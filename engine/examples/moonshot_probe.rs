@@ -11,7 +11,9 @@ fn main() {
     let model = std::fs::read(format!("{dir}ranker.bin")).unwrap();
     let learned = std::fs::read(format!("{dir}learned.bin")).unwrap();
     let p = Predictor::parse(&model, &read("common-en.txt"), &read("common-ko.txt"), &read("english-nouns.txt")).unwrap();
-    let p = Arc::new(p.with_learned(&learned).unwrap().with_japanese_words(&read("common-ja.txt")));
+    let p = p.with_learned(&learned).unwrap().with_japanese_words(&read("common-ja.txt"));
+    // The kanji dictionary, as the shells load it (docs/moonshot.md §5.1).
+    let p = Arc::new(p.with_kanji(&std::fs::read(format!("{dir}kanji.bin")).unwrap()).unwrap());
     for keys in std::env::args().skip(1) {
         let mut e = Engine::new();
         e.set_predictor(Some(p.clone()));

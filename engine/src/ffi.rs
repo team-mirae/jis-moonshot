@@ -4,11 +4,10 @@
 //! `jk_preedit_*` until the next call. Strings are UTF-8 and not NUL-terminated.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
 
 use crate::plan::{self, Counts};
 use crate::resolve;
-use crate::{Candidate, Dictionary, Engine, Key, Layout, Mode, Mods, Output, PAGE_SIZE, output_in};
+use crate::{Candidate, Engine, Key, Layout, Mode, Mods, Output, PAGE_SIZE, output_in};
 
 pub struct JkEngine {
     engine: Engine,
@@ -25,10 +24,9 @@ pub struct JkEngine {
     learned: String,
 }
 
-/// A parsed hanja dictionary, shareable by many engines.
-pub struct JkDict(Arc<Dictionary>);
 
 /// Never unwind into the host: on Windows the engine runs inside every app's process.
+#[cfg(feature = "predict")]
 fn guard<T>(fallback: T, f: impl FnOnce() -> T) -> T {
     catch_unwind(AssertUnwindSafe(f)).unwrap_or(fallback)
 }
@@ -356,7 +354,7 @@ pub extern "C" fn jk_resolved_len(handle: *mut JkEngine) -> usize {
     with(handle, 0, |h| h.resolved.len())
 }
 
-// --- Hanja (spec §7)
+// --- Memory, and the list the engine shows (the English modes' letter variants)
 
 /// Allocates `len` bytes in the engine's memory, for passing data in from wasm hosts.
 #[unsafe(no_mangle)]
@@ -381,44 +379,6 @@ pub unsafe extern "C" fn jk_dealloc(ptr: *mut u8, len: usize) {
     }
 }
 
-/// Parses a dictionary (`dict/hanja.tsv` contents, UTF-8). Null if it isn't UTF-8.
-///
-/// # Safety
-/// `ptr` must point to `len` readable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn jk_dict_new(ptr: *const u8, len: usize) -> *mut JkDict {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    // SAFETY: per the contract above.
-    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
-    guard(std::ptr::null_mut(), || match std::str::from_utf8(bytes) {
-        Ok(text) => Box::into_raw(Box::new(JkDict(Arc::new(Dictionary::parse(text))))),
-        Err(_) => std::ptr::null_mut(),
-    })
-}
-
-/// Engines given this dictionary keep their own reference, so it can be freed any time.
-///
-/// # Safety
-/// `dict` must come from `jk_dict_new` and not be used afterwards.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn jk_dict_free(dict: *mut JkDict) {
-    if !dict.is_null() {
-        // SAFETY: per the contract above.
-        drop(unsafe { Box::from_raw(dict) });
-    }
-}
-
-/// # Safety
-/// `dict` must be null or come from `jk_dict_new` and not be freed yet.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn jk_set_dictionary(handle: *mut JkEngine, dict: *const JkDict) {
-    // SAFETY: per the contract above.
-    let Some(dict) = (unsafe { dict.as_ref() }) else { return };
-    with(handle, (), |h| h.engine.set_dictionary(dict.0.clone()))
-}
-
 /// Candidates on the last result: 0 when no list is open.
 #[unsafe(no_mangle)]
 pub extern "C" fn jk_candidate_count(handle: *mut JkEngine) -> usize {
@@ -441,12 +401,12 @@ fn candidate(h: &JkEngine, index: usize) -> Option<&Candidate> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn jk_candidate_ptr(handle: *mut JkEngine, index: usize) -> *const u8 {
-    with(handle, std::ptr::null(), |h| candidate(h, index).map_or(std::ptr::null(), |c| c.hanja.as_ptr()))
+    with(handle, std::ptr::null(), |h| candidate(h, index).map_or(std::ptr::null(), |c| c.text.as_ptr()))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn jk_candidate_len(handle: *mut JkEngine, index: usize) -> usize {
-    with(handle, 0, |h| candidate(h, index).map_or(0, |c| c.hanja.len()))
+    with(handle, 0, |h| candidate(h, index).map_or(0, |c| c.text.len()))
 }
 
 #[unsafe(no_mangle)]
@@ -501,8 +461,8 @@ pub extern "C" fn jk_clear(handle: *mut JkEngine) {
 
 // --- Key-press counts (the web playground's comparison)
 
-/// Counts the key presses `text` (UTF-8) takes on JIS Korean and on conventional 2-set, using this
-/// engine's hanja dictionary if it has one. Read the results with `jk_plan_*`.
+/// Counts the key presses `text` (UTF-8) takes on JIS Moonshot and on conventional 2-set. Read the
+/// results with `jk_plan_*`.
 ///
 /// # Safety
 /// `ptr` must point to `len` readable bytes.
@@ -514,7 +474,7 @@ pub unsafe extern "C" fn jk_plan(handle: *mut JkEngine, ptr: *const u8, len: usi
     // SAFETY: per the contract above.
     let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
     let text = String::from_utf8_lossy(bytes).into_owned();
-    with(handle, (), |h| h.counts = plan::count(&text, h.engine.dictionary()))
+    with(handle, (), |h| h.counts = plan::count(&text))
 }
 
 #[unsafe(no_mangle)]

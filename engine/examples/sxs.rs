@@ -116,9 +116,12 @@ fn main() {
     let p = Arc::new(Predictor::parse(&model, &read("common-en.txt"), &read("common-ko.txt"), &read("english-nouns.txt")).unwrap());
     let grid = !std::env::args().any(|a| a == "--no-grid");
 
-    let dict = std::fs::read_to_string(format!("{root}/dict/hanja.tsv")).unwrap();
-    let readings: HashSet<String> = dict.lines().filter_map(|l| l.split('\t').next()).map(String::from).collect();
-    let mut words: Vec<String> = dict.lines().filter_map(|l| l.split('\t').next()).filter(|r| r.chars().count() >= 2).step_by(40).map(String::from).collect();
+    // Multi-syllable words from the Korean lexicon (the hanja dictionary's readings are gone).
+    let lexicon = read("common-ko.txt");
+    let readings: HashSet<String> = lexicon.lines().filter(|l| !l.starts_with('#')).filter_map(|l| l.split('\t').next()).map(String::from).collect();
+    let mut words: Vec<String> = readings.iter().filter(|r| r.chars().count() >= 2).cloned().collect();
+    words.sort();
+    words = words.into_iter().step_by(10).collect();
     if let Ok(corpus) = std::fs::read_to_string(format!("{root}/tests/data/samsung-business.txt")) {
         words.extend(corpus.split(|c: char| !('가'..='힣').contains(&c)).filter(|w| w.chars().count() >= 2).map(String::from));
     }

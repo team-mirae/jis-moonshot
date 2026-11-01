@@ -12,7 +12,7 @@
 //   LearnFromChoices   DWORD  0  learning from the user's choices (spec §10.11)
 //   Learned            SZ        what was learned: one line of counts, no text or keys
 //   Weight.<Scenario>  SZ        user tuning (spec §10.5): Korean English Implied Mixed TwoSet
-//                                KeepFinals Hanja ImpliedL Kana, e.g. "0.8"
+//                                KeepFinals Hanja ImpliedL Kana, e.g. "0.8" (Hanja: retired, no effect)
 //   DiagnosticLog      DWORD  0  log.h
 //   SettingsVersion    DWORD     changes with every write below (Version)
 //   Apps\<exe>         key       per app: Predictions DWORD, overriding the default-off list;

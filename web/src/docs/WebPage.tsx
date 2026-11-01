@@ -44,7 +44,6 @@ npm run build    # the production build in dist/
 import { loadEngine } from "./engine";
 
 const engine = await loadEngine();
-await engine.loadDictionary("/hanja.tsv");      // for Shift+F8
 await engine.loadPredictor("/predict/");        // Korean, English and kana readings
 engine.setPredictions(true);
 engine.key("KeyG"); engine.key("KeyK");
@@ -66,7 +65,6 @@ engine.resolveKeyCodeFromOutput("ㅃ", 1, 1);     // [["Digit1"], ["S-KeyQ"]]
           ["legend(code, shift)", "What a key types in the current mode, for drawing keys."],
           ["resolveKeyCodeInput(press, context?)", "What a key types alone, or the field after a context and the key. Null if none."],
           ["resolveKeyCodeFromOutput(text, min?, max?)", "Every combination of presses that types the text. Empty for a nonsensical range."],
-          ["loadDictionary(url)", "The hanja dictionary, for Shift+F8."],
           ["loadPredictor(base) / setPredictions(on)", "Load the predictive layer (with the learned ranker when base has learned.bin, and the kana reading when it has common-ja.txt, kanji when it has kanji.bin), and turn it on."],
           ["predictions() / commitPrediction(i)", "The ranked readings, each with its kind (korean, english, kana, katakana, …), and committing one. predictionsBy / commitPredictionBy do the same with another ranker, for comparing them."],
           ["setWeight / clearWeight / setRanker", "Tune the ranking (spec §10.5)."],

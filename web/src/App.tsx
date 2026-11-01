@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { Candidates, Counts, Engine, Mods, Output, Prediction, PredictionKind, RankerName, WeightName } from "./engine";
+import type { Counts, Engine, Mods, Output, Prediction, PredictionKind, RankerName, WeightName } from "./engine";
 import { JAPANESE_KINDS, WEIGHTS } from "./engine";
 import type { TrainingFile, TrainingSummary, WordLists } from "./training";
 import { check, learnExamples, wordLists } from "./training";
@@ -46,8 +46,6 @@ export function App({ engine }: { engine: Engine }) {
   });
   const [pressed, setPressed] = useState<Set<string>>(new Set());
   const [focused, setFocused] = useState(false);
-  const [candidates, setCandidates] = useState<Candidates | null>(null);
-  const [hanjaReady, setHanjaReady] = useState(false);
   const [sampleId, setSampleId] = useState(SAMPLES[0].id);
   const [samples, setSamples] = useState<Record<string, string>>({});
   const sample = samples[sampleId] ?? "한글을 입력해 보세요";
@@ -122,12 +120,6 @@ export function App({ engine }: { engine: Engine }) {
     return () => clearInterval(timer);
   }, [engine]);
   useEffect(() => {
-    engine
-      .loadDictionary(`${import.meta.env.BASE_URL}hanja.tsv`)
-      .then(() => setHanjaReady(true))
-      .catch((error) => console.error("hanja dictionary:", error));
-  }, [engine]);
-  useEffect(() => {
     // Keep the caret in view (and clear of a floating keyboard) as the text grows.
     caret.current?.scrollIntoView({ block: "nearest" });
   }, [doc, preedit]);
@@ -155,9 +147,8 @@ export function App({ engine }: { engine: Engine }) {
       return next;
     });
     setPreedit(out.preedit);
-    setCandidates(out.candidates);
-    // The predictive layer's readings of what's staged (none while a hanja list is open).
-    showReadings(Boolean(out.preedit && !out.candidates));
+    // The predictive layer's readings of what's staged.
+    showReadings(Boolean(out.preedit));
     // Past 24 hours, what was learned goes, counts in the engine included, before anything new
     // is stored (else old counts would carry into a fresh window).
     if (expireLearned()) {
@@ -263,14 +254,18 @@ export function App({ engine }: { engine: Engine }) {
       return;
     }
     const f = file as TrainingFile;
+    // Only the weights there are: a retired one ("hanja") is ignored.
+    const given = Object.fromEntries(
+      Object.entries(f.weights ?? {}).filter(([name]) => (WEIGHTS as readonly string[]).includes(name)),
+    ) as Partial<Record<WeightName, number>>;
     let next = { ...weights };
-    for (const [name, value] of Object.entries(f.weights ?? {}) as [WeightName, number][]) {
+    for (const [name, value] of Object.entries(given) as [WeightName, number][]) {
       next = { ...next, [name]: value };
       engine.setWeight(name, value);
     }
     setWeights(next);
     try {
-      localStorage.setItem("jis-moonshot:weights", JSON.stringify({ ...storedWeights(), ...(f.weights ?? {}) }));
+      localStorage.setItem("jis-moonshot:weights", JSON.stringify({ ...storedWeights(), ...given }));
     } catch {
       // Not remembered; fine.
     }
@@ -290,7 +285,7 @@ export function App({ engine }: { engine: Engine }) {
     setTraining({
       summary: {
         source: f.source?.tool ?? "training file",
-        weights: Object.keys(f.weights ?? {}).length,
+        weights: Object.keys(given).length,
         words: count,
         avoided,
         examples,
@@ -354,7 +349,6 @@ export function App({ engine }: { engine: Engine }) {
     engine.activate();
     setDoc("");
     setPreedit("");
-    setCandidates(null);
     surface.current?.focus();
   }
 
@@ -432,18 +426,17 @@ export function App({ engine }: { engine: Engine }) {
           {doc}
           {preedit && <span className="preedit">{preedit}</span>}
           {focused && <span ref={caret} className="caret" aria-hidden="true" />}
-          {candidates && <CandidateList candidates={candidates} pageSize={engine.pageSize} onPick={onScreenKey} />}
-          {!candidates && readings.length > 0 && (
+          {readings.length > 0 && (
             <PredictionList
               readings={readings}
               label={ranking === "side-by-side" ? "Rules" : undefined}
               onPick={(i) => pick(i)}
             />
           )}
-          {!candidates && travelReadings.length > 0 && (
+          {travelReadings.length > 0 && (
             <PredictionList readings={travelReadings} label="Travel" onPick={(i) => pick(i, "", "travel")} />
           )}
-          {!candidates && routeReadings.length > 0 && (
+          {routeReadings.length > 0 && (
             <PredictionList readings={routeReadings} label="Route" onPick={(i) => pick(i, "", "route")} />
           )}
           {rest && <span className="placeholder">{rest}</span>}
@@ -550,12 +543,8 @@ export function App({ engine }: { engine: Engine }) {
             <dd>Hiragana / katakana: the staged keys read as kana until the next commit, then predictive again. With nothing staged, the next word is kana. In JIS Kana they switch its script for good.</dd>
           </div>
           <div>
-            <dt>F8 漢字</dt>
+            <dt>F8 漢字 (or Shift+F8)</dt>
             <dd>Kanji: the kana reading's conversions on top until the next commit. With nothing staged, the next word converts. Kanji also show as predictions when a Japanese reading ranks in the top two.</dd>
-          </div>
-          <div>
-            <dt>Shift+F8 한자</dt>
-            <dd>{hanjaReady ? "Hanja for the word you just typed. Shift+F8 again or ↓ for the next, 1–9 to pick, Esc to go back." : "Loading the hanja dictionary…"}</dd>
           </div>
           <div>
             <dt>F9 / F10</dt>
@@ -587,38 +576,6 @@ export function App({ engine }: { engine: Engine }) {
         <span>MIT license</span>
       </footer>
     </main>
-  );
-}
-
-function CandidateList({ candidates, pageSize, onPick }: { candidates: Candidates; pageSize: number; onPick(code: string): void }) {
-  const { items, selected } = candidates;
-  const start = Math.floor(selected / pageSize) * pageSize;
-  const page = items.slice(start, start + pageSize);
-  const pages = Math.ceil(items.length / pageSize);
-  return (
-    <span className="candidates" role="listbox" aria-label="Hanja candidates">
-      {page.map((c, i) => (
-        <span
-          key={start + i}
-          role="option"
-          aria-selected={start + i === selected}
-          className={"candidate" + (start + i === selected ? " selected" : "")}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onPick(`Digit${i + 1}`);
-          }}
-        >
-          <span className="number">{i + 1}</span>
-          <span className="hanja">{c.hanja}</span>
-          {c.comment && <span className="comment">{c.comment}</span>}
-        </span>
-      ))}
-      {pages > 1 && (
-        <span className="pager">
-          {start / pageSize + 1} / {pages} · ← →
-        </span>
-      )}
-    </span>
   );
 }
 
@@ -703,7 +660,6 @@ const KIND_LABELS: Record<PredictionKind, string> = {
   upper: "AA",
   "two-set": "두벌식",
   "keep-finals": "받침",
-  hanja: "漢",
   bare: "ㅏ",
   mixed: "En+한",
   "implied-l": "ㄹ",
@@ -787,7 +743,6 @@ const WEIGHT_LABELS: Record<WeightName, string> = {
   mixed: "English + particle",
   "two-set": "Plain 2-set",
   "keep-finals": "Finals kept",
-  hanja: "Hanja",
   "implied-l": "Implied ㄹ after ㄴ",
   kana: "Kana",
 };
@@ -972,7 +927,7 @@ function Tuning({
         </button>
         <p className="counts-note">
           Counts which kinds of prediction you pick over the top one, nothing else: no text, no keys. It nudges each
-          weight within 0.5–2×; a slider you moved wins over it. Hanja never come first.
+          weight within 0.5–2×; a slider you moved wins over it.
         </p>
       </fieldset>
       <fieldset className="ranking">

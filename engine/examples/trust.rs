@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-use jis_korean::Dictionary;
 use jis_korean::predict::{Effort, Predictor, Preference, Ranker};
 use jis_korean::plan::Style;
 use jis_korean::trust::type_text;
@@ -29,7 +28,6 @@ fn main() {
         .filter(Predictor::is_learned)
         .map(Arc::new);
     let p = Arc::new(rules);
-    let d = Arc::new(Dictionary::parse(&std::fs::read_to_string(format!("{root}/dict/hanja.tsv")).unwrap()));
     let text: String = args
         .iter()
         .enumerate()
@@ -45,10 +43,10 @@ fn main() {
         ("route", p.clone(), Ranker::Route(Preference::default())),
     ];
     for (name, p, ranker) in learned.map(|l| ("learned", l, Ranker::Rules)).into_iter().chain(rankers) {
-        let t = type_text(&text, p, Some(d.clone()), ranker, style, false, None).0;
+        let t = type_text(&text, p, ranker, style, false, None).0;
         println!(
-            "{name:7} {}/{} words failed ({:.2}%), {} chars wrong, {} hanja on top; effort {} vs {} without predictions ({:+.1}%)",
-            t.failures.len(), t.words, 100.0 * t.failures.len() as f64 / t.words as f64, t.char_errors, t.hanja_on_top.len(),
+            "{name:7} {}/{} words failed ({:.2}%), {} chars wrong; effort {} vs {} without predictions ({:+.1}%)",
+            t.failures.len(), t.words, 100.0 * t.failures.len() as f64 / t.words as f64, t.char_errors,
             t.effort(), t.deterministic, 100.0 * (t.effort() as f64 / t.deterministic as f64 - 1.0)
         );
         if show && (name == "rules" || name == "learned") {

@@ -18,6 +18,7 @@ private let learningDefault = "LearnFromChoices"
 /// What was learned: one line of counts, no text or keys.
 let learnedDefault = "Learned"
 /// The scenarios' names (`Weight.<name>`), by engine id.
+/// By weight id (`JK_WEIGHT_*`). Hanja (6) is retired: no reading uses it.
 let weightNames = ["Korean", "English", "Implied", "Mixed", "TwoSet", "KeepFinals", "Hanja", "ImpliedL", "Kana"]
 #endif
 
@@ -69,7 +70,6 @@ final class JKInputController: IMKInputController {
 
     override init!(server: IMKServer!, delegate: Any!, client inputClient: Any!) {
         super.init(server: server, delegate: delegate, client: inputClient)
-        jk_set_dictionary(engine, sharedDictionary)
         // ⌥Space: a full-width space, or `_` in English (docs/moonshot.md §4). macOS only.
         jk_set_option_space(engine, 1)
         #if PREDICT
@@ -325,8 +325,9 @@ final class JKInputController: IMKInputController {
         // What was learned, read-only: one line per scenario that moved.
         let learned = NSMenuItem(title: "Learned Weights", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
-        let labels = ["Korean", "English", "Implied ㅇ", "English + particle", "Plain 2-set", "Finals kept", "Hanja", "Implied ㄹ after ㄴ", "Kana"]
-        for (id, label) in labels.enumerated() {
+        // By weight id; 6 (hanja) is retired and not shown.
+        let labels = ["Korean", "English", "Implied ㅇ", "English + particle", "Plain 2-set", "Finals kept", "", "Implied ㄹ after ㄴ", "Kana"]
+        for (id, label) in labels.enumerated() where !label.isEmpty {
             let value = jk_learned_weight(engine, UInt32(id))
             let item = NSMenuItem(title: String(format: "%@  ×%.2f", label, value), action: nil, keyEquivalent: "")
             item.isEnabled = false
@@ -681,7 +682,8 @@ final class JKInputController: IMKInputController {
     /// Which list was asked for last: a show scheduled for an earlier one is dropped.
     private var listGeneration = 0
 
-    /// Hanja candidates after F7, or the predictions while typing (when there's more than one).
+    /// The engine's list (an English mode's letter variants), or the predictions while typing (when
+    /// there's more than one).
     private func showList(_ client: IMKTextInput, empty: Bool) {
         let window = SuggestionWindow.shared
         listGeneration += 1
@@ -698,17 +700,17 @@ final class JKInputController: IMKInputController {
                 window.show(items, selected: selected, below: caret, horizontal: horizontal, japanese: japanese)
             }
         }
-        let hanja = jk_candidate_count(engine)
-        if hanja > 0 {
-            let items = (0..<hanja).map { i -> String in
-                let hanja = text(jk_candidate_ptr(engine, i), jk_candidate_len(engine, i))
+        let count = jk_candidate_count(engine)
+        if count > 0 {
+            let items = (0..<count).map { i -> String in
+                let candidate = text(jk_candidate_ptr(engine, i), jk_candidate_len(engine, i))
                 let comment = text(jk_candidate_comment_ptr(engine, i), jk_candidate_comment_len(engine, i))
-                return comment.isEmpty ? hanja : "\(hanja)  \(comment)"
+                return comment.isEmpty ? candidate : "\(candidate)  \(comment)"
             }
             let selected = jk_candidate_selected(engine)
-            window.onPick = { [weak self] index in self?.pickHanja(index, from: selected, client) }
+            window.onPick = { [weak self] index in self?.pickCandidate(index, from: selected, client) }
             // An English mode's list is letter variants (spec §3.6.3): one row.
-            show(items, selected: selected < hanja ? selected : nil, horizontal: InputModes.current.english)
+            show(items, selected: selected < count ? selected : nil, horizontal: InputModes.current.english)
             return
         }
         #if PREDICT
@@ -727,8 +729,8 @@ final class JKInputController: IMKInputController {
         SuggestionWindow.shared.hide()
     }
 
-    /// A click on a hanja candidate: move the engine's selection there, then pick it.
-    private func pickHanja(_ index: Int, from selected: Int, _ client: IMKTextInput) {
+    /// A click on a row of the engine's list: move the engine's selection there, then pick it.
+    private func pickCandidate(_ index: Int, from selected: Int, _ client: IMKTextInput) {
         let key = UInt32(index > selected ? JK_KEY_ARROWDOWN : JK_KEY_ARROWUP)
         for _ in 0..<abs(index - selected) {
             jk_key(engine, key, 0)

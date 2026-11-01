@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use jis_korean::predict::{Kind, Predictor};
-use jis_korean::{Dictionary, Engine, Key, Mods};
+use jis_korean::{Engine, Key, Mods};
 
 fn predictor() -> Arc<Predictor> {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/predict/");
@@ -201,27 +201,6 @@ fn korean_words_with_particles_stay_korean() {
     assert_eq!(top("KeyT KeyJ KeyQ KeyJ KeyP").0, "서버에");
 }
 
-// No hanja readings (docs/moonshot.md §5.1): dictionary words, dates, countries, weekdays and
-// 曰 were predicted in JIS Korean; the hanja list (Shift+F8) still has them.
-
-#[test]
-fn hanja_are_not_predicted() {
-    let dictionary = Arc::new(Dictionary::parse("학교\t學校\t\n학\t學\t배울 학\n공자\t孔子\t\n"));
-    for keys in [
-        "KeyG KeyK KeyR KeyR KeyY",
-        "KeyG KeyK KeyR",
-        "S-Digit2 S-Digit0 S-Digit2 S-Digit6 KeyS KeyU KeyS",
-        "KeyA KeyL",
-        "KeyG KeyK KeyS KeyA KeyL",
-        "KeyR KeyH KeyD KeyW KeyK KeyD KeyH KeyK KeyF",
-    ] {
-        let mut e = typed(keys);
-        e.set_dictionary(dictionary.clone());
-        let p = e.predictions();
-        assert!(p.iter().all(|x| x.kind != Kind::Hanja), "{keys}: {p:?}");
-    }
-}
-
 #[test]
 fn english_words_ending_in_particle_keys_stay_english() {
     // Last keys that would read as a particle (l = 이, p = 에, mf = 을 …) in real English words.
@@ -264,8 +243,8 @@ fn weights_are_clamped() {
     let mut w = Weights::default();
     w.set(Weight::Korean, 100.0);
     w.set(Weight::English, -1.0);
-    w.set(Weight::Hanja, f64::NAN);
-    assert_eq!((w.get(Weight::Korean), w.get(Weight::English), w.get(Weight::Hanja)), (10.0, 0.1, 1.0));
+    w.set(Weight::Mixed, f64::NAN);
+    assert_eq!((w.get(Weight::Korean), w.get(Weight::English), w.get(Weight::Mixed)), (10.0, 0.1, 1.0));
 }
 
 // Shift+Z with predictions (docs/moonshot.md §1: no longer F10)
@@ -295,9 +274,10 @@ fn shift_z_without_a_predictor_types_kieuk() {
 /// The keys a JIS Korean typist presses for a Hangul word: 2-set, with the implied ㅇ where it
 /// works and the double press after a final (as the robot and the ranker's training do).
 fn jis_keys(word: &str) -> Option<Vec<(String, bool)>> {
-    const I: [&str; 19] = ["r", "R", "s", "e", "E", "f", "a", "q", "Q", "t", "T", "d", "w", "W", "c", "z", "x", "v", "g"];
-    const M: [&str; 21] = ["k", "o", "i", "O", "j", "p", "u", "P", "h", "hk", "ho", "hl", "y", "n", "nj", "np", "nl", "b", "m", "ml", "l"];
-    const F: [&str; 28] = ["", "r", "R", "rt", "s", "sw", "sg", "e", "f", "fr", "fa", "fq", "ft", "fx", "fv", "fg", "a", "q", "qt", "t", "T", "d", "w", "c", "z", "x", "v", "g"];
+    // JIS Moonshot's keys (docs/moonshot.md §9): ㄲ ㄸ ㅃ ㅆ ㅉ on 4 3 1 5 2, ㅒ ㅖ on : and ;.
+    const I: [&str; 19] = ["r", "4", "s", "e", "3", "f", "a", "q", "1", "t", "5", "d", "w", "2", "c", "z", "x", "v", "g"];
+    const M: [&str; 21] = ["k", "o", "i", ":", "j", "p", "u", ";", "h", "hk", "ho", "hl", "y", "n", "nj", "np", "nl", "b", "m", "ml", "l"];
+    const F: [&str; 28] = ["", "r", "4", "rt", "s", "sw", "sg", "e", "f", "fr", "fa", "fq", "ft", "fx", "fv", "fg", "a", "q", "qt", "t", "5", "d", "w", "c", "z", "x", "v", "g"];
     let combines = |prev_m: usize, next: char| matches!((prev_m, next), (8, 'k' | 'o' | 'l') | (13, 'j' | 'p' | 'l') | (18, 'l'));
     let mut keys = String::new();
     let mut prev: Option<(usize, usize)> = None; // (medial, final)
@@ -318,7 +298,13 @@ fn jis_keys(word: &str) -> Option<Vec<(String, bool)>> {
         keys.push_str(F[f]);
         prev = Some((m, f));
     }
-    Some(keys.chars().map(|c| (format!("Key{}", c.to_ascii_uppercase()), c.is_ascii_uppercase())).collect())
+    let code = |c: char| match c {
+        '1'..='9' => format!("Digit{c}"),
+        ':' => "Quote".to_string(),
+        ';' => "Semicolon".to_string(),
+        _ => format!("Key{}", c.to_ascii_uppercase()),
+    };
+    Some(keys.chars().map(|c| (code(c), c.is_ascii_uppercase())).collect())
 }
 
 #[test]
@@ -328,21 +314,25 @@ fn kanxms_is_amuteun_not_a_mixed_word() {
 
 #[test]
 fn real_korean_words_almost_never_rank_as_mixed() {
-    // Multi-syllable readings from the hanja dictionary, plus the Samsung corpus if fetched.
-    let dict = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap();
-    let mut words: Vec<String> = dict.lines().filter_map(|l| l.split('\t').next()).filter(|r| r.chars().count() >= 2).step_by(40).map(String::from).collect();
+    // Multi-syllable words from the Korean lexicon, plus the Samsung corpus if fetched.
+    let lexicon = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/predict/common-ko.txt")).unwrap();
+    let mut words: Vec<String> = lexicon
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split('\t').next())
+        .filter(|w| w.chars().count() >= 2 && w.chars().all(|c| ('가'..='힣').contains(&c)))
+        .step_by(10)
+        .map(String::from)
+        .collect();
     words.dedup();
     if let Ok(corpus) = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/samsung-business.txt")) {
         words.extend(corpus.split(|c: char| !('가'..='힣').contains(&c)).filter(|w| w.chars().count() >= 2).map(String::from));
     }
     let p = predictor();
-    // With the hanja dictionary, as the apps run.
-    let dictionary = Arc::new(Dictionary::parse(&dict));
     let (mut total, mut mixed, mut english) = (0, Vec::new(), 0);
     for word in &words {
         let Some(keys) = jis_keys(word) else { continue };
         let mut e = Engine::new();
-        e.set_dictionary(dictionary.clone());
         e.set_predictor(Some(p.clone()));
         for (code, shift) in &keys {
             e.key(Key::from_code(code), if *shift { Mods::SHIFTED } else { Mods::NONE });
@@ -512,10 +502,8 @@ fn lazy_keys(word: &str) -> String {
 #[test]
 fn kept_and_moved_finals_follow_the_spelling_rules() {
     let p = predictor();
-    let dict = Arc::new(Dictionary::parse(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap()));
     let ranked = |word: &str| {
         let mut e = Engine::new();
-        e.set_dictionary(dict.clone());
         e.set_predictor(Some(p.clone()));
         for token in lazy_keys(word).split(' ') {
             let (mods, code) = token.strip_prefix("S-").map_or((Mods::NONE, token), |c| (Mods::SHIFTED, c));
@@ -569,6 +557,50 @@ fn an_implied_l_after_n_is_offered_and_its_weight_0_turns_it_off() {
     assert_eq!(e.effective_weights().get(Weight::Korean), jis_korean::predict::Weights::MIN);
     // Only after a ㄴ final: 사람 has none to offer.
     assert!(typed("KeyT KeyK KeyF KeyK KeyA").predictions().iter().all(|x| x.kind != Kind::ImpliedL));
+}
+
+// ㄶ for ㄴ + ㅋ / ㅌ / ㅊ (spec §10.5): 않고 is said [안코], so it gets typed that way
+
+fn aspirated(keys: &str) -> Vec<(String, Kind)> {
+    typed(keys).predictions().into_iter().map(|p| (p.text, p.kind)).collect()
+}
+
+#[test]
+fn nh_read_from_n_and_an_aspirated_consonant_goes_above_the_literal() {
+    // ㅇ ㅏ ㄴ ㅋ ㅗ: 안코 as typed, 않고 meant.
+    let p = aspirated("KeyD KeyK KeyS KeyZ KeyH");
+    assert_eq!(p[0], ("않고".into(), Kind::Aspirated), "{p:?}");
+    assert!(p.iter().any(|(t, _)| t == "안코"), "the literal is still offered: {p:?}");
+    // ㅇ ㅏ ㄴ ㅋ ㅔ: 안케 → 않게.
+    assert_eq!(aspirated("KeyD KeyK KeyS KeyZ KeyP")[0], ("않게".into(), Kind::Aspirated));
+    // After a slot key's vowel (docs/moonshot.md §9): ^ (다) ㄴ ㅋ ㅗ → 닪고 is offered.
+    assert!(aspirated("Equal KeyS KeyZ KeyH").iter().any(|(t, k)| t == "닪고" && *k == Kind::Aspirated));
+    // ㄴ + ㅌ: 만타 → 많다.
+    assert_eq!(aspirated("KeyA KeyK KeyS KeyX KeyK")[0], ("많다".into(), Kind::Aspirated));
+    // ㄴ + ㅊ, with a second ㄴ + ㅊ earlier in the word: 괜찬치 → 괜찮지 (only the last place).
+    let p = aspirated("KeyR KeyH KeyO KeyS KeyC KeyK KeyS KeyC KeyL");
+    assert_eq!(p[0], ("괜찮지".into(), Kind::Aspirated), "{p:?}");
+}
+
+#[test]
+fn nh_stays_below_a_literal_word_and_its_weight_0_turns_it_off() {
+    use jis_korean::predict::Weight;
+    // 만큼 and 한테 are words: the ㄶ readings (많금, 핞데) never pass them.
+    for (keys, word) in [("KeyA KeyK KeyS KeyZ KeyM KeyA", "만큼"), ("KeyG KeyK KeyS KeyX KeyP", "한테")] {
+        let p = aspirated(keys);
+        assert_eq!(p[0].0, word, "{p:?}");
+    }
+    // Neither known (귀찬케 / 귀찮게): one step below the literal.
+    let p = aspirated("KeyR KeyN KeyL KeyC KeyK KeyS KeyZ KeyP");
+    let at = |t: &str| p.iter().position(|(x, _)| x == t);
+    assert!(at("귀찬케").is_some() && at("귀찮게").is_some() && at("귀찬케") < at("귀찮게"), "{p:?}");
+    // Only after a ㄴ final and before a vowel: 사람 and 안ㅋ have none.
+    assert!(aspirated("KeyT KeyK KeyF KeyK KeyA").iter().all(|(_, k)| *k != Kind::Aspirated));
+    assert!(aspirated("KeyD KeyK KeyS KeyZ").iter().all(|(_, k)| *k != Kind::Aspirated));
+    // It shares the implied ㄹ slider (both spell what was heard): 0 turns it off.
+    let mut e = typed("KeyD KeyK KeyS KeyZ KeyH");
+    e.set_prediction_weight(Weight::ImpliedL, 0.0);
+    assert!(e.predictions().iter().all(|x| x.kind != Kind::Aspirated), "{:?}", e.predictions());
 }
 
 /// The standard 2-set reading (spec §10.2) types the stock JIS symbol: Shift+2 is ".

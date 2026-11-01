@@ -12,7 +12,6 @@ BEGIN
     IDS_PROFILE "JIS Moonshot"
 END
 
-IDR_HANJA RCDATA "@JK_ENGINE_DIR@/dict/hanja.tsv"
 #ifdef JK_PREDICT
 IDR_RANKER RCDATA "@JK_ENGINE_DIR@/predict/ranker.bin"
 IDR_COMMON_EN RCDATA "@JK_ENGINE_DIR@/predict/common-en.txt"

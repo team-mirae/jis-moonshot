@@ -4,7 +4,7 @@
 //!
 //! The readings are the rules' ([`Predictor::candidates`]), and so are the hard guarantees, applied
 //! after scoring: a capital that settles English, command names and acronyms (what the rules rule
-//! out stays below the rest), hanja and strongly avoided words never on top, the avoid list's
+//! out stays below the rest), strongly avoided words never on top, the avoid list's
 //! penalty, a scenario weighed 0 off, duplicates removed, at most [`MAX_PREDICTIONS`]. The model only
 //! orders what's left. Scores are in bits, like the rules': the user's weights (§10.5) and what the
 //! learner learned (§10.11) add log2(weight) to their scenario.
@@ -14,7 +14,6 @@
 
 use std::collections::BTreeSet;
 
-use crate::Dictionary;
 use crate::predict::{
     self, AVOIDED, BadModel, Candidate, Context, Kind, Language, MAX_PREDICTIONS, Origin, Prediction, Predictor, Readings, Weight, Weights,
 };
@@ -125,8 +124,8 @@ pub struct Featured {
 }
 
 /// The readings ranked by the learned model, with the rules' guarantees on top.
-pub fn rank(p: &Predictor, model: &Model, readings: &Readings, context: Context, dictionary: Option<&Dictionary>) -> Vec<Prediction> {
-    let list = featurize(p, readings, context, dictionary, model.bits);
+pub fn rank(p: &Predictor, model: &Model, readings: &Readings, context: Context) -> Vec<Prediction> {
+    let list = featurize(p, readings, context, model.bits);
     let w = context.weights;
     // One vowel key alone is its syllable, never a letter (spec §10.3 rule 4): English readings stay
     // below, as for what a rule ruled out.
@@ -167,18 +166,9 @@ pub fn rank(p: &Predictor, model: &Model, readings: &Readings, context: Context,
     }
     // What a rule ruled out stays below the rest; then the model's order, ties in the rules' order.
     scored.sort_by(|a, b| a.1.cmp(&b.1).then(b.0.score.total_cmp(&a.0.score)).then(a.2.cmp(&b.2)));
-    // Hanja by rule (spec §10.3 rule 6, §10.4): the dictionary's form last, shown when there's
-    // room; an everyday one right after the Korean reading.
-    let (hanja, rest): (Vec<_>, Vec<_>) = scored.into_iter().partition(|s| s.3 == Origin::Hanja);
-    let (everyday, rest): (Vec<_>, Vec<_>) = rest.into_iter().partition(|s| s.3 == Origin::EverydayHanja);
-    let mut out: Vec<Prediction> = rest.into_iter().map(|s| s.0).collect();
-    let at = out.iter().position(|p| p.text == readings.korean).map_or(out.len(), |i| i + 1);
-    for (i, s) in everyday.into_iter().enumerate() {
-        out.insert((at + i).min(out.len()), s.0);
-    }
-    out.extend(hanja.into_iter().map(|s| s.0));
-    // Hanja and strongly avoided words are never on top: the first other reading moves up.
-    let held = |p: &Prediction| p.kind == Kind::Hanja || strong.contains(&p.text);
+    let mut out: Vec<Prediction> = scored.into_iter().map(|s| s.0).collect();
+    // Strongly avoided words are never on top: the first other reading moves up.
+    let held = |p: &Prediction| strong.contains(&p.text);
     if out.first().is_some_and(held)
         && let Some(i) = out.iter().position(|p| !held(p))
     {
@@ -205,8 +195,7 @@ fn scenario_bits(w: &Weights, kind: Kind, origin: Origin, readings: &Readings, t
         Kind::Korean => korean,
         Kind::TwoSet => korean + bits(Weight::TwoSet),
         Kind::KoreanKeepFinals => korean + bits(Weight::KeepFinals),
-        Kind::ImpliedL => korean + bits(Weight::ImpliedL),
-        Kind::Hanja => korean + bits(Weight::Hanja),
+        Kind::ImpliedL | Kind::Aspirated => korean + bits(Weight::ImpliedL),
         Kind::BareVowels => {
             let two_set = if text == readings.two_set { bits(Weight::TwoSet) } else { 0.0 };
             korean - readings.implied as f64 * bits(Weight::Implied) + two_set
@@ -232,10 +221,10 @@ fn neutral(context: Context) -> Context {
 
 /// The distinct readings of the staged text with their features: each text once, as the copy the
 /// rules score highest, with where its other copies came from.
-pub fn featurize(p: &Predictor, readings: &Readings, context: Context, dictionary: Option<&Dictionary>, bits: u32) -> Vec<Featured> {
+pub fn featurize(p: &Predictor, readings: &Readings, context: Context, bits: u32) -> Vec<Featured> {
     let context = neutral(context);
     let mut candidates: Vec<Candidate> =
-        p.candidates(readings, context, dictionary).into_iter().filter(|c| !c.prediction.text.is_empty() && c.prediction.score.is_finite()).collect();
+        p.candidates(readings, context).into_iter().filter(|c| !c.prediction.text.is_empty() && c.prediction.score.is_finite()).collect();
     // Stable: equal scores keep the rules' order of generation.
     candidates.sort_by(|a, b| b.prediction.score.total_cmp(&a.prediction.score));
     // Each text once: its highest copy, where its other copies came from, and every copy.
@@ -376,7 +365,6 @@ fn class(origin: Origin, kind: Kind) -> &'static str {
     match origin {
         Origin::English | Origin::Capitalized | Origin::Upper => "en",
         Origin::Mixed | Origin::Head => "mx",
-        Origin::Hanja | Origin::EverydayHanja => "hj",
         Origin::Pieces => match kind {
             Kind::English => "en",
             Kind::Korean => "ko",
@@ -396,8 +384,7 @@ fn origin_name(origin: Origin) -> &'static str {
         Origin::KeepFinals => "F",
         Origin::Kept => "k",
         Origin::ImpliedL => "L",
-        Origin::Hanja => "H",
-        Origin::EverydayHanja => "h",
+        Origin::Aspirated => "N",
         Origin::Bare => "B",
         Origin::Mixed => "M",
         Origin::Head => "A",
@@ -555,6 +542,7 @@ fn features(f: &mut Features, p: &Predictor, readings: &Readings, keys: &Keys, c
     f.add(&["implied", o, &small(readings.implied, 4)], 1.0);
     f.add(&["kept variants", o, &small(keys.kept, 3)], 1.0);
     f.add(&["implied l variants", o, &small(readings.implied_l.len(), 2)], 1.0);
+    f.add(&["aspirated variants", o, &small(readings.aspirated.len(), 2)], 1.0);
     let jamo = chars.iter().filter(|&&c| predict::is_jamo(c)).count();
     f.add(&["jamo", o, &small(jamo, 4)], 1.0);
     if jamo > 0 && jamo == chars.len() {

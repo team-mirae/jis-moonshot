@@ -1,6 +1,7 @@
 import Cocoa
 
-/// The suggestion list under the marked text: predictions while typing, hanja candidates after F7.
+/// The suggestion list under the marked text: predictions while typing, or an English mode's letter
+/// variants.
 /// Modeled on the macOS Japanese input method's live-conversion list: a rounded Liquid Glass panel,
 /// one row per suggestion with hairline separators, and a slim scroll thumb when it overflows. The
 /// English modes' letter variants (spec §3.6.3) are single letters, so they run in one row instead,

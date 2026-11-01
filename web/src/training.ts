@@ -60,7 +60,8 @@ export function check(file: unknown): string[] {
     problems.push('format must be "jis-moonshot-training" (or JIS Korean\'s "jis-korean-training")');
   if (f.version !== 1) problems.push("version must be 1");
   for (const [k, v] of Object.entries(f.weights ?? {})) {
-    if (!(WEIGHTS as readonly string[]).includes(k)) problems.push(`unknown weight "${k}"`);
+    // "hanja" is retired (docs/training-contract.md): accepted and ignored.
+    if (!(WEIGHTS as readonly string[]).includes(k) && k !== "hanja") problems.push(`unknown weight "${k}"`);
     else if (typeof v !== "number" || v < 0 || v > 10) problems.push(`weight "${k}" must be 0–10`);
   }
   const words = (list: TrainingWord[] | undefined, pattern: RegExp, name: string) => {

@@ -11,7 +11,6 @@
 //! A key press is written as its canonical `KeyboardEvent.code`, with `S-` for Shift held:
 //! `KeyG`, `S-Digit2`. One press is one key, with or without Shift.
 
-use std::collections::HashMap;
 
 use crate::plan::{Press, is_compat_jamo, is_syllable};
 use crate::{Engine, Key, Layout, Mods, Out, Step, output_with};
@@ -73,14 +72,14 @@ pub fn type_keys(template: &Engine, presses: &[impl AsRef<str>]) -> Option<Strin
 /// above [`MAX_PRESSES`] is cut to it.
 ///
 /// The search follows key presses whose text heads toward `text` (its Hangul jamo, its letters as
-/// typed or converted with F9/F10, or a hanja's reading before Shift+F8), and keeps a combination only
+/// typed or converted with F9/F10), and keeps a combination only
 /// when typing it really shows `text`.
 pub fn keys_for_output(template: &Engine, text: &str, min: i64, max: i64) -> Vec<Vec<String>> {
     if min < 1 || max < min || text.is_empty() {
         return Vec::new();
     }
     let (min, max) = (min as usize, max.min(MAX_PRESSES) as usize);
-    let targets = targets(template, text);
+    let targets = targets(text);
     let alphabet = alphabet(template, text, &targets);
     let mut found: Vec<Vec<Press>> = Vec::new();
     let mut frontier = vec![(Field::new(template), Vec::<Press>::new())];
@@ -125,7 +124,7 @@ pub fn keys_for_output(template: &Engine, text: &str, min: i64, max: i64) -> Vec
 /// [`key_input_after`] is staged. Keys whose own Korean reading is `text` come first, as a person
 /// types it; only if there are none does a match through the shown prediction count.
 fn route_to(template: &Engine, text: &str) -> Option<Vec<Press>> {
-    let targets = targets(template, text);
+    let targets = targets(text);
     let alphabet = alphabet(template, text, &targets);
     let limit = 4 * text.chars().count() + 8;
     let as_typed = |f: &Field| f.committed.clone() + &f.engine.preedit() == text;
@@ -182,7 +181,7 @@ fn search(
 
 /// The presses a search for `text` tries, plain before Shift: the keys whose character (in the
 /// mode's layout) or letter is part of `text`, Shift+Enter (commit, before a bare jamo), and only
-/// where `text` needs them Shift+F8 (hanja), F9 (full-width), F10 (letters), Space and Enter.
+/// where `text` needs them F9 (full-width), F10 (letters), Space and Enter.
 /// Backspace, Esc, the arrows and Tab are left out: they never shorten a way to type something.
 /// F6 and F7 switch to kana and F8 to kanji (docs/moonshot.md §4), which no Korean or English
 /// text needs.
@@ -216,9 +215,6 @@ fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> 
     let has = |f: &dyn Fn(char) -> bool| text.chars().any(f);
     let mut keys = vec![];
     presses.push(Press { key: Key::Enter, shift: true });
-    if has(&is_hanja) {
-        presses.push(Press { key: Key::F8, shift: true });
-    }
     if has(&|c| crate::half_width(c) != c) {
         keys.push(Key::F9);
     }
@@ -255,7 +251,7 @@ impl Field {
     /// A key that types nothing in the current layout would pass through to the app, whose text
     /// we can't know: those aren't pressed.
     fn can_press(&self, p: Press) -> bool {
-        matches!(p.key, Key::F9 | Key::F10 | Key::Space | Key::Enter) || (p.key == Key::F8 && p.shift)
+        matches!(p.key, Key::F9 | Key::F10 | Key::Space | Key::Enter)
             || output_with(self.engine.mode(), self.engine.dedicated_symbols(), Layout::JisKorean, p.key, p.shift).is_some()
     }
 
@@ -263,7 +259,7 @@ impl Field {
     fn shown_prediction(&self) -> Option<String> {
         #[cfg(feature = "predict")]
         {
-            if self.engine.preedit().is_empty() || self.engine.hanja_open() {
+            if self.engine.preedit().is_empty() {
                 return None;
             }
             let top = self.engine.predictions().into_iter().next()?;
@@ -297,10 +293,8 @@ impl Field {
         self.committed == before.committed
             && self.engine.preedit() == before.engine.preedit()
             && self.engine.english() == before.engine.english()
-            && self.engine.hanja_open() == before.engine.hanja_open()
             && self.engine.mode() == before.engine.mode()
             && self.engine.script() == before.engine.script()
-            && !self.engine.hanja_open()
     }
 
     /// What the field shows: the committed text, then the marked text.
@@ -310,11 +304,8 @@ impl Field {
     }
 
     /// Whether the field is on the way to one of the targets: its Korean, or its keys read as
-    /// letters (before F9/F10), lead into a target, or a hanja list is open.
+    /// letters (before F9/F10), lead into a target.
     fn heads_toward(&self, targets: &[Vec<char>]) -> bool {
-        if self.engine.hanja_open() {
-            return true;
-        }
         let korean = stream(&(self.committed.clone() + &self.engine.preedit()));
         let english = stream(&(self.committed.clone() + &self.engine.english()));
         // The implied ㅇ (spec §4.2) shows before F6 can drop it (ㅠ shows as 유 on the way to ㅠ).
@@ -323,59 +314,9 @@ impl Field {
     }
 }
 
-/// The text a search aims for, as jamo streams: the text itself, and with its hanja replaced by
-/// their readings (typed before Shift+F8). At most 8.
-fn targets(template: &Engine, text: &str) -> Vec<Vec<char>> {
-    let mut variants = vec![String::new()];
-    // Building the reverse index reads the whole dictionary: only for text with hanja.
-    let readings = if text.chars().any(is_hanja) { hanja_readings(template) } else { HashMap::new() };
-    let chars: Vec<char> = text.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        if is_hanja(chars[i]) {
-            let end = (i..chars.len()).find(|&j| !is_hanja(chars[j])).unwrap_or(chars.len());
-            let run: String = chars[i..end].iter().collect();
-            let ways: Vec<String> = match readings.get(&run) {
-                Some(word) => word.clone(),
-                None => chars[i..end]
-                    .iter()
-                    .fold(vec![String::new()], |acc, c| {
-                        let single = readings.get(&c.to_string()).cloned().unwrap_or_default();
-                        acc.iter().flat_map(|a| single.iter().map(move |r| a.clone() + r)).take(8).collect()
-                    }),
-            };
-            let ways = if ways.is_empty() { vec![run] } else { ways };
-            variants = variants.iter().flat_map(|v| ways.iter().map(move |w| v.clone() + w)).take(8).collect();
-            i = end;
-        } else {
-            variants.iter_mut().for_each(|v| v.push(chars[i]));
-            i += 1;
-        }
-    }
-    variants.iter().map(|v| stream(v)).collect()
-}
-
-/// hanja word or character → its readings, best-ranked first.
-fn hanja_readings(template: &Engine) -> HashMap<String, Vec<String>> {
-    let mut found: HashMap<String, Vec<(usize, String)>> = HashMap::new();
-    if let Some(dictionary) = template.dictionary() {
-        for (reading, candidates) in dictionary.entries() {
-            for (position, candidate) in candidates.iter().enumerate() {
-                found.entry(candidate.hanja.clone()).or_default().push((position, reading.to_string()));
-            }
-        }
-    }
-    found
-        .into_iter()
-        .map(|(hanja, mut readings)| {
-            readings.sort();
-            (hanja, readings.into_iter().map(|(_, r)| r).collect())
-        })
-        .collect()
-}
-
-fn is_hanja(c: char) -> bool {
-    matches!(c, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}')
+/// The text a search aims for, as jamo streams: the text itself.
+fn targets(text: &str) -> Vec<Vec<char>> {
+    vec![stream(text)]
 }
 
 /// Text as a stream for prefix checks: Hangul split into jamo, with double and compound jamo split

@@ -67,14 +67,12 @@ FinishedLabelNoIcons=Restart the apps that were open: they keep the old version,
 FinishedLabel=Restart the apps that were open: they keep the old version, or none, until they restart.%n%nPress Win+Space and pick JIS Moonshot.%n%n無変換 switches to English, 変換 back to Korean (한/영 toggles them). F6 types hiragana, F7 katakana. Right-click the 한あ / ABC indicator in the taskbar for JIS Kana and the settings.
 
 [Files]
-; The engine's data (the hanja dictionary, the predictor's lexicons, predict/common-ja.txt for
-; the kana reading included) is embedded in the DLL (jismoonshot.rc.in).
+; The engine's data (the predictor's lexicons, predict/common-ja.txt for the kana reading and
+; predict/kanji.bin included) is embedded in the DLL (jismoonshot.rc.in).
 Source: "{#Build}\x64\jismoonshot.dll"; DestDir: "{app}\x64"; Flags: ignoreversion
 Source: "{#Build}\x86\jismoonshot.dll"; DestDir: "{app}\x86"; Flags: ignoreversion
 ; The licenses of the data inside the DLL.
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#Root}\engine\dict\LICENSE-libhangul-hanja.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#Root}\engine\dict\LICENSE-unicode.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\engine\predict\LICENSE-corpora.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\engine\predict\LICENSE-wordnet.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\engine\predict\LICENSE-mozc.txt"; DestDir: "{app}"; Flags: ignoreversion

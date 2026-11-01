@@ -1,12 +1,12 @@
 //! Kanji conversion (docs/moonshot.md §5.1): the converter on Mozc's evaluation set, its data
-//! never panicking, and how conversions join the predictions (the top-n gate, F8, Shift+F8).
+//! never panicking, and how conversions join the predictions (the top-n gate, F8 and Shift+F8).
 #![cfg(feature = "predict")]
 
 use std::sync::{Arc, OnceLock};
 
 use jis_korean::kanji::Kanji;
 use jis_korean::predict::{KANJI_TOP_N, Kind, MAX_WITH_KANJI, Predictor};
-use jis_korean::{Dictionary, Engine, Key, Mode, Mods, Script};
+use jis_korean::{Engine, Key, Mode, Mods, Script};
 
 const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/predict/");
 
@@ -161,18 +161,6 @@ fn kanji_join_only_when_a_japanese_reading_is_in_the_top_n() {
 }
 
 #[test]
-fn no_hanja_readings_among_the_predictions() {
-    // 학교 has a dictionary hanja form, 2026년 an everyday one: neither is predicted any more.
-    let mut e = engine();
-    e.set_dictionary(Arc::new(Dictionary::parse(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap())));
-    for keys in ["KeyG KeyK KeyR KeyR KeyY", "Digit2 Digit0 Digit2 Digit6 KeyS KeyU KeyS"] {
-        press(&mut e, keys);
-        assert!(predicted(&e).iter().all(|(_, k)| *k != Kind::Hanja), "{keys}: {:?}", predicted(&e));
-        e.clear();
-    }
-}
-
-#[test]
 fn f8_puts_kanji_on_top_until_the_commit() {
     // 한 (G K S) reads Korean; F8 converts its kana reading (きのと) and shows the conversions first,
     // then the kana reading, then the rest.
@@ -191,6 +179,21 @@ fn f8_puts_kanji_on_top_until_the_commit() {
     let out = e.key_after_prediction(0, Key::Space, Mods::NONE);
     assert_eq!(out.commit, format!("{top} "));
     assert!(!e.kanji_forced());
+    press(&mut e, "KeyG KeyK KeyS");
+    assert_eq!(predicted(&e)[0], ("한".into(), Kind::Korean));
+}
+
+#[test]
+fn a_common_word_from_the_kanji_dictionary_reads_as_japanese() {
+    // どようび (と゛ よ う ひ゛: ゛ is @, a key that types Korean too) isn't in common-ja.txt, but it's
+    // a common word in Mozc's dictionary: kana first, 土曜日 listed (docs/moonshot.md §5).
+    let mut e = engine();
+    press(&mut e, "KeyS BracketLeft Digit9 Digit4 KeyV BracketLeft");
+    let list = predicted(&e);
+    assert_eq!(list[0], ("どようび".into(), Kind::Kana), "{list:?}");
+    assert!(texts(&list).contains(&"土曜日"), "{list:?}");
+    // A rare one (きのと, 乙) doesn't count: 한 stays Korean.
+    let mut e = engine();
     press(&mut e, "KeyG KeyK KeyS");
     assert_eq!(predicted(&e)[0], ("한".into(), Kind::Korean));
 }
@@ -239,21 +242,3 @@ fn f8_in_jis_kana_offers_conversions_above_the_kana() {
     assert_eq!(e.script(), Script::Katakana);
 }
 
-#[test]
-fn the_hanja_list_moved_to_shift_f8() {
-    let mut e = engine();
-    e.set_dictionary(Arc::new(Dictionary::parse(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap())));
-    press(&mut e, "KeyG KeyK KeyS S-F7");
-    assert!(!e.hanja_open(), "Shift+F7 is reserved");
-    press(&mut e, "S-F8");
-    assert!(e.hanja_open());
-    let first = e.key(Key::F8, Mods::SHIFTED).candidates.unwrap();
-    assert_eq!(first.selected, 1, "Shift+F8 again moves down the list");
-    // Plain F8 closes the list and converts.
-    e.key(Key::F8, Mods::NONE);
-    assert!(!e.hanja_open());
-    assert!(e.kanji_forced());
-    // With nothing staged, Shift+F8 goes to the app.
-    let mut e = engine();
-    assert!(!e.key(Key::F8, Mods::SHIFTED).consumed);
-}

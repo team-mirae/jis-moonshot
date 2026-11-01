@@ -30,9 +30,6 @@ interface Exports {
   jk_resolved_len(h: number): number;
   jk_alloc(len: number): number;
   jk_dealloc(ptr: number, len: number): void;
-  jk_dict_new(ptr: number, len: number): number;
-  jk_dict_free(dict: number): void;
-  jk_set_dictionary(h: number, dict: number): void;
   jk_candidate_count(h: number): number;
   jk_candidate_selected(h: number): number;
   jk_candidate_page_size(): number;
@@ -80,12 +77,12 @@ export interface Prediction {
 }
 
 export type PredictionKind =
-  | "korean" | "english" | "capitalized" | "upper" | "two-set" | "keep-finals" | "hanja" | "bare" | "mixed" | "implied-l"
+  | "korean" | "english" | "capitalized" | "upper" | "two-set" | "keep-finals" | "bare" | "mixed" | "implied-l"
   | "kana" | "katakana" | "kanji";
-/** In C ABI id order (JK_PREDICTION_*): kana (10) and katakana (11) are the kana reading, kanji
- * (12) its conversions. */
-const KINDS: PredictionKind[] = [
-  "korean", "english", "capitalized", "upper", "two-set", "keep-finals", "hanja", "bare", "mixed", "implied-l",
+/** Indexed by C ABI id (JK_PREDICTION_*): kana (10) and katakana (11) are the kana reading, kanji
+ * (12) its conversions. 6 was hanja (gone): a hole, so the ids after it stay. */
+const KINDS: (PredictionKind | undefined)[] = [
+  "korean", "english", "capitalized", "upper", "two-set", "keep-finals", undefined, "bare", "mixed", "implied-l",
   "kana", "katakana", "kanji",
 ];
 
@@ -93,8 +90,12 @@ const KINDS: PredictionKind[] = [
 export const JAPANESE_KINDS: PredictionKind[] = ["kana", "katakana", "kanji"];
 
 /** Scenarios the user can tune (spec §10.5), in C ABI id order. */
-export const WEIGHTS = ["korean", "english", "implied", "mixed", "two-set", "keep-finals", "hanja", "implied-l", "kana"] as const;
+export const WEIGHTS = ["korean", "english", "implied", "mixed", "two-set", "keep-finals", "implied-l", "kana"] as const;
 export type WeightName = (typeof WEIGHTS)[number];
+/** Their C ABI ids (JK_WEIGHT_*). 6 was hanja: retired, kept so the ids after it stay. */
+const WEIGHT_IDS: Record<WeightName, number> = {
+  korean: 0, english: 1, implied: 2, mixed: 3, "two-set": 4, "keep-finals": 5, "implied-l": 7, kana: 8,
+};
 
 /** How the implied-ㅇ alternatives are ranked (spec §10.7), in C ABI id order. */
 export const RANKERS = ["rules", "travel", "route"] as const;
@@ -118,7 +119,7 @@ export interface Mods {
 }
 
 export interface Candidate {
-  hanja: string;
+  text: string;
   comment: string;
 }
 
@@ -131,7 +132,8 @@ export interface Output {
   commit: string;
   preedit: string;
   consumed: boolean;
-  /** The hanja list, while one is open (Shift+F8). */
+  /** The engine's candidate list, while one is open: only the English modes' ⌥ + letter variants
+   * (spec §3.6.3), which the playground doesn't offer. */
   candidates: Candidates | null;
 }
 
@@ -169,7 +171,7 @@ export class Engine {
     const items: Candidate[] = [];
     for (let i = 0; i < count; i++) {
       items.push({
-        hanja: this.text(x.jk_candidate_ptr(h, i), x.jk_candidate_len(h, i)),
+        text: this.text(x.jk_candidate_ptr(h, i), x.jk_candidate_len(h, i)),
         comment: this.text(x.jk_candidate_comment_ptr(h, i), x.jk_candidate_comment_len(h, i)),
       });
     }
@@ -185,31 +187,7 @@ export class Engine {
     return this.x.jk_candidate_page_size();
   }
 
-  private dictionaryLoad?: Promise<void>;
   private predictorLoad?: Promise<void>;
-
-  /** Loads the hanja dictionary (dict/hanja.tsv) so Shift+F8 works. Once per engine: a remounted
-   * playground gets the same promise. A failed load can be tried again. */
-  loadDictionary(url: string): Promise<void> {
-    this.dictionaryLoad ??= this.fetchDictionary(url).catch((error) => {
-      this.dictionaryLoad = undefined;
-      throw error;
-    });
-    return this.dictionaryLoad;
-  }
-
-  private async fetchDictionary(url: string): Promise<void> {
-    const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
-    const { x } = this;
-    const ptr = x.jk_alloc(bytes.length);
-    new Uint8Array(x.memory.buffer, ptr, bytes.length).set(bytes);
-    const dict = x.jk_dict_new(ptr, bytes.length);
-    x.jk_dealloc(ptr, bytes.length);
-    if (!dict) throw new Error("hanja dictionary is not UTF-8");
-    x.jk_set_dictionary(this.handle, dict);
-    // The engine keeps its own reference.
-    x.jk_dict_free(dict);
-  }
 
   private predictor = 0;
   /** The predictor as loaded; `predictor` may be it with the user's own words (training file). */
@@ -218,7 +196,7 @@ export class Engine {
   private ranker: RankerName = "rules";
 
   /** Loads the predictive layer (ranker model and word lists). Turn it on with `setPredictions`.
-   * Once per engine, as `loadDictionary`: loading again would leak the predictor it replaces. */
+   * Once per engine: loading again would leak the predictor it replaces. */
   loadPredictor(base: string): Promise<void> {
     this.predictorLoad ??= this.fetchPredictor(base).catch((error) => {
       this.predictorLoad = undefined;
@@ -369,7 +347,9 @@ export class Engine {
     const count = x.jk_predict(h);
     const out: Prediction[] = [];
     for (let i = 0; i < count; i++) {
-      out.push({ text: this.text(x.jk_prediction_ptr(h, i), x.jk_prediction_len(h, i)), kind: KINDS[x.jk_prediction_kind(h, i)] });
+      // Every row, so the indices match commitPrediction's (the engine never gives the hole, 6).
+      const kind = KINDS[x.jk_prediction_kind(h, i)] ?? "korean";
+      out.push({ text: this.text(x.jk_prediction_ptr(h, i), x.jk_prediction_len(h, i)), kind });
     }
     return out;
   }
@@ -403,12 +383,12 @@ export class Engine {
   /** Tunes one scenario: a multiplier on its learned probability (1 = as learned; 0 turns an
    * alternative off). */
   setWeight(which: WeightName, value: number): void {
-    this.x.jk_set_prediction_weight(this.handle, WEIGHTS.indexOf(which), value);
+    this.x.jk_set_prediction_weight(this.handle, WEIGHT_IDS[which], value);
   }
 
   /** Hands a scenario's weight back to learning (or 1 when learning is off). */
   clearWeight(which: WeightName): void {
-    this.x.jk_clear_prediction_weight(this.handle, WEIGHTS.indexOf(which));
+    this.x.jk_clear_prediction_weight(this.handle, WEIGHT_IDS[which]);
   }
 
   /** Learning from the user's choices (spec §10.11). The engine records choices itself. */
@@ -418,7 +398,7 @@ export class Engine {
 
   /** The learned multiplier for a scenario (0.5–2; 1 = no change). */
   learnedWeight(which: WeightName): number {
-    return this.x.jk_learned_weight(this.handle, WEIGHTS.indexOf(which));
+    return this.x.jk_learned_weight(this.handle, WEIGHT_IDS[which]);
   }
 
   /** Whether what was learned changed since the last call. */

@@ -1,6 +1,6 @@
 // The JIS Moonshot text service: one COM object per thread that has TSF, holding one engine. All
 // behavior is in the engine (docs/moonshot.md, docs/spec.md): this class moves key events in, and
-// text out as a TSF composition, and shows the hanja / prediction list. Mirrors
+// text out as a TSF composition, and shows the prediction list. Mirrors
 // mac/Sources/InputController.swift.
 //
 // 한/영 (VK_HANGUL) switches JIS Moonshot to ABC and back, as the Microsoft IME does: in ABC every
@@ -118,13 +118,11 @@ private:
     void Apply(ITfContext* context);
     void Refresh(ITfContext* context, const std::wstring& commit = {});
     void ShowList();
-    void PickHanja(size_t index);
     // Commits everything unconfirmed (focus loss, IME switch, 한/영).
     void Flush(ITfContext* context);
     void ApplySettings(bool force = false);  // unless forced, only when settings::Version changed
     void Activated();  // settings, then a changed training file (spec §10.12)
     void EnsureData();  // the predictor, before the first key
-    void EnsureDictionary();  // the hanja dictionary: at the first Shift+F8, or with predictions
     void SetMode(unsigned mode);  // by engine id; one the engine refuses (1, 2, 9, 10): Mode A
 
 #ifdef JK_PREDICT
@@ -208,7 +206,6 @@ private:
     bool app_off_ = false;     // JIS Moonshot is off in this program (settings::AppOff)
     std::wstring last_scopes_;  // for the log
     bool data_ready_ = false;  // the shared predictor may be set on the engine
-    bool dictionary_set_ = false;  // the shared dictionary is set on the engine
     std::optional<unsigned long> applied_version_;  // settings::Version last applied
     unsigned training_seen_ = 0;  // training::Generation last applied
 #ifdef JK_PREDICT

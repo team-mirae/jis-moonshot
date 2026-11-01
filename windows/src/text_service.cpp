@@ -32,6 +32,7 @@ constexpr ULONGLONG kOwnTermination = 100;
 
 #ifdef JK_PREDICT
 // spec §10.5, in JK_WEIGHT_* order (as macOS's Weight.<Scenario>); Kana is docs/moonshot.md §5.
+// Hanja (6) is retired (no reading uses it) but keeps its slot so ImpliedL and Kana keep ids 7, 8.
 constexpr const wchar_t* kWeightNames[] = {L"Korean", L"English", L"Implied", L"Mixed",  L"TwoSet",
                                            L"KeepFinals", L"Hanja", L"ImpliedL", L"Kana"};
 #endif
@@ -161,14 +162,8 @@ void TextService::EnsureData() {
 #endif
     if (data_ready_) return;
     data_ready_ = true;
-    // The predictor (and with it the dictionary); waits only if Preload hasn't finished.
+    // The predictor; waits only if Preload hasn't finished.
     ApplySettings(true);
-}
-
-void TextService::EnsureDictionary() {
-    if (dictionary_set_) return;
-    dictionary_set_ = true;
-    jk_set_dictionary(engine_, SharedDictionary());  // parsed now if nothing needed it before
 }
 
 TextService::~TextService() {
@@ -312,7 +307,7 @@ STDMETHODIMP TextService::Deactivate() {
 // --- keys
 
 bool TextService::Composing() const {
-    if (jk_preedit_len(engine_) > 0 || jk_candidate_count(engine_) > 0) return true;
+    if (jk_preedit_len(engine_) > 0) return true;
 #ifdef JK_PREDICT
     if (shown_) return true;
 #endif
@@ -571,8 +566,6 @@ void TextService::HandleKey(ITfContext* context, unsigned vk, std::uint32_t key,
                             std::uint32_t mods, BOOL* eaten) {
     Settle();  // a queued session's refusal, before the engine sees the next key
     CheckOrphan();
-    // The hanja list (Shift+F8, docs/moonshot.md §4): the first one in this program parses it.
-    if (key == JK_KEY_F8 && (mods & JK_MOD_SHIFT)) EnsureDictionary();
 #ifdef JK_PREDICT
     if (HandleList(context, vk, key, mods)) {
         *eaten = TRUE;
@@ -706,7 +699,7 @@ void TextService::Apply(ITfContext* context) {
     predictions_.clear();
     japanese_.clear();
     const bool staged = jk_preedit_len(engine_) > 0;
-    if (staged && predicting_ && jk_candidate_count(engine_) == 0) {
+    if (staged && predicting_) {
         const size_t count = jk_predict(engine_);
         for (size_t i = 0; i < count; ++i) {
             predictions_.push_back(Utf16(jk_prediction_ptr(engine_, i), jk_prediction_len(engine_, i)));
@@ -733,7 +726,7 @@ void TextService::Apply(ITfContext* context) {
 
 void TextService::Refresh(ITfContext* context, const std::wstring& commit) {
     std::wstring preedit = Utf16(jk_preedit_ptr(engine_), jk_preedit_len(engine_));
-    bool converted = jk_candidate_count(engine_) > 0;
+    bool converted = false;
 #ifdef JK_PREDICT
     if (chosen_ && *chosen_ < predictions_.size()) shown_ = predictions_[*chosen_];
     if (shown_) {
@@ -752,27 +745,10 @@ void TextService::Refresh(ITfContext* context, const std::wstring& commit) {
     ShowList();
 }
 
+// The list shows the predictions only. The engine's own candidate list (jk_candidate_*) never
+// opens here: hanja are gone, and its other use, the English modes' Alt + letter variants (spec
+// §3.6.3), is macOS's only (the engine is never in an English mode here; TypeEnglish types ABC).
 void TextService::ShowList() {
-    const size_t hanja = jk_candidate_count(engine_);
-    if (hanja > 0) {
-        const size_t page = jk_candidate_page_size();
-        // A selected index equal to the count: nothing selected yet (spec §3.6.3); the first page.
-        const size_t raw = jk_candidate_selected(engine_);
-        const bool none = raw >= hanja;
-        const size_t selected = none ? 0 : raw;
-        const size_t start = selected / page * page;
-        std::vector<CandidateWindow::Row> rows;
-        for (size_t i = start; i < hanja && i < start + page; ++i) {
-            rows.push_back({std::to_wstring(i - start + 1),
-                            Utf16(jk_candidate_ptr(engine_, i), jk_candidate_len(engine_, i)),
-                            Utf16(jk_candidate_comment_ptr(engine_, i),
-                                  jk_candidate_comment_len(engine_, i))});
-        }
-        list_.Show(std::move(rows), none ? -1 : static_cast<int>(selected - start),
-                   (none ? L"" : std::to_wstring(selected + 1) + L"/") + std::to_wstring(hanja), anchor_,
-                   [this, start](size_t row) { PickHanja(start + row); });
-        return;
-    }
 #ifdef JK_PREDICT
     if (Composing() && predictions_.size() > 1) {
         std::vector<CandidateWindow::Row> rows;
@@ -787,20 +763,6 @@ void TextService::ShowList() {
     }
 #endif
     list_.Hide();
-}
-
-// A click on a hanja candidate: move the engine's selection there, then pick it.
-void TextService::PickHanja(size_t index) {
-    if (!Target(nullptr)) return;
-    Settle();
-    const size_t selected = jk_candidate_selected(engine_);
-    const std::uint32_t key = index > selected ? JK_KEY_ARROWDOWN : JK_KEY_ARROWUP;
-    for (size_t i = 0; i < (index > selected ? index - selected : selected - index); ++i) {
-        jk_key(engine_, key, 0);
-    }
-    jk_key(engine_, JK_KEY_ENTER, 0);
-    ComPtr<ITfContext> context = Target(nullptr);
-    Apply(context.Get());
 }
 
 void TextService::Flush(ITfContext* context) {
@@ -822,7 +784,7 @@ void TextService::Flush(ITfContext* context) {
 #ifdef JK_PREDICT
 bool TextService::HandleList(ITfContext* context, unsigned vk, std::uint32_t key,
                              std::uint32_t mods) {
-    if (predictions_.size() < 2 || jk_candidate_count(engine_) > 0 || (mods & kShortcut)) {
+    if (predictions_.size() < 2 || (mods & kShortcut)) {
         return false;
     }
     const size_t count = predictions_.size();
@@ -885,7 +847,6 @@ void TextService::ApplySettings(bool force) {
     // Before the first key the predictor may still be loading (EnsureData sets it then).
     predicting_ = on && data_ready_ && training::SetPredictor(engine_);
     if (!predicting_) jk_set_predictor(engine_, nullptr);
-    if (predicting_) EnsureDictionary();  // predictions read hanja readings from it
     for (std::uint32_t id = 0; id < std::size(kWeightNames); ++id) {
         const std::wstring name = std::wstring(L"Weight.") + kWeightNames[id];
         if (auto value = settings::ReadString(name.c_str())) {
@@ -1006,10 +967,12 @@ void TextService::InitMenu(ITfMenu* menu) {
     const std::wstring title = L"Learned Weights";
     if (SUCCEEDED(menu->AddMenuItem(0, TF_LBMENUF_SUBMENU, nullptr, nullptr, title.c_str(),
                                     static_cast<ULONG>(title.size()), &learned)) && learned) {
+        // By weight id; nullptr: the retired hanja slot (6), not shown.
         const wchar_t* labels[] = {L"Korean",      L"English",     L"Implied ㅇ", L"English + particle",
-                                   L"Plain 2-set", L"Finals kept", L"Hanja",      L"Implied ㄹ after ㄴ",
+                                   L"Plain 2-set", L"Finals kept", nullptr,       L"Implied ㄹ after ㄴ",
                                    L"Kana"};
         for (std::uint32_t id = 0; id < std::size(labels); ++id) {
+            if (!labels[id]) continue;
             wchar_t line[64];
             swprintf_s(line, L"%s  ×%.2f", labels[id], jk_learned_weight(engine_, id));
             learned->AddMenuItem(0, TF_LBMENUF_GRAYED, nullptr, nullptr, line,

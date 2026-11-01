@@ -60,7 +60,7 @@ for it (`A_ROMAJI`).
 | ⌥Space (macOS) | A full-width space in JIS Moonshot and JIS Kana; `_` in English. |
 | F7 | Katakana, the same way. |
 | F8 | Kanji: the kana reading's conversions on top, until the commit. Kanji also show as predictions when a Japanese reading ranks in the top two. |
-| Shift+F8 | The hanja list (it was F7 in JIS Korean). Hanja are no longer predicted. |
+| Shift+F8 | The same as F8 (kanji). JIS Moonshot has no hanja. |
 | F9 / F10 | Full-width / half-width letters, as in JIS Korean. |
 | Shift+Z | A key like any other: ㅋ in Korean, っ in kana, Z in English. In JIS Korean it was F10. |
 
@@ -117,9 +117,6 @@ JIS Moonshot is a fork of **[JIS Korean](https://github.com/team-mirae/jis-korea
 engine, the predictor and both shells, is JIS Korean's work. JIS Moonshot installs beside JIS Korean
 without colliding.
 
-- The **hanja dictionary** is derived from [libhangul](https://github.com/libhangul/libhangul)
-  (BSD-3-Clause), with readings from the [Unicode Unihan database](https://www.unicode.org/reports/tr38/)
-  (Unicode License v3).
 - The **prediction word lists and ranker model** are word counts from public corpora and word
   lists, with no sentences shipped: [NSMC](https://github.com/e9t/nsmc) (CC0 1.0),
   [Chatbot_data](https://github.com/songys/Chatbot_data) (MIT), [Tatoeba](https://tatoeba.org)
@@ -127,7 +124,7 @@ without colliding.
   (CC BY 4.0), 행정안전부 공통표준용어 and 공통표준단어 ([공공데이터포털](https://www.data.go.kr)),
   [FIBO](https://github.com/edmcouncil/fibo) (MIT), [dwyl/english-words](https://github.com/dwyl/english-words)
   (Unlicense) and [Princeton WordNet 3.0](https://wordnet.princeton.edu) (WordNet license). The
-  license files ship alongside the data (`engine/predict/`, `engine/dict/`).
+  license files ship alongside the data (`engine/predict/`).
 - The Japanese word list (`engine/predict/common-ja.txt`) is hand-written for JIS Moonshot.
 - Used for testing only, not shipped: Samsung Electronics' "사업의 내용" from
   [DART](https://dart.fss.or.kr), and texts on [Korean Wikisource](https://ko.wikisource.org).

@@ -16,7 +16,7 @@ ways. Where this file and `spec.md` disagree, this file wins until the spec is u
 | 5 | Minecraft mod | **Dropped** (its corpus tools moved to `engine/tools/corpora/`) |
 | 6 | macOS, Windows, Minecraft, web | macOS first, Windows second. The web playground stays as a demo |
 | 7 | 英数 → English, カタカナ/F18 → Korean, かな left to macOS | 英数 / 無変換 → English, かな / 変換 → predictive (Mode A); again in Mode A → force Korean |
-| 8 | F6 commits Korean, F7 opens hanja; Shift+Z is F10 | **F6 → hiragana, F7 → katakana**, for the text being typed (`A_KANA` is the kana-only mode); **F8 → kanji**, **Shift+F8 → the hanja list**; F9/F10 as before. **Shift+Z is no longer F10**: it's ㅋ in Korean (standard 2-set again) and っ in kana |
+| 8 | F6 commits Korean, F7 opens hanja; Shift+Z is F10 | **F6 → hiragana, F7 → katakana**, for the text being typed (`A_KANA` is the kana-only mode); **F8 → kanji** (Shift+F8 the same), **the hanja list**; F9/F10 as before. **Shift+Z is no longer F10**: it's ㅋ in Korean (standard 2-set again) and っ in kana |
 | 9 | Hanja show as predictions | **No hanja predictions**; the kana reading's **kanji conversions** join the predictions instead (§5.1) |
 | 10 | Symbols on the keys right of 0 (! ( — ' [ ~ : ] , . · \\), ㅃ ㅉ ㄸ ㄲ ㅆ ㅒ ㅖ on Shift | Those 12 keys type syllables, compound vowels and finals instead (24 slots with Shift), and Shift on Q W E R T O P changes (§9) |
 
@@ -106,7 +106,7 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
 | F6 | goes to the app | hiragana: the staged keys read as kana, **until the next commit** (then Auto again) | hiragana, kept |
 | F7 | goes to the app | katakana, until the next commit | katakana, kept |
 | F8 | goes to the app | **kanji**: the kana reading's conversions on top, until the next commit (§5.1) | the conversions above the kana, until the next commit |
-| Shift+F8 | goes to the app | the hanja list (staged text; nothing staged: to the app) | nothing |
+| Shift+F8 | goes to the app | the same as F8 (the hanja list is gone) | the same as F8 |
 | F9 / F10 | goes to the app | as in JIS Korean (the word's keys as full- / half-width letters) | the staged run's keys as full- / half-width characters |
 | Shift+Z | Z | ㅋ / っ (a key like any other) | っ |
 
@@ -125,9 +125,8 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   again. In `A_KANA` (which predicts nothing by itself) it lists the conversions above the kana as
   typed, in the mode's script. **[decide]** whether F8 should put the conversions on top or only
   make sure they're listed.
-- **The hanja list** moved from F7 to Shift+F7 and then to **Shift+F8** (2026-11-01, next to F8's
-  kanji), with something staged in Mode A; Shift+F8 again moves down the list. Shift+F6 and
-  Shift+F7 are reserved. Hanja are **no longer predicted** (§5.1).
+- **No hanja** (2026-11-02, §5.1): the hanja list (F7 in JIS Korean, then Shift+F7, then
+  Shift+F8) is gone with the hanja dictionary. Shift+F8 is F8. Shift+F6 and Shift+F7 are reserved.
 - **⌥Space** (macOS) commits what shows and types a full-width space (U+3000) in Mode A and
   `A_KANA`, and types `_` in the English modes. It's an engine setting (`jk_set_option_space`), off
   by default: on Windows Alt+Space is the window menu. In a terminal, ⌥ in an English mode still
@@ -159,7 +158,11 @@ Mode A's predictions get a **kana** reading, of kind `Kana` (hiragana) or `Katak
 - **Lexicon:** `engine/predict/common-ja.txt` (hand-written, hiragana and katakana words with
   counts; particles and endings marked). Japanese is written without spaces, so a staged segment is
   often a whole phrase: the score uses the share of the kana covered by known words and particles
-  (a longest-match segmentation), not only exact matches.
+  (a longest-match segmentation), not only exact matches. A **common word in the kanji dictionary**
+  counts as known too (2026-11-02): three kana or more, Mozc cost 4500 or less (どようび 3353 in,
+  きのと 5766 out), so common words the hand-written list lacks read as Japanese and get their kanji.
+- **Korean-only keys** (§9.3) lift Korean over English; a known Japanese word gets the same lift, so
+  those keys (kana-only keys too) don't push Korean past it: どようび, typed with ゛ on `@`.
 - **Score** (bits, the predictor's units): the best other reading's score, minus 3, plus the
   evidence: coverage by known words (up to +5 for a whole known word, scaled down for 2–3 kana),
   each **kana-only key** inside the run (− ^ ¥ @ [ ; : ] , . / ろ, which type symbols in Korean:
@@ -195,9 +198,12 @@ predictions **only when a Japanese reading (kana or katakana) is among the top n
   (386k of 1.29M entries); the connection matrix kept whole, one byte per cell, run-length coded.
   On Mozc's evaluation sentences (`tests/data/kanji-evaluation.tsv`) it gets 70% exactly right
   (79% for the whole dictionary) and 79% within the top three; `tests/kanji.rs` holds the floor.
-- **No hanja predictions:** they'd compete with kanji for the same slots and read the same
-  characters differently. `Kind::Hanja` and `Weight::Hanja` keep their ids; the hanja dictionary
-  still counts as evidence that a Korean reading is a word. Hanja come from the list (Shift+F8).
+- **No hanja at all** (2026-11-02, the owner's call; losses accepted): hanja predictions would
+  compete with kanji for the same slots, and the hanja list and dictionary cost test time for little
+  use. The dictionary (`engine/dict/`), the list, `jk_dict_*` / `jk_set_dictionary` and the
+  prediction kind are gone; `Weight::Hanja` (id 6) stays as a retired slot so the weights after it
+  keep their ids. Without the dictionary, Sino-Korean words it knew no longer count as known words
+  (the legacy ranker's corpus limits rose a little, `tests/corpora.rs`).
 - **Display:** Japanese readings (kanji, kana, katakana) are drawn in a Japanese font so kanji
   take their Japanese (新字体) forms whatever the system language: **Hiragino Sans** in the macOS
   suggestion list and marked text (with the language tagged `ja`; apps that draw marked text in

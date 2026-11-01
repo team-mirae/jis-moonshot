@@ -4,7 +4,7 @@ The Windows input method for JIS Moonshot, the fork of JIS Korean that types Kor
 Japanese kana from one JIS keyboard (`docs/moonshot.md`, which wins over `docs/spec.md`): a TSF
 text input processor (`jismoonshot.dll`) that wraps `/engine`. All behavior is in the engine. This
 shell maps scan codes to engine keys (spec §2) and applies the result to the app as a TSF
-composition, the hanja and prediction list, and the taskbar's 한あ / かな / ABC indicator.
+composition, the prediction list, and the taskbar's 한あ / かな / ABC indicator.
 
 It installs beside JIS Korean without colliding: its own CLSID and profile (`src/guids.h`),
 `jismoonshot.dll` in `Program Files\JIS Moonshot`, settings in `HKCU\Software\JIS Moonshot` and
@@ -24,9 +24,9 @@ tools/build.ps1 -Arch x64     # one architecture
 python -I tools/make-icons.py # only after the logo changes: icons/moonshot.ico from docs/logo
 ```
 
-There is no lite build: predictions are always on (docs/moonshot.md §6). The DLL embeds the hanja
-dictionary and the prediction model, `predict/common-ja.txt` (the kana reading's lexicon) included,
-so each process maps one copy from the image. It links the static CRT: it loads into every app
+There is no lite build: predictions are always on (docs/moonshot.md §6). The DLL embeds the
+prediction model, `predict/common-ja.txt` (the kana reading's lexicon) and `predict/kanji.bin`
+included, so each process maps one copy from the image. It links the static CRT: it loads into every app
 and can't count on a VC++ runtime being installed. The engine is built with its `english` feature,
 for ABC's English layouts.
 
@@ -102,7 +102,7 @@ exclusions still apply. A left click on the indicator shows it too.
 | 한/영 | Toggles ABC and 한글, as the Microsoft IME does, committing what's unconfirmed first. The state (with 無変換 / 変換) is one for the whole session, every app, and isn't stored: after a restart it's 한글. A click on the indicator does the same. JIS keyboards have no 한/영 key; 無変換 and 変換 do its job. |
 | F6 / F7 | Hiragana (F6) or katakana (F7): the staged keys read as kana until the next commit, then predictive again; with nothing staged, the next segment is kana. In JIS Kana they switch its script for good. |
 | F8 | Kanji: the kana reading's conversions on top until the next commit (nothing staged: the next segment). In JIS Kana, the conversions above the kana. |
-| Shift+F8 | The hanja list for what's staged in Mode A (it was F7 in JIS Korean), numbered 1–9 per page (spec §7). |
+| Shift+F8 | The same as F8 (kanji). JIS Moonshot has no hanja (docs/moonshot.md §4). |
 | F9 / F10 | As in JIS Korean: the word's keys as full- / half-width letters. Shift+Z is no longer F10: it types ㅋ (っ on the kana layout). |
 | English Layout (無変換, 한/영) | What ABC types, a selector of its own in the menu: JIS English (the default), JIS Dvorak, JIS Colemak, or **Windows' Keyboard Layout**, which passes every key to the app untouched. Shortcuts (Ctrl, Alt, Win) always go to the app; the Alt + letter variants of macOS's English modes are deliberately left out (spec §3.6.3). |
 | Predictions (spec §10) | Always on. The unconfirmed text shows the top reading (`hello` shows as hello, きって as きって). ↓ / Tab and ↑ / Shift+Tab move through the list under it (up to five rows, the kana reading among them), Space / Enter commit what's shown (Enter the chosen row), Esc goes back to the top reading, a click picks a row. Excluded by default in terminals, remote desktop, password managers, File Explorer and launchers (spec §10.11.1): there, Mode A types forced Korean. |
@@ -123,7 +123,7 @@ switch, and that is all it can be. It's very hard to make it work the way people
   then hands every key to the app. It can't go back and turn the last word into English, and
   pressing it mid-word splits the word in two.
 - **English typed in ABC is invisible to JIS Moonshot's composition.** No predictions, no F9 / F10,
-  no hanja, and nothing learned from it: ABC only types the English layout's characters.
+  no kanji, and nothing learned from it: ABC only types the English layout's characters.
 - **One state for everything.** It's the same in every app and every field, and starts on 한글
   after a restart, so a field that "should" be English needs the key pressed again.
 - **Mixed text costs two extra presses per switch**, where the predictions need none.
@@ -173,7 +173,7 @@ from the menu.
 | `EnterCommits` | DWORD | 0 | Enter commits without a new line (spec §5.1) |
 | `LearnFromChoices` | DWORD | 0 | learning from your choices (spec §10.11) |
 | `Learned` | SZ | | what was learned: one line of counts, no text or keys |
-| `Weight.<Scenario>` | SZ | | user tuning (spec §10.5): `Korean` `English` `Implied` `Mixed` `TwoSet` `KeepFinals` `Hanja` `ImpliedL` `Kana`, e.g. `0.8` |
+| `Weight.<Scenario>` | SZ | | user tuning (spec §10.5): `Korean` `English` `Implied` `Mixed` `TwoSet` `KeepFinals` `Hanja` `ImpliedL` `Kana`, e.g. `0.8` (`Hanja` is retired: it has no effect, but keeps its id) |
 | `Apps\<program.exe>\Predictions` | DWORD | | predictions in one app, overriding the default-off list (a safety exclusion: there is no global switch) |
 | `Apps\<program.exe>\Off` | DWORD | | 1: JIS Moonshot passes every key through in that program (menu: Off in <program>) |
 | `DiagnosticLog` | DWORD | 0 | log activations, focus and errors (never typed text) to `%ProgramData%\JIS Moonshot\jismoonshot.log` |
@@ -209,10 +209,10 @@ What the shell does differently from what TSF's documentation suggests, and why,
 | `src/text_service.*` | One per thread: key events in, composition out, the list, focus-loss commits, 한/영 / 無変換 / 変換, the consent gate, the settings menu |
 | `src/key_map.*` | Scan codes → engine keys (spec §2), and the switch keys. No Windows headers; unit-tested |
 | `src/lang_bar.*` | The taskbar indicator (한あ / かな / ABC, drawn at run time) and its menu |
-| `src/candidate_window.*` | The hanja / prediction list |
+| `src/candidate_window.*` | The prediction list |
 | `src/settings.*` | The registry settings, the consent value and the default-off apps |
 | `src/training.*`, `src/training_lines.*`, `src/json.*` | Training files (spec §10.12), applied off the UI thread; `training_lines` is unit-tested |
-| `src/shared_data.*` | The dictionary and predictor (with `common-ja.txt`), parsed once per process: off the UI thread unless predictions are excluded in the program, else the dictionary at the first Shift+F8 |
+| `src/shared_data.*` | The predictor (with `common-ja.txt` and `kanji.bin`), parsed once per process, off the UI thread, unless predictions are excluded in the program |
 | `src/edit_session.*` | TSF edit sessions, the only way to change the document |
 | `src/log.*` | The diagnostic log (`DiagnosticLog`) |
 | `src/registration.*`, `src/dllmain.cpp` | COM and TSF registration (`regsvr32`) |
@@ -223,7 +223,7 @@ What the shell does differently from what TSF's documentation suggests, and why,
 
 ## Passwords and screen recording
 
-The prediction and hanja list shows readings of what's being typed, so in a password box it would
+The prediction list shows readings of what's being typed, so in a password box it would
 show the password in other forms. JIS Moonshot protects it in layers:
 
 - **The list never appears in screen recordings, screenshots or screen sharing**

@@ -5,7 +5,7 @@ export function WindowsPage() {
     <>
       <PageHead title="Windows" folder="windows/">
         A Text Services Framework (TSF) text input processor, <code>jismoonshot.dll</code>, around the engine. It maps scan
-        codes to engine keys and shows what the engine says as a TSF composition, the hanja and prediction list, and the
+        codes to engine keys and shows what the engine says as a TSF composition, the prediction list, and the
         taskbar's 한글 / かな / ABC indicator. It's behind the macOS shell.
       </PageHead>
 
@@ -18,7 +18,7 @@ export function WindowsPage() {
         <li>
           <strong>Inside every app's process</strong>, as every TSF input processor is. That's why the engine never panics
           and its C ABI catches any unwinding: a crash would take the app down with it. The DLL links the static C runtime,
-          and embeds the hanja dictionary and the prediction model, the kana reading's lexicon included, parsed once per
+          and embeds the prediction model, the kana reading's lexicon and the kanji data included, parsed once per
           process.
         </li>
         <li>
@@ -72,7 +72,7 @@ tools/install.ps1 -Log        # turn the diagnostic log on and follow it
           ["한/영", "Toggles ABC and 한글, as the Microsoft IME does, committing first. JIS keyboards have no 한/영 key; 無変換 and 変換 do its job."],
           ["F6 / F7", "Hiragana / katakana until the next commit; in JIS Kana they switch its script for good."],
           ["F8", "Kanji: the kana reading's conversions on top until the next commit (nothing staged: the next segment). In JIS Kana, the conversions above the kana."],
-          ["Shift+F8", "The hanja list, numbered 1–9 per page."],
+          ["Shift+F8", "The same as F8: there are no hanja."],
           ["F9 / F10", "The word's keys as full- / half-width letters. Shift+Z types ㅋ (っ in kana), not F10."],
           [
             "English Layout",
@@ -86,7 +86,7 @@ tools/install.ps1 -Log        # turn the diagnostic log on and follow it
       />
       <p>
         <strong>Type English and kana in Mode A.</strong> 無変換 and 한/영 are an on/off switch and nothing more: English
-        typed in ABC gets no predictions, F9/F10 or hanja, and switching mid-word splits the word. The recommended way is to
+        typed in ABC gets no predictions, F9/F10 or kanji, and switching mid-word splits the word. The recommended way is to
         stay in Mode A, let the predictions read English and kana words, and train them on your own words with a training
         file (<Source path="docs/training-contract.md" />) at <code>%APPDATA%\JIS Moonshot\training.json</code>.
       </p>
@@ -104,7 +104,7 @@ tools/install.ps1 -Log        # turn the diagnostic log on and follow it
           ["EnglishMode", "3", "ABC's layout: 3 JIS English, 7 JIS Dvorak, 8 JIS Colemak, 0xFFFFFFFF for Windows' layout"],
           ["EnterCommits", "0", "Enter commits without a new line"],
           ["LearnFromChoices", "0", "Learning from your choices, stays on this PC"],
-          ["Weight.<Scenario>", "", "Tuning: Korean, English, Implied, Mixed, TwoSet, KeepFinals, Hanja, ImpliedL, Kana"],
+          ["Weight.<Scenario>", "", "Tuning: Korean, English, Implied, Mixed, TwoSet, KeepFinals, ImpliedL, Kana (Hanja: retired, no effect)"],
           ["Apps\\<program.exe>\\Predictions", "", "Predictions in one app (a safety exclusion: there is no global switch)"],
           ["Apps\\<program.exe>\\Off", "", "1: every key passes through in that program"],
           ["DiagnosticLog", "0", "Activations, focus and errors, never typed text, to %ProgramData%\\JIS Moonshot\\jismoonshot.log"],

@@ -89,7 +89,6 @@ iPhone are out of scope.
   layout change that breaks typability shows up there. Its corpus, Samsung Electronics' latest
   "사업의 내용", is fetched by `tests/data/fetch_corpus.py` and gitignored (it's the filer's
   text). See the report with `cargo test --test robot -- --nocapture`.
-- The hanja dictionary is generated: edit `engine/dict/build_dict.py`, not `hanja.tsv`.
 - Run with `cargo test` in `/engine`. `tests/header.rs` fails if `include/jis_korean.h` drifts from
   the key list.
 - **The baseline** (`engine/tests/baseline.rs`) is the core principle as a test: every syllable,

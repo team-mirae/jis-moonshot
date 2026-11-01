@@ -93,7 +93,7 @@ Every **Korean mode** (`Mode::is_korean`; only Mode A now) shares these, and can
   Shift+Z is ㅋ, as on standard 2-set (it was F10 in JIS Korean).
 - **F6–F10** work as spec §6 and docs/moonshot.md §4 say.
 - **The automaton and everything after it** (spec §4 onward): the implied ㅇ, the double press,
-  backspace by jamo, commit rules, hanja and predictions.
+  backspace by jamo, commit rules and predictions.
 - **Space, Enter, Backspace, Tab, Esc, the arrows and the modifiers** keep their spec §3.5 behavior.
 
 Every **English mode** (spec §3.6.2) keeps none of the Korean ones, and shares these instead:

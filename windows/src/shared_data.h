@@ -1,8 +1,7 @@
-// The hanja dictionary and the predictor, parsed once per process from the DLL's resources and
-// shared by every engine (they're immutable). Parsing takes about 100 ms (measured), so Preload
-// starts it on a thread-pool thread when JIS Moonshot activates, unless predictions are off in
-// this program (a per-app exclusion); the getters wait for it if needed. Otherwise the dictionary
-// is parsed at the first F7.
+// The predictor, parsed once per process from the DLL's resources and shared by every engine
+// (it's immutable). Preload starts parsing it on a thread-pool thread when JIS Moonshot activates,
+// unless predictions are off in this program (a per-app exclusion); the getter waits for it if
+// needed.
 #pragma once
 
 #include "jis_korean.h"
@@ -10,7 +9,6 @@
 namespace jk {
 
 void Preload();
-const JkDict* SharedDictionary();
 #ifdef JK_PREDICT
 const JkPredictor* SharedPredictor();  // nullptr if the model is missing
 #endif

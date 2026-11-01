@@ -72,8 +72,8 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
         DisableThreadLibraryCalls(instance);
     } else if (reason == DLL_PROCESS_DETACH && !reserved) {
         // Unloaded (FreeLibrary after DllCanUnloadNow), not the process ending: give back the
-        // shared dictionary and predictors (about 60 MB) and the list's window class, or every
-        // reload in this process would leak them. At process exit the OS takes it all back.
+        // shared predictors and the list's window class, or every reload in this process would
+        // leak them. At process exit the OS takes it all back.
         jk::ReleaseSharedData();
 #ifdef JK_PREDICT
         jk::training::Release();

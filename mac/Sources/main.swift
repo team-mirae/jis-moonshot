@@ -10,16 +10,6 @@ if CommandLine.arguments.count > 1 {
 // one JKInputController per text input client.
 let connectionName = Bundle.main.infoDictionary?["InputMethodConnectionName"] as? String
     ?? "me.sjun.inputmethod.JISMoonshot_Connection"
-/// The hanja dictionary, parsed once and shared by every controller's engine.
-let sharedDictionary: OpaquePointer? = {
-    guard let url = Bundle.main.url(forResource: "hanja", withExtension: "tsv"),
-          let data = try? Data(contentsOf: url)
-    else { return nil }
-    return data.withUnsafeBytes { bytes in
-        jk_dict_new(bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count)
-    }
-}()
-
 #if PREDICT
 /// The predictive layer (spec §10), parsed once and shared. Nil if its files are missing.
 let sharedPredictor: OpaquePointer? = {

@@ -180,6 +180,7 @@ void ApplyIfChanged(JkEngine* engine) {
         log::Write(L"training.json isn't a version 1 training file; ignored");
         return;
     }
+    // "hanja" is a retired weight (no reading uses it); still read, so older files parse as before.
     static const std::map<std::string, const wchar_t*> kWeights = {
         {"korean", L"Korean"}, {"english", L"English"},   {"implied", L"Implied"},
         {"mixed", L"Mixed"},   {"two-set", L"TwoSet"},    {"keep-finals", L"KeepFinals"},
@@ -236,9 +237,8 @@ void ApplyInBackground() {
     const bool queued = RunInBackground([] {
         JkEngine* engine = jk_new();
         if (engine) {
-            // As the UI engine would have it: the mode, the dictionary and what was learned so far.
+            // As the UI engine would have it: the mode and what was learned so far.
             jk_set_mode(engine, static_cast<std::uint32_t>(settings::ReadDword(L"Mode", 0)));
-            jk_set_dictionary(engine, SharedDictionary());
             if (auto learned = settings::ReadString(L"Learned")) {
                 const std::string bytes = Narrow(*learned);
                 jk_learner_import(engine, reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size());

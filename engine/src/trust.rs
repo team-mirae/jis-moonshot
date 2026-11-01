@@ -1,8 +1,7 @@
 //! Typing a text the trusting way (spec §10.10): the fewest presses, letting predictions do the
 //! rest. Each word is typed by its cheapest keys: Hangul by JIS Korean's optimized route, Latin
-//! letter by letter (no F10), hanja from the hanja list (their reading, Shift+F8, the digit; JIS
-//! Moonshot predicts no hanja, docs/moonshot.md §5.1), symbols by their key (pasted when no JIS
-//! Korean legend has them). Space or Enter then commits the top prediction, as the shells do. A
+//! letter by letter (no F10), symbols by their key (pasted when no JIS Moonshot legend has them, and
+//! so are hanja). Space or Enter then commits the top prediction, as the shells do. A
 //! word fails when what's committed isn't the word.
 //!
 //! The measure that matters is [`Trusting::effort`]: presses plus what fixing the failures costs,
@@ -10,10 +9,10 @@
 
 use std::sync::Arc;
 
-use crate::plan::{self, Metric, Press, Robot, Style, each_jamo, is_compat_jamo, is_hanja, is_syllable, keys_of, normalize};
+use crate::plan::{self, Metric, Press, Robot, Style, each_jamo, is_compat_jamo, is_syllable, keys_of, normalize};
 use crate::learn::Learner;
 use crate::predict::{Kind, Predictor, Ranker};
-use crate::{Dictionary, Engine, Mods};
+use crate::{Engine, Mods};
 
 /// A word whose committed text wasn't the word.
 #[derive(Clone, Debug)]
@@ -41,12 +40,8 @@ pub struct Trusting {
     pub corrections: usize,
     /// The same text without predictions ([`plan::count`]).
     pub deterministic: usize,
-    /// Hanja picked from the hanja list (Shift+F8).
-    pub hanja_picked: usize,
     /// The ↓ presses an attentive typist makes to a wanted word (counted in `presses`).
     pub arrows: usize,
-    /// Words where a hanja reading was the top prediction (none since hanja aren't predicted).
-    pub hanja_on_top: Vec<String>,
 }
 
 impl Trusting {
@@ -57,24 +52,23 @@ impl Trusting {
 }
 
 /// Types `text` the trusting way with `predictor` ranked by `ranker`.
-pub fn type_trusting(text: &str, predictor: Arc<Predictor>, dictionary: Option<Arc<Dictionary>>, ranker: Ranker) -> Trusting {
-    type_text(text, predictor, dictionary, ranker, Style::Optimal, false, None).0
+pub fn type_trusting(text: &str, predictor: Arc<Predictor>, ranker: Ranker) -> Trusting {
+    type_text(text, predictor, ranker, Style::Optimal, false, None).0
 }
 
 /// Types `text` like [`type_trusting`], with Hangul typed in `style` (the cheapest way, every jamo,
 /// or a mix of the valid ways), and, when `attentive`, picking the wanted prediction with ↓
-/// whenever it's listed (each ↓ a press, as for hanja). With `learner`, learning is on from that
+/// whenever it's listed (each ↓ a press). With `learner`, learning is on from that
 /// state (spec §10.11), and what it learned comes back.
 pub fn type_text(
     text: &str,
     predictor: Arc<Predictor>,
-    dictionary: Option<Arc<Dictionary>>,
     ranker: Ranker,
     style: Style,
     attentive: bool,
     learner: Option<Learner>,
 ) -> (Trusting, Option<Learner>) {
-    type_text_observed(text, predictor, dictionary, ranker, style, attentive, learner, &mut |_, _, _| {})
+    type_text_observed(text, predictor, ranker, style, attentive, learner, &mut |_, _, _| {})
 }
 
 /// [`type_text`], calling `observe` before each word is committed with the engine, the word, and
@@ -84,7 +78,6 @@ pub fn type_text(
 pub fn type_text_observed(
     text: &str,
     predictor: Arc<Predictor>,
-    dictionary: Option<Arc<Dictionary>>,
     ranker: Ranker,
     style: Style,
     attentive: bool,
@@ -92,18 +85,15 @@ pub fn type_text_observed(
     observe: &mut dyn FnMut(&Engine, &str, &str),
 ) -> (Trusting, Option<Learner>) {
     let (text, _) = normalize(text);
-    let robot = Robot::new(dictionary.clone());
+    let robot = Robot::new();
     let mut engine = Engine::new();
-    if let Some(d) = &dictionary {
-        engine.set_dictionary(d.clone());
-    }
     engine.set_predictor(Some(predictor));
     engine.set_ranker(ranker);
     if let Some(learner) = learner.clone() {
         engine.set_learner(learner);
         engine.set_learning(true);
     }
-    let mut report = Trusting { deterministic: plan::count(&text, dictionary.clone()).jis, ..Trusting::default() };
+    let mut report = Trusting { deterministic: plan::count(&text).jis, ..Trusting::default() };
     for (i, line) in text.split('\n').enumerate() {
         if i > 0 {
             report.presses += 1; // Enter
@@ -120,7 +110,7 @@ pub fn type_text_observed(
                 Style::Mixed(seed) => Style::Mixed(seed ^ (report.words as u64 + 1).wrapping_mul(0x9E37_79B9)),
                 other => other,
             };
-            type_word(word, &robot, &mut engine, dictionary.clone(), style, attentive, &mut report, observe);
+            type_word(word, &robot, &mut engine, style, attentive, &mut report, observe);
         }
     }
     let learned = learner.map(|_| engine.learner().clone());
@@ -132,7 +122,6 @@ fn type_word(
     word: &str,
     robot: &Robot,
     engine: &mut Engine,
-    dictionary: Option<Arc<Dictionary>>,
     style: Style,
     attentive: bool,
     report: &mut Trusting,
@@ -160,25 +149,6 @@ fn type_word(
             0 => keys_of(&run),
             1 => hangul_presses(&run, style),
             2 => each_jamo(&run).unwrap_or_default(),
-            // A hanja: what's staged committed first (as the robot does), then its reading, the
-            // hanja list (Shift+F8) and the digit that picks it (→ for later pages).
-            _ if is_hanja(c) => {
-                got.push_str(&commit_top(engine).0);
-                let reading = robot.hanja_reading(c).map(str::to_string).unwrap_or_default();
-                press(engine, &hangul_presses(&reading, Style::Optimal), &mut got, &mut keys, report);
-                let mut list = vec![Press { key: crate::Key::F8, shift: true }];
-                let mut trial = engine.clone();
-                let out = trial.key(crate::Key::F8, Mods::SHIFTED);
-                match out.candidates.and_then(|l| l.items.iter().position(|cand| cand.hanja.chars().eq([c]))) {
-                    Some(index) => {
-                        list.extend(std::iter::repeat_n(Press::new(crate::Key::ArrowRight), index / crate::PAGE_SIZE));
-                        list.push(Press::new(crate::Key::from_code(&format!("Digit{}", index % crate::PAGE_SIZE + 1))));
-                        report.hanja_picked += 1;
-                    }
-                    None => list.push(Press::new(crate::Key::Escape)),
-                }
-                list
-            }
             _ => match robot.symbol_presses(c) {
                 Some(p) => p,
                 None => {
@@ -199,9 +169,6 @@ fn type_word(
         observe(engine, word, staged);
     }
     let list: Vec<(String, Kind)> = engine.predictions().into_iter().map(|p| (p.text, p.kind)).collect();
-    if list.first().is_some_and(|(_, kind)| *kind == Kind::Hanja) {
-        report.hanja_on_top.push(word.to_string());
-    }
     let before = got.clone();
     // An attentive typist picks the word from the list with ↓ when it's there.
     let pick = match list.iter().position(|(t, _)| format!("{before}{t}") == word) {
@@ -221,7 +188,7 @@ fn type_word(
         report.char_errors += edit_distance(&got, word);
         report.corrections += match list.iter().position(|t| format!("{before}{t}") == word) {
             Some(index) => index,
-            None => got.chars().count() + plan::count(word, dictionary).jis,
+            None => got.chars().count() + plan::count(word).jis,
         };
         report.failures.push(Failure { want: word.to_string(), got, list, keys });
     }
@@ -230,7 +197,7 @@ fn type_word(
 /// The keys for a run of syllables on its own, in `style` (the cheapest: implied ㅇ, dedicated
 /// keys, double press).
 fn hangul_presses(run: &str, style: Style) -> Vec<Press> {
-    let mut robot = Robot::new(None);
+    let mut robot = Robot::new();
     robot.metric = Metric::Presses;
     robot.style = style;
     robot.type_text(run);

@@ -22,5 +22,4 @@ const predict = [
 
 mkdirSync(join(web, "public", "predict"), { recursive: true });
 copyFileSync(join(engine, "target", "wasm32-unknown-unknown", "release", "jis_korean.wasm"), join(web, "src", "engine.wasm"));
-copyFileSync(join(engine, "dict", "hanja.tsv"), join(web, "public", "hanja.tsv"));
 for (const f of predict) copyFileSync(join(engine, "predict", f), join(web, "public", "predict", f));

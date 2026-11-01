@@ -2,7 +2,7 @@
 //! tests/predict.rs.
 
 use jis_korean::resolve::{MAX_PRESSES, key_input, key_input_after, keys_for_output, type_keys};
-use jis_korean::{Dictionary, Engine, Mode};
+use jis_korean::{Engine, Mode};
 
 fn in_mode(mode: Mode) -> Engine {
     let mut e = Engine::new();
@@ -85,17 +85,6 @@ fn every_combination_types_the_text() {
             }
         }
     }
-}
-
-#[test]
-fn hanja_through_shift_f8() {
-    let mut e = Engine::new();
-    let tsv = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap();
-    e.set_dictionary(std::sync::Arc::new(Dictionary::parse(&tsv)));
-    // 학교 (G K R R Y), then Shift+F8 (the hanja list moved from F7, then Shift+F7,
-    // docs/moonshot.md §4): its top hanja.
-    let found = keys_for_output(&e, "學校", 6, 6);
-    assert!(has(&found, "KeyG KeyK KeyR KeyR KeyY S-F8"), "{found:?}");
 }
 
 #[test]

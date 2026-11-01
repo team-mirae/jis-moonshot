@@ -65,13 +65,13 @@ export function EnginePage() {
         </li>
         <li>
           <strong>Scripts and function keys</strong>: F6 and F7 show the staged keys as hiragana and katakana until the
-          next commit (in JIS Kana, for good); the かな key (<code>jk_kana_key</code>) forces their Korean. Shift+F8 opens
-          hanja candidates for the longest dictionary word at the end of the segment, F8 puts the kana reading's kanji conversions on top, F9 and F10 convert
+          next commit (in JIS Kana, for good); the かな key (<code>jk_kana_key</code>) forces their Korean. F8 (and Shift+F8,
+          the same key: there are no hanja) puts the kana reading's kanji conversions on top, F9 and F10 convert
           the word to full- and half-width letters, cycling the case. Shift+Z is a key like any other: ㅋ, っ or Z.
         </li>
         <li>
           <strong>Predictions</strong> (full build, <Source path="engine/src/predict.rs" />): the same keys are read several
-          ways (Korean, English, plain 2-set, finals kept, English + particle, hanja) and ranked by rules over key-trigram
+          ways (Korean, English, plain 2-set, finals kept, English + particle) and ranked by rules over key-trigram
           models, word lists and the user's weights, then corrected by a learned model (<Source path="engine/src/learned.rs" />,
           spec §10.13; not in the legacy build). The kana reading (hiragana, or katakana for a known katakana word) is
           scored against the Japanese lexicon (<Source path="engine/predict/common-ja.txt" />) and merged in by score
@@ -84,7 +84,7 @@ export function EnginePage() {
       <Code lang="rust">{`
 use jis_korean::{Engine, Key, Mode, Mods};
 
-let mut engine = Engine::new();            // Mode A, no dictionary, no predictor
+let mut engine = Engine::new();            // Mode A, no predictor
 for code in ["KeyG", "KeyK", "KeyS"] {
     let out = engine.key(Key::from_code(code), Mods::NONE);
     // out.commit: text to insert; out.preedit: text to show as marked;
@@ -98,14 +98,13 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
         code
         head={["Item", "What it does"]}
         rows={[
-          ["Engine::key(key, mods) -> Output", "One key press. Output: commit, preedit, consumed, the hanja candidates, and the English reading."],
+          ["Engine::key(key, mods) -> Output", "One key press. Output: commit, preedit, consumed, the candidate list (the English modes' ⌥ + letter variants), and the English reading."],
           ["flush() / clear()", "Commit everything unconfirmed / discard it."],
           ["activate()", "The input method was switched back to (nothing to reset since the F8 escape was retired)."],
           ["set_mode(Mode) / mode()", "Mode A (JIS Moonshot), JIS Kana (Mode::AKana) or an English mode. Mode::ALL lists them, with id(), code() and name(); Mode::from_id(id) is None for an id the build doesn't have, retired ids (1, 2, 9, 10) included. The engine changes its own mode (かな from JIS Kana): read mode() after a key."],
           ["script()", "How the staged keys are shown: Auto (the top prediction), Korean (forced), Hiragana or Katakana."],
           ["set_enter_commits(bool)", "Plain Enter commits without a new line, as Shift+Enter does."],
           ["set_option_space(bool)", "⌥Space: a full-width space (_ in the English modes). Off by default: on Windows Alt+Space is the window menu."],
-          ["set_dictionary(Arc<Dictionary>)", "The hanja dictionary for Shift+F8, shared between engines."],
           ["set_predictor(Option<Arc<Predictor>>)", "Turns predictions on (full build). predictions() ranks; commit_prediction(i) commits one."],
           ["key_after_prediction(i, key, mods) / flush_prediction(i)", "A key that commits while prediction i is shown (Space, Enter, a symbol): commits what's shown, then the key acts on it. flush_prediction commits it quietly, for focus loss."],
           ["preedit() / english()", "The unconfirmed text, and the same keys read on the plain keyboard."],
@@ -127,7 +126,7 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
           Keys are passed as stable ids (<code>JK_KEY_*</code>), one per <code>KeyboardEvent.code</code>. New keys are only
           appended, before <code>JK_KEY_MODIFIER</code>; a test fails if the header and the engine disagree.
         </li>
-        <li>One handle per text field, used from one thread. Dictionaries and predictors are shared, reference-counted.</li>
+        <li>One handle per text field, used from one thread. Predictors are shared, reference-counted.</li>
         <li>Wasm hosts pass data in through <code>jk_alloc</code> / <code>jk_dealloc</code>.</li>
       </ul>
       <Table
@@ -139,7 +138,6 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
           ["Modes", <code>jk_set_mode, jk_mode, jk_script, jk_mode_count, jk_mode_id_at, jk_mode_name_*, jk_mode_code_*, jk_mode_is_english, jk_legend, jk_legend_in</code>],
           ["Keys by name", <code>jk_key_count, jk_key_code_ptr, jk_key_code_len</code>],
           ["Resolving", <code>jk_resolve_key_input, jk_resolve_key_input_after, jk_resolve_keys_for_output, jk_resolved_*</code>],
-          ["Hanja", <code>jk_dict_new, jk_dict_free, jk_set_dictionary</code>],
           ["Predictions", <code>jk_predictor_new, jk_predictor_with_learned, jk_predictor_with_japanese, jk_predictor_free, jk_set_predictor, jk_predict, jk_prediction_*, jk_commit_prediction, jk_key_after_prediction, jk_flush_prediction, jk_set_prediction_weight, jk_clear_prediction_weight, jk_set_ranker</code>],
           ["Learning", <code>jk_set_learning, jk_set_recording, jk_learned_weight, jk_learner_*, jk_learn_example, jk_predictor_with_words, jk_predictor_with_avoided, jk_predictor_with_avoided_japanese</code>],
           ["Key counts", <code>jk_plan, jk_plan_jis, jk_plan_conventional, jk_plan_chars, jk_plan_off_keyboard, jk_plan_dropped</code>],
@@ -171,7 +169,7 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
         Keys apply as a shell applies them: with predictions on, the marked text shows the top prediction unless it's the
         Korean reading, and Space and Enter commit what's shown. The search tries only keys whose characters are part of
         the text, skips presses that change nothing, and follows routes heading toward the text: its jamo, its letters
-        before F9/F10, a hanja's reading before Shift+F8. Every combination is checked by typing it.
+        before F9/F10. Every combination is checked by typing it.
       </p>
 
       <h2>Performance</h2>
@@ -181,8 +179,6 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
         rows={[
           ["A key press (no predictor)", <>O(<i>n</i>), <i>n</i> = keys staged</>, "The segment is recomposed for the preedit; a segment is one word, usually under 20 keys."],
           ["A key press with predictions", <>O(<i>n</i> · <i>k</i>), <i>k</i> ≤ 8</>, "Each reading is composed (a handful), plus the English + particle splits over the last 8 keys; model and word-list lookups are hash lookups, O(1) each."],
-          ["Shift+F8 (hanja)", <>O(<i>w</i>), <i>w</i> = syllables at the end</>, "One hash lookup per suffix length, longest first."],
-          ["Loading the dictionary", "O(size)", "167,783 readings from a 4.3 MB TSV, parsed once and shared."],
           ["key_input", "O(1)", "One table lookup."],
           ["key_input_after, keys_for_output", "Bounded", "A search over key presses, capped at 50,000 engine steps and 16 presses: it always ends, and returns what it found."],
         ]}
@@ -202,7 +198,6 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
           ["Key press, median", "0.2 µs", "2.7 µs"],
           ["Key press, 99th percentile", "0.7 µs", "16.2 µs"],
           ["Key press, slowest", "1.3 µs", "54 µs"],
-          ["Load the hanja dictionary", "31–46 ms", "31–46 ms"],
           ["Load the predictor", "–", "8–11 ms"],
         ]}
       />
@@ -213,16 +208,14 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
           [<code>keys_for_output("hello", 5, 5)</code>, "1 combination", "3.6 ms"],
           [<code>key_input_after("대한민국의", KeyS)</code>, "대한민국읜", "0.2 ms"],
           [<code>keys_for_output("한글", 1, 8)</code>, "844 combinations", "91 ms"],
-          [<code>keys_for_output("學校", 6, 6)</code>, "8 combinations", "91 ms (builds a reverse hanja index)"],
         ]}
       />
       <h3>Memory</h3>
       <Table
         head={["Part", "Size", "Notes"]}
         rows={[
-          ["Engine per text field", "Small", "The segment (one word of tokens), settings and learned weights. Engines share the dictionary and predictor."],
-          ["Hanja dictionary", "4.3 MB on disk; most of a 74 MB process", "Parsed into a hash map of 167,783 readings. Peak resident memory of the whole benchmark process, without the predictor: 74 MB."],
-          ["Predictor", "1.3 MB on disk; about 8 MB in memory", "The key-trigram model (39 KB) and three word lists. Peak resident memory with it: 82 MB. The learned ranker adds learned.bin (2.1 MB)."],
+          ["Engine per text field", "Small", "The segment (one word of tokens), settings and learned weights. Engines share the predictor."],
+          ["Predictor", "1.3 MB on disk; about 8 MB in memory", "The key-trigram model (39 KB) and three word lists. The learned ranker adds learned.bin (2.1 MB)."],
           ["Wasm binary", "564 KB (176 KB gzipped)", "The full engine with predictions and resolving, without data files."],
         ]}
       />

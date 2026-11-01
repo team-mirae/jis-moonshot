@@ -513,7 +513,7 @@ Forms pairs ¢ £ ¬ ¯ ¦ ¥ ₩ and ｡ ｢ ｣ ､ ･ (。「」、・ full-
 | F6 | ひらがな | **Hiragana:** to JIS Kana (`A_KANA`), the staged keys read as kana and shown in hiragana; nothing is committed. Right after F9/F10 it undoes the conversion first; an open hanja list closes. With nothing staged it still switches (consumed). Shift+F6 with something staged does nothing (reserved). | moonshot.md §4 |
 | F7 | カタカナ | **Katakana:** the same, shown in katakana. | moonshot.md §4 |
 | F8 | 漢字 | **Kanji:** the staged keys' kana reading converted, the conversions on top of the predictions until the next commit (§6.1). With nothing staged it's still taken (the next segment). | moonshot.md §4, §5.1 |
-| Shift+F8 | 한자 | Hanja conversion of the word at the end of the unconfirmed text, with a candidate list (§7). Mode A only. (F7 in JIS Korean, then Shift+F7, which is now reserved.) | moonshot.md §4 |
+| Shift+F8 | 漢字 | The same as F8 (the hanja list is gone, §7). | moonshot.md §4 |
 | F9 | 전각영숫자 | Convert the current word to full-width alphanumerics, from the raw characters (§5.2). | done in prototype |
 | F10 | 반각영숫자 | Same, half-width. (In JIS Korean Shift+Z did the same; in JIS Moonshot it's ㅋ, §3.4.) | done |
 
@@ -529,8 +529,8 @@ F8 used to escape to standard 2-set over the stock keys, for the symbols JIS Kor
 It was retired on 2026-10-27, before release: it wasn't standard 2-set (the implied ㅇ, the double
 press and F6 still applied), and symbols off the legends are typed in an English mode (§3.6.2) or
 the platform's English input source. The engine keeps each mode's stock keyboard for the English
-and standard 2-set readings (§10.2). Since 2026-11-01 F8 is **kanji** and Shift+F8 the hanja list:
-moonshot.md §4 and §5.1 define them.
+and standard 2-set readings (§10.2). Since 2026-11-01 F8 is **kanji** (Shift+F8 too since the hanja list
+went, §7): moonshot.md §4 and §5.1 define it.
 
 ### 6.2 F9 / F10 cycling *(from prototype)*
 
@@ -547,29 +547,14 @@ Example: ㅎ ㅏ ㄴ (keys G K S) → 한. F10 → `gks`. F10 → `GKS`. F10 →
 
 ---
 
-## 7. Hanja (Shift+F8)
+## 7. Hanja (removed)
 
-Basic support: dictionary lookup with a candidate list. No learning, no reconversion of committed
-text.
+JIS Moonshot has no hanja (2026-11-02, moonshot.md §5.1): no hanja dictionary, no hanja list and no
+hanja readings. Shift+F8 does what F8 does (kanji, §6.1). JIS Korean's hanja support (a libhangul /
+Unihan dictionary in `engine/dict/`, a list on F7 for the longest dictionary word at the end of the
+unconfirmed text) lives on upstream.
 
-### 7.1 Dictionary
-
-`engine/dict/hanja.tsv`, built by `engine/dict/build_dict.py` from:
-
-- **libhangul `data/hanja/hanja.txt`** (BSD-3-Clause; the data file is BSD even though libhangul's
-  code is LGPL): every single-syllable entry with its meaning (學: 배울 학), and the first two
-  forms of each word up to four syllables.
-- **Unicode Unihan `kHangul`** (Unicode License v3): syllables in KS X 1001 or the education set
-  that `hanja.txt` lacks.
-
-Candidates keep source order, which is roughly by frequency. The engine does no I/O: each shell
-loads the file and hands it to the engine (`jk_dict_new`), and engines share one parsed copy. The
-license files sit next to the dictionary and ship with it.
-
-### 7.2 Keys
-
-| State | Key | Effect |
-|---|---|---|
+---|---|---|
 | no list | Shift+F8 | In Mode A, open a list for the **longest dictionary word at the end of the unconfirmed text**: 나는학교 → 학교. Only whole syllables count. No match, or no dictionary: nothing happens. (F7 in JIS Korean; F7 is now katakana, §6, and Shift+F7 reserved.) |
 | list open | Shift+F8, ↓ | Next candidate (wraps) |
 | | ↑ | Previous candidate (wraps) |
@@ -703,6 +688,8 @@ set the engine still behaves exactly like it.
 | Korean, finals kept | each vowel after a final starts its own syllable on ㅇ | `akfl` → 말이 (JIS Korean: 마리) |
 | Bare vowels | JIS Korean without the implied ㅇ (§10.3) | `bb` → ㅠㅠ, `nn` → ㅜㅜ |
 | English + particle | an English start with a Korean particle or ending (§10.3); after an acronym, a Korean word; or a Korean start with an acronym | Anthropic에서, report에, RLHF에, server를; LG에너지솔루션은; 한전KPS |
+| Implied ㄹ after ㄴ | an ㄹ before a vowel a ㄴ final moved onto (§10.5) | `wjsur` → 전력 (JIS Korean: 저녁) |
+| ㄶ by sound | ㄶ and ㄱ / ㄷ / ㅈ where a ㄴ final met ㅋ / ㅌ / ㅊ (§10.5) | `dkszh` → 않고 (JIS Korean: 안코) |
 | Hanja | **Not in JIS Moonshot** (moonshot.md §5.1: kanji conversions instead; hanja from Shift+F8). Was: the top dictionary form of the **whole** Korean reading, 2+ syllables only; plus the everyday exceptions (§10.4) | 학교 → 學校, 2026년 → 2026年 |
 | Kana | the JIS kana of every staged key, composed (゛ ゜, moonshot.md §3.1), in hiragana. Shift on the number row, E and Z gives small kana, Shift+0 を; a つ before a kana of the か, さ, た or ぱ rows may also be read as っ | `G K S` → きのと |
 | Katakana | the kana reading in katakana, offered instead of hiragana when that is the known word | コーヒー |
@@ -798,14 +785,13 @@ Scores are in bits per key, positive leaning Korean:
    - **A known Korean start holds a split back:** a split with a lowercase start isn't offered when
      the Korean reading is a known word and the split's ending (소요되는, not thy되는).
    The start must also read as English on its own (1 bit per key), and when the whole keys make a
-   Korean word (in the lexicon or the hanja dictionary: `kanxms` is 아무튼, not kanx은) the split is
+   Korean word (in the lexicon: `kanxms` is 아무튼, not kanx은) the split is
    only an alternative below it; junk Korean (slack에 as 님차에) doesn't hold it back. Otherwise it
    ranks above the whole-word English reading. A regression test types 8,700+ real Korean words the
    JIS Korean way, with the hanja dictionary: 0.07% rank as mixed (fragments such as 노드는; 0.13%
    before the business-text rules, with 년까지).
-6. **Hanja are lean:** one dictionary candidate at most, whole words of 2+ syllables only, and a
-   heavy penalty that keeps it last. It shows only when there's room. The exceptions (§10.4) aren't
-   penalized.
+6. **Hanja** were lean in JIS Korean (one dictionary candidate, kept last). JIS Moonshot has none
+   (§7).
 
 ### 10.4 Everyday hanja (not penalized)
 
@@ -838,6 +824,14 @@ also gets a reading with an ㄹ before it (전력). It's an alternative: one ste
 reading unless it's a known word, with word counts deciding between two known words. Both are
 often valid (저녁, 전력), so it's a slider (default 1.0; 0.00 turns it off; macOS
 `Weight.ImpliedL`).
+
+**ㄶ by sound:** ㅎ then ㄱ, ㄷ or ㅈ sounds ㅋ, ㅌ or ㅊ, so 않고 is said [안코] and a typist going by
+sound types 안코 (`dkszh`). Where a ㄴ final is followed by ㅋ, ㅌ or ㅊ starting a syllable, the
+reading gets that ㄴ as ㄶ and the consonant as ㄱ, ㄷ or ㅈ: 안코 → 않고, 만타 → 많다, 괜찬치 → 괜찮지.
+One variant per place, and one with all of them when there are several. It's ranked like the
+implied ㄹ, so a known word goes **above the literal** (않고 over 안코) and a literal word stays on
+top (만큼, not 많금; 한테, not 핞데). It shares the implied ㄹ slider (`Weight.ImpliedL`): both spell
+what was heard, and 0 turns both off. Kind `Aspirated`.
 
 Hosts store them per user: the web playground has sliders under "Tune predictions" (remembered
 in the browser); macOS reads `defaults write me.sjun.inputmethod.JISMoonshot Weight.<Scenario>`;
