@@ -202,7 +202,7 @@ private:
     static constexpr std::uint32_t kPassThrough = 0xFFFFFFFF;
     std::uint32_t english_mode_ = JK_MODE_A_QWERTY;
     bool predicting_ = false;
-    bool private_ = false;     // the focused field is a password field: keys pass through
+    bool private_ = false;     // the focused field is a password field: keys type ABC's layout
     bool app_off_ = false;     // JIS Moonshot is off in this program (settings::AppOff)
     std::wstring last_scopes_;  // for the log
     bool data_ready_ = false;  // the shared predictor may be set on the engine

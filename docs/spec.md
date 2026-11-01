@@ -1257,11 +1257,12 @@ no Predictions switch and no lite build (`build.ps1` has no `-Lite`).
 
 **Private fields.** The list (§7, §10) shows readings of what's typed, so it's excluded from
 screen capture (recordings, screenshots, screen sharing). In a field marked as a password or PIN
-(input scope, disabled keyboard, a password character) every key passes through, as in ABC;
-Windows already keeps TIPs out of most of them. Password boxes that aren't marked (common in
+(input scope, disabled keyboard, a password character) every key types ABC's layout, composing
+nothing: JIS on any board, not Windows' Korean layout under the TIP (US ANSI symbols, Shift+2 → @).
+Windows already keeps TIPs out of most of them, and there its Korean layout types. Password boxes that aren't marked (common in
 banking and certificate programs) can't be told apart from text: there the user switches to ABC,
-or turns JIS Moonshot off for that program in the menu (`Apps\<program.exe>\Off`), which passes
-every key through there only.
+or turns JIS Moonshot off for that program in the menu (`Apps\<program.exe>\Off`), which types
+ABC's layout there only.
 
 **Settings** are the macOS ones, stored in `HKCU\Software\JIS Moonshot` (`Mode` by engine id;
 `EnglishMode`, ABC's layout: an English mode's id, `0xFFFFFFFF` for Windows' layout, unset for the

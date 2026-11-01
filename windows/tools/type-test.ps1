@@ -19,7 +19,8 @@ $appKey = "$key\Apps\jk_testpad.exe"
 if (-not (Test-Path $appKey)) { New-Item $appKey -Force | Out-Null }
 
 # name, Mode (0 A, 11 JIS Kana), Predictions, keys, expected text in the control[, EnglishMode:
-# ABC's layout id, 'unset' for the default (JIS English), 'windows' for Windows' own]
+# ABC's layout id, 'unset' for the default (JIS English), 'windows' for Windows' own, 'off' for the
+# default with JIS Moonshot off in jk_testpad.exe]
 # Cases end committed: classic controls (edit, rich) hold only the first character of an open
 # composition (docs/troubleshooting/windows-tsf-notes.md).
 $cases = @(
@@ -54,9 +55,11 @@ $cases = @(
     @('ABC: JIS Dvorak', 0, 0, 'Hangul KeyS KeyD KeyF S-KeyJ Hangul', 'oeuH', 7),
     @('ABC: Windows layout passes keys', 0, 0, 'Hangul KeyG S-Digit2 Hangul', 'g@', 'windows'),
     @('ABC in Mode A, then 한글 again', 0, 0, 'Hangul KeyG KeyK Hangul KeyG KeyK Space', 'gk하 ', 'unset'),
-    @('無変換 in ABC stays, 変換 from ABC to 한글', 0, 0, 'NonConvert NonConvert KeyG Convert KeyG KeyK Space', 'g하 ', 'unset')
+    @('無変換 in ABC stays, 変換 from ABC to 한글', 0, 0, 'NonConvert NonConvert KeyG Convert KeyG KeyK Space', 'g하 ', 'unset'),
+    @('Off in a program: ABC there (JIS)', 0, 1, 'KeyG KeyK KeyS S-Digit2 BracketLeft Space', 'gks"@ ', 'off')
 )
-# Password fields: every key passes through untouched (ABC), with predictions on.
+# Password fields: nothing composes, with predictions on. Windows keeps the TIP out of both, so its
+# Korean layout types (US ANSI symbols); one that slips by would type ABC's layout.
 # (The leading comma keeps a one-case list a list of cases: PowerShell would unroll it.)
 $passwordCases = @(
     ,@('password field passes keys through', 0, 1, 'KeyG KeyK KeyS S-KeyR Digit1 KeyH KeyE KeyL KeyL KeyO', 'gksR1hello')
@@ -93,6 +96,8 @@ try {
         Set-ItemProperty $key Mode $c[1] -Type DWord
         Set-ItemProperty $appKey Predictions $c[2] -Type DWord
         $english = if ($c.Count -gt 5 -and -not $hosted) { $c[5] } else { 'unset' }
+        if ($english -eq 'off') { Set-ItemProperty $appKey Off 1 -Type DWord; $english = 'unset' }
+        else { Remove-ItemProperty $appKey -Name Off -ErrorAction SilentlyContinue }
         if ($english -eq 'unset') { Remove-ItemProperty $key -Name EnglishMode -ErrorAction SilentlyContinue }
         elseif ($english -eq 'windows') { Set-ItemProperty $key EnglishMode ([int32]-1) -Type DWord }
         else { Set-ItemProperty $key EnglishMode $english -Type DWord }
@@ -113,6 +118,7 @@ try {
         }
     }
 } finally {
+    Remove-ItemProperty $appKey -Name Off -ErrorAction SilentlyContinue
     foreach ($name in $saved.Keys) {
         if ($null -eq $saved[$name]) { Remove-ItemProperty $key -Name $name -ErrorAction SilentlyContinue }
         else { Set-ItemProperty $key $name $saved[$name] -Type DWord }

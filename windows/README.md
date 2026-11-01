@@ -175,7 +175,7 @@ from the menu.
 | `Learned` | SZ | | what was learned: one line of counts, no text or keys |
 | `Weight.<Scenario>` | SZ | | user tuning (spec §10.5): `Korean` `English` `Implied` `Mixed` `TwoSet` `KeepFinals` `Hanja` `ImpliedL` `Kana`, e.g. `0.8` (`Hanja` is retired: it has no effect, but keeps its id) |
 | `Apps\<program.exe>\Predictions` | DWORD | | predictions in one app, overriding the default-off list (a safety exclusion: there is no global switch) |
-| `Apps\<program.exe>\Off` | DWORD | | 1: JIS Moonshot passes every key through in that program (menu: Off in <program>) |
+| `Apps\<program.exe>\Off` | DWORD | | 1: JIS Moonshot types ABC's layout in that program, composing nothing (menu: Off in <program>) |
 | `DiagnosticLog` | DWORD | 0 | log activations, focus and errors (never typed text) to `%ProgramData%\JIS Moonshot\jismoonshot.log` |
 | `TrainingFileDate`, `TrainingWords.*`, `TrainingAvoid.*` | SZ | | the training file last applied, its words and the words it avoids |
 | `SettingsVersion` | DWORD | | changes with every write from JIS Moonshot (see above) |
@@ -231,12 +231,15 @@ show the password in other forms. JIS Moonshot protects it in layers:
 - **Password boxes that say they are one get no input method at all.** Windows itself keeps TIPs
   out of `ES_PASSWORD` edits and fields with a password input scope (measured with JIS Korean: it
   never receives a key there). JIS Moonshot also checks for them itself (input scope, disabled keyboard,
-  a password character on an Edit or RichEdit) and passes keys through if one slips by *(not
-  measured: Windows caught every case we could build)*.
+  a password character on an Edit or RichEdit) and types ABC's layout there if one slips by *(not
+  measured: Windows caught every case we could build)*. Where Windows keeps it out, its Korean
+  layout types: US ANSI symbols (Shift+2 → @), not JIS. No setting moves Korean input methods off
+  that layout (tried 2026-11-02: TSF's substitute layout, `Keyboard Layout\Substitutes`, a JIS layout
+  in Korean's keyboards).
 - **Password boxes that don't say so can't be detected.** Banking and certificate programs often
   draw their own (●●● in a plain field), and the keys then compose like any text. Use **ABC**
-  (無変換, 한/영) there, or right-click the indicator → **Off in <program>**, which passes every key through
-  in that program only, from then on. Measured: UniSign accepts its certificate password in ABC.
+  (無変換, 한/영) there, or right-click the indicator → **Off in <program>**, which types ABC there (JIS
+  English, not Windows' US ANSI Korean layout) in that program only, from then on. Measured: UniSign accepts its certificate password in ABC.
   JIS Moonshot starts off in the local agents of certificate programs found on a test PC
   (CrossCert UniSign, DreamSecurity MagicLine4NX, SignKorea; `kOffByDefault` in
   `src/settings.cpp`). Certificate windows drawn inside a web page are in the browser: use ABC.

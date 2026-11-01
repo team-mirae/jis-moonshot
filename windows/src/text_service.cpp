@@ -441,18 +441,20 @@ bool TextService::MayBePrivate(std::uint32_t key) const {
 
 bool TextService::Private(const wchar_t* why) {
     // Logged once per field: what made it private (never its text).
-    if (!private_) log::Write(L"private field (%s): keys pass through", why);
+    if (!private_) log::Write(L"private field (%s): keys type ABC's layout", why);
     return true;
 }
 
 bool TextService::TypesEnglish(std::uint32_t key) const {
-    // ABC, outside password fields and programs JIS Moonshot is off in (those pass everything).
-    return !open_ && !private_ && !app_off_ && key != JK_KEY_MODIFIER && key != JK_KEY_OTHER;
+    // ABC, and where nothing may be composed (password fields, programs JIS Moonshot is off in):
+    // there the keys type ABC's layout too, not Windows' Korean layout under the TIP (US ANSI
+    // symbols, Shift+2 → @). JIS on any board. ABC on Windows' layout passes them through.
+    return (!open_ || private_ || app_off_) && key != JK_KEY_MODIFIER && key != JK_KEY_OTHER;
 }
 
 bool TextService::Wants(unsigned vk, std::uint32_t key, std::uint32_t mods) const {
-    // A password field: every key goes to the app untouched, as in ABC. Nothing is composed,
-    // listed or learned there, so nothing of it can show on screen.
+    // A password field: every key types ABC's layout (TypesEnglish). Nothing is composed, listed or
+    // learned there, so nothing of it can show on screen.
     if (private_ || app_off_ || !open_ || key == JK_KEY_MODIFIER) return false;
     // While composing every key goes through the engine: it commits before keys it doesn't use.
     if (Composing()) return true;
@@ -624,7 +626,7 @@ void TextService::HandleSwitchKey(ITfContext* context, SwitchKey key, bool repea
     }
     // In Mode A or JIS Kana: the engine's かな key. Mode A forces the staged keys' Korean reading
     // (nothing staged: nothing); JIS Kana goes back to Mode A, the staged keys forced Korean.
-    // Where keys pass through (a password field, a program it's off in) it does nothing.
+    // Where nothing is composed (a password field, a program it's off in) it does nothing.
     if (private_ || app_off_ || !context) return;
     EnsureData();
     Settle();
@@ -917,7 +919,7 @@ void TextService::InitMenu(ITfMenu* menu) {
         return;
     }
     add(kMenuEnglish, L"ABC: English (無変換, 한/영)", !open_);
-    add(kMenuAppOff, L"Off in " + settings::ExeName() + L" (Keys Pass Through There)", app_off_);
+    add(kMenuAppOff, L"Off in " + settings::ExeName() + L" (Types ABC There)", app_off_);
     separator();
     // The typing modes (docs/moonshot.md §2): Mode A and JIS Kana, by the engine's names. Ids have
     // gaps, so they're listed with jk_mode_id_at.

@@ -16,7 +16,7 @@
 //   DiagnosticLog      DWORD  0  log.h
 //   SettingsVersion    DWORD     changes with every write below (Version)
 //   Apps\<exe>         key       per app: Predictions DWORD, overriding the default-off list;
-//                                Off DWORD 1: JIS Moonshot passes every key through there (as ABC)
+//                                Off DWORD 1: JIS Moonshot types ABC's layout there
 //
 // Predictions are always on (docs/moonshot.md §6): there is no global switch, only the per-app
 // exclusions, which are a safety measure.
@@ -55,7 +55,7 @@ const wchar_t* DefaultOffReason(const std::wstring& exe);
 bool AppPredicting(const std::wstring& exe);
 void SetAppPredicting(const std::wstring& exe, bool on);
 
-// Whether JIS Moonshot is off in `exe`: every key passes through, as in ABC, there only. For
+// Whether JIS Moonshot is off in `exe`: every key types ABC's layout, there only. For
 // programs whose password boxes don't say they are (banking and certificate programs).
 bool AppOff(const std::wstring& exe);
 void SetAppOff(const std::wstring& exe, bool off);
