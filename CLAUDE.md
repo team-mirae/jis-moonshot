@@ -62,6 +62,10 @@ iPhone are out of scope.
   ranks by the rules alone. `cargo test --no-default-features` still has to pass (the engine builds
   without predictions or English), but no shell ships that build. macOS: `make` /
   `make LEGACY_PREDICT=1`; Windows: `tools/build.ps1` / `-Legacy` (no `-Lite`).
+- Key model (docs/moonshot.md §5): `python3 -I engine/tools/corpora/build_keymodel.py [--eval]`
+  rebuilds the three-language order-4 model in `engine/predict/ranker.bin`, keeping the
+  Korean-vs-English tables the file starts with; it reads the gitignored corpora (fetch with
+  `engine/tools/corpora/fetch_corpora.py`) and the Mozc cache (`build_kanji.py`).
 - Learned ranker: `python3 engine/tools/train_learned.py` regenerates its training data (typing the
   corpora through the engine) and retrains `learned.bin` in one command; rerun it after
   `ranker.bin` or `common-*.txt` change. Never train on the evaluation texts (it excludes them).

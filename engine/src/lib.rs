@@ -8,6 +8,8 @@ pub mod ffi;
 mod hangul;
 #[cfg(feature = "predict")]
 pub mod kanji;
+#[cfg(feature = "predict")]
+pub mod keymodel;
 #[cfg(feature = "english")]
 mod hold;
 pub mod kana;

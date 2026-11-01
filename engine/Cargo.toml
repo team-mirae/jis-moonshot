@@ -44,6 +44,10 @@ name = "easy"
 required-features = ["predict"]
 
 [[example]]
+name = "first_key"
+required-features = ["predict"]
+
+[[example]]
 name = "legends"
 
 [[example]]

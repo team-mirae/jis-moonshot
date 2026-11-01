@@ -10,7 +10,9 @@ Sources (all redistributable):
   (NOUN_WEIGHT): words whose normalized form is a noun in Princeton WordNet 3.0 (index.noun;
   license in engine/predict/LICENSE-wordnet.txt). Verbs, adjectives and other or inflected forms
   count as non-nouns. In mixed Korean text, English words are mostly nouns (report에, server를).
-- Korean: readings in engine/dict/hanja.tsv (libhangul, BSD-3), plus common-ko.txt.
+- Korean: readings in engine/dict/hanja.tsv (libhangul, BSD-3) when it exists (it was removed with
+  the hanja, docs/moonshot.md §5.1: without it Korean is common-ko.txt and the corpora), plus
+  common-ko.txt.
 - Colloquial (with --corpora, fetched by fetch_corpora.py; 9 in 10 sentences train, 1 in 10 is
   held out for evaluation): Korean NSMC movie reviews (CC0) and songys/Chatbot_data (MIT);
   English Tatoeba sentences (CC BY 2.0 FR) and Google Taskmaster-1 dialogues (CC BY 4.0). Word
@@ -21,13 +23,18 @@ Sources (all redistributable):
   Notices for all of them are in engine/predict/LICENSE-corpora.txt.
 
 The model and the common-*.txt lists live in engine/predict/ (the engine's predictor uses them);
-the Minecraft mod copies them into its jar at build time.
+the Minecraft mod copies them into its jar at build time. JIS Moonshot's three-language key model
+(format JKR3, Korean, English and kana) is built by build_keymodel.py, which imports this file;
+this script's own ranker.bin (JKRK, two languages) would overwrite it: write it with --out.
 
 Usage: python3 -I build_ranker.py <words_alpha.txt> --nouns <wordnet dict/index.noun>
                                   [--corpora <dir>] [--eval-korean <text file>]
-                                  [--order 3|4] [--out <dir>] [--derived <corpora/derived>]
+                                  [--order 3..7] [--out <dir>] [--derived <corpora/derived>]
 Writes engine/predict/ranker.bin (or into --out, with the generated lists, for experiments).
 --order 4: key 4-grams (format version 2), Witten-Bell smoothed; 3 (default): the trigram table.
+--order 5, 6, 7: experiments only (the engine loads 3 and 4): the same Witten-Bell scheme, kept
+sparse (a dense table would be 27^n bytes), written with --out as ranker-<n>.sparse (format
+version 3: every seen n-gram's cost byte and every seen context's backoff byte, see write_sparse).
 --derived: the open corpora, each extracted by engine/tools/corpora/open_corpora/<source>.py into
 corpora/derived/<source>/ (ko.txt, en.txt, ko_words.tsv, en_words.tsv, terms.tsv, meta.json with
 its tier and weight, from the per-source evaluation). Each source counts as a share of the word
@@ -55,9 +62,10 @@ PREDICT = os.path.join(ROOT, "..", "engine", "predict")
 # still read from engine/predict), so an experiment doesn't touch the shipped files.
 OUT_DIR = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else PREDICT
 OUT = os.path.join(OUT_DIR, "ranker.bin")
-# Key n-gram order: 3 (format version 1) or 4 (format version 2).
+# Key n-gram order: 3 (format version 1) or 4 (format version 2); 5–7 for experiments (sparse).
 ORDER = int(sys.argv[sys.argv.index("--order") + 1]) if "--order" in sys.argv else 3
-assert ORDER in (3, 4), "--order is 3 or 4"
+assert 3 <= ORDER <= 7, "--order is 3 to 7"
+assert ORDER <= 4 or OUT_DIR != PREDICT, "--order 5 and up are experiments: write them with --out"
 
 # --- Hand-written lists (shared with the mod): frequent words the big lists miss or under-weight ---
 
@@ -428,8 +436,102 @@ def train4(weighted_words):
     return table
 
 
+class KeyModel:
+    """Key n-grams of any order (1–10), Witten-Bell smoothed as `train4`, kept sparse: only seen
+    n-grams and contexts are stored. Symbols are codes 0..size-1 (size ≤ 64, six bits each); an
+    n-gram is the int of its codes, oldest first. `boundary` pads the start and ends every word.
+    A model trained at order N also scores at any lower order (`prob(..., order=n)`)."""
+
+    BITS = 6
+
+    def __init__(self, order, size=27, boundary=END):
+        assert 1 <= order <= 10 and size <= 1 << self.BITS
+        self.order, self.size, self.boundary = order, size, boundary
+        self.counts = [dict() for _ in range(order + 1)]  # counts[n][n-gram]: weight
+        self.masks = [(1 << (self.BITS * k)) - 1 for k in range(order)]  # history of k codes
+        self.start = 0
+        for _ in range(order - 1):
+            self.start = (self.start << self.BITS) | boundary
+
+    def add(self, codes, w):
+        h, bits, top = self.start, self.BITS, self.masks[self.order - 1]
+        counts, masks = self.counts, self.masks
+        for c in list(codes) + [self.boundary]:
+            for n in range(1, self.order + 1):
+                d = counts[n]
+                k = ((h & masks[n - 1]) << bits) | c
+                d[k] = d.get(k, 0.0) + w
+            h = ((h << bits) | c) & top
+
+    def finish(self):
+        """Context totals and distinct-follower counts, from the n-gram counts."""
+        self.total = [dict() for _ in range(self.order + 1)]
+        self.types = [dict() for _ in range(self.order + 1)]
+        for n in range(1, self.order + 1):
+            total, types = self.total[n], self.types[n]
+            for k, w in self.counts[n].items():
+                ctx = k >> self.BITS
+                total[ctx] = total.get(ctx, 0.0) + w
+                types[ctx] = types.get(ctx, 0) + 1
+        return self
+
+    def prob(self, h, c, order=None):
+        p = 1 / self.size
+        for n in range(1, (order or self.order) + 1):
+            ctx = h & self.masks[n - 1]
+            t = self.total[n].get(ctx)
+            if t:
+                y = self.types[n][ctx]
+                p = (self.counts[n].get((ctx << self.BITS) | c, 0.0) + y * p) / (t + y)
+        return p
+
+    def logprob(self, codes, order=None):
+        """log2 probability of a word's codes, its end included."""
+        h, total, top = self.start, 0.0, self.masks[self.order - 1]
+        for c in list(codes) + [self.boundary]:
+            total += math.log2(self.prob(h, c, order))
+            h = ((h << self.BITS) | c) & top
+        return total
+
+    def entries(self, order=None):
+        """(n-grams, contexts) stored for scoring at `order`."""
+        n = order or self.order
+        return sum(len(self.counts[i]) for i in range(1, n + 1)), sum(len(self.total[i]) for i in range(1, n + 1))
+
+
+def train_wb(weighted_words, order):
+    """`train4`'s scheme at any order, sparse (a KeyModel)."""
+    model = KeyModel(order)
+    for word, w in weighted_words:
+        model.add([END if ch == "$" else code(ch) for ch in word], w)
+    return model.finish()
+
+
+def write_sparse(path, models):
+    """Format version 3 (experiments only, the engine doesn't read it): "JKRK", version, order,
+    size, then per model (English, Korean) per n = 1..order: the count of seen n-grams, each as
+    (u64 n-gram, u8 cost = -log2 p * 16 of its smoothed probability), then the count of seen
+    contexts, each as (u64 context, u8 -log2 of its backoff weight y/(t+y) * 16)."""
+    with open(path, "wb") as f:
+        f.write(b"JKRK")
+        f.write(struct.pack(">HH", 3, 27))
+        f.write(struct.pack(">B", models[0].order))
+        for m in models:
+            for n in range(1, m.order + 1):
+                f.write(struct.pack(">I", len(m.counts[n])))
+                for k in sorted(m.counts[n]):
+                    p = m.prob(k >> m.BITS, k & ((1 << m.BITS) - 1), order=n)
+                    f.write(struct.pack(">QB", k, min(255, round(-math.log2(p) * 16))))
+                f.write(struct.pack(">I", len(m.total[n])))
+                for ctx in sorted(m.total[n]):
+                    t, y = m.total[n][ctx], m.types[n][ctx]
+                    f.write(struct.pack(">QB", ctx, min(255, round(-math.log2(y / (t + y)) * 16))))
+
+
 def score(table, keys):
     """Average log2 probability per key (higher = more likely)."""
+    if isinstance(table, KeyModel):
+        return table.logprob([code(ch) for ch in keys]) / (len(keys) + 1)
     hist = [START] * (ORDER - 1)
     total = 0.0
     for ch in keys + "$":
@@ -461,7 +563,13 @@ def main():
     rng = random.Random(20261019)
 
     english = [w.strip() for w in open(words_alpha, encoding="utf-8") if w.strip()]
-    readings = sorted({line.split("\t", 1)[0] for line in open(HANJA_TSV, encoding="utf-8")})
+    # The hanja readings were the Korean word list; without hanja.tsv (removed with the hanja,
+    # docs/moonshot.md §5.1) Korean is common-ko.txt and the corpora alone.
+    readings = []
+    if os.path.isfile(HANJA_TSV):
+        readings = sorted({line.split("\t", 1)[0] for line in open(HANJA_TSV, encoding="utf-8")})
+    else:
+        print(f"no {os.path.relpath(HANJA_TSV, os.path.join(ROOT, '..'))}: Korean trains on common-ko.txt and the corpora")
     rng.shuffle(english)
     rng.shuffle(readings)
     en_test, en_train = english[: len(english) // 10], english[len(english) // 10:]
@@ -523,12 +631,17 @@ def main():
             if is_keys(k):
                 ko_data.append((k, weight * share))
 
-    trainer = train4 if ORDER == 4 else train
+    print(f"training: {len(en_data)} English, {len(ko_data)} Korean key sequences "
+          f"(weights {sum(w for _, w in en_data):.0f} and {sum(w for _, w in ko_data):.0f})")
+    trainer = train4 if ORDER == 4 else train if ORDER == 3 else lambda data: train_wb(data, ORDER)
     en_table = trainer(en_data)
     ko_table = trainer(ko_data)
 
     def accuracy(name, keys_list, want_korean):
         keys_list = [k for k in keys_list if is_keys(k)]
+        if not keys_list:
+            print(f"  {name:<34} (none)")
+            return
         right = sum((score(ko_table, k) > score(en_table, k)) == want_korean for k in keys_list)
         print(f"  {name:<34} {right / len(keys_list):6.1%} of {len(keys_list)}")
 
@@ -554,12 +667,18 @@ def main():
         f.write("\n".join(sorted(w for w in nouns if len(w) >= 3)) + "\n")
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "wb") as f:
-        f.write(b"JKRK")
-        f.write(struct.pack(">HH", 1 if ORDER == 3 else 2, 27))
-        f.write(en_table)
-        f.write(ko_table)
-    print(f"{OUT}: {os.path.getsize(OUT)} bytes")
+    if ORDER > 4:
+        out = os.path.join(OUT_DIR, f"ranker-{ORDER}.sparse")
+        write_sparse(out, [en_table, ko_table])
+        print(f"{out}: {os.path.getsize(out)} bytes; n-grams/contexts stored: English "
+              f"{en_table.entries()}, Korean {ko_table.entries()}")
+    else:
+        with open(OUT, "wb") as f:
+            f.write(b"JKRK")
+            f.write(struct.pack(">HH", 1 if ORDER == 3 else 2, 27))
+            f.write(en_table)
+            f.write(ko_table)
+        print(f"{OUT}: {os.path.getsize(OUT)} bytes")
 
     for w in ["hello", "minecraft", "diamond", "gg", "ok", "lol"]:
         print(f"  {w:<12} en={score(en_table, w):6.2f} ko={score(ko_table, w):6.2f}")
@@ -568,4 +687,5 @@ def main():
         print(f"  {w:<8} {k:<14} en={score(en_table, k):6.2f} ko={score(ko_table, k):6.2f}")
 
 
-main()
+if __name__ == "__main__":  # importable, for experiments that reuse its data and models
+    main()
