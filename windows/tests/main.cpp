@@ -182,15 +182,22 @@ int main() {
         }
         jk_free(e);
     }
-    // The engine switches its own mode (docs/moonshot.md §4): F6 to JIS Kana, the かな key (変換)
-    // back to Mode A, keeping what's staged. The shell follows jk_mode after each call.
+    // F6 shows the staged keys as hiragana in Mode A until the commit (docs/moonshot.md §4); the
+    // かな key (変換) forces Korean. From JIS Kana, 変換 switches the engine back to Mode A itself:
+    // the shell follows jk_mode after each call.
     {
         JkEngine* e = jk_new();
         jk_set_mode(e, JK_MODE_A);
         for (const Press& p : {g, k, s}) jk_key(e, jk::EngineKey(p.vk, p.scan, false), 0);
         jk_key(e, JK_KEY_F6, 0);
-        Check(jk_mode(e) == JK_MODE_A_KANA && Str(jk_preedit_ptr(e), jk_preedit_len(e)) == "きのと",
-              "F6: JIS Kana, G K S as きのと");
+        Check(jk_mode(e) == JK_MODE_A && jk_script(e) == JK_SCRIPT_HIRAGANA && Str(jk_preedit_ptr(e), jk_preedit_len(e)) == "きのと",
+              "F6: G K S as きのと, still Mode A");
+        Check(jk_kana_key(e) == 1 && jk_mode(e) == JK_MODE_A && Str(jk_preedit_ptr(e), jk_preedit_len(e)) == "한",
+              "変換 after F6: 한 again");
+        jk_flush(e);
+        jk_set_mode(e, JK_MODE_A_KANA);
+        for (const Press& p : {g, k, s}) jk_key(e, jk::EngineKey(p.vk, p.scan, false), 0);
+        Check(Str(jk_preedit_ptr(e), jk_preedit_len(e)) == "きのと", "JIS Kana: G K S as きのと");
         Check(jk_kana_key(e) == 1 && jk_mode(e) == JK_MODE_A && Str(jk_preedit_ptr(e), jk_preedit_len(e)) == "한",
               "変換 from JIS Kana: Mode A, 한 again");
         jk_free(e);
