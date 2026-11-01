@@ -19,10 +19,13 @@ reading. The owner doesn't expect it to become a usable product; it's an experim
 ## Core principle (never break)
 
 Every valid standard 2-set key and combination still types what it always did. Dedicated keys add
-shortcuts; they never remove anything. Shift+Q is still ㅃ, ㅗ+ㅏ is still ㅘ, and double finals
-still compose. The sanctioned exceptions are listed in spec §1: the implied ㅇ (ㅏ → 아) and
-Shift+vowel starting a syllable on ㅇ. Shift+Z is no longer F10: it's ㅋ (standard 2-set) again,
-and っ in kana.
+shortcuts; they never remove anything. ㅗ+ㅏ is still ㅘ, and double finals still compose. The
+sanctioned exceptions are listed in spec §1: the implied ㅇ (ㅏ → 아) and Shift+vowel starting a
+syllable on ㅇ. Shift+Z is no longer F10: it's ㅋ (standard 2-set) again, and っ in kana.
+
+JIS Moonshot moved what standard 2-set puts on Shift (docs/moonshot.md §9, the owner's call,
+2026-11-02): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only and ㅒ ㅖ on `:` and `;`; Shift+Q W E R T type the plain
+consonant and Shift+O / P type ㅔ゜ / ㅖ゜. The baseline holds every other key to standard 2-set.
 
 ## Layout
 

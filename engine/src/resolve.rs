@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 
 use crate::plan::{Press, is_compat_jamo, is_syllable};
-use crate::{Engine, Key, Layout, Mods, output_with};
+use crate::{Engine, Key, Layout, Mods, Out, Step, output_with};
 
 /// The most presses in a combination: a longer range is cut to it.
 pub const MAX_PRESSES: i64 = 16;
@@ -40,7 +40,7 @@ pub fn parse_press(text: &str) -> Option<Press> {
 /// F10, docs/moonshot.md §1).
 pub fn key_input(template: &Engine, press: &str) -> Option<String> {
     let p = parse_press(press)?;
-    output_with(template.mode(), template.dedicated_symbols(), Layout::JisKorean, p.key, p.shift).map(|out| out.char().to_string())
+    output_with(template.mode(), template.dedicated_symbols(), Layout::JisKorean, p.key, p.shift).map(Out::legend)
 }
 
 /// What the field shows after `context` (text typed so far, still unconfirmed) and then the key:
@@ -190,8 +190,21 @@ fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> 
     let (mode, symbols) = (template.mode(), template.dedicated_symbols());
     let wanted: std::collections::HashSet<char> = targets.iter().flatten().copied().collect();
     let part_of_text = |c: char| stream(&c.to_string()).iter().all(|c| wanted.contains(c));
+    // An action (docs/moonshot.md §9) is useful when the text has all its jamo (and the ㅇ of ゛).
+    // A lone ゜ adds nothing to the text, so it never is.
+    let output_useful = |out: Out| match out {
+        Out::Keys(action) => {
+            action.steps.iter().any(|step| *step != Step::Break)
+                && action.steps.iter().all(|step| match *step {
+                    Step::Jamo(j) => part_of_text(j),
+                    Step::Ieung(j) => part_of_text('ㅇ') && part_of_text(j),
+                    Step::Break => true,
+                })
+        }
+        _ => part_of_text(out.char()),
+    };
     let useful = |p: Press| {
-        output_with(mode, symbols, Layout::JisKorean, p.key, p.shift).is_some_and(|out| part_of_text(out.char()))
+        output_with(mode, symbols, Layout::JisKorean, p.key, p.shift).is_some_and(output_useful)
             || p.key.letter().or(p.key.digit()).is_some_and(|c| wanted.contains(&c))
     };
     let mut presses = Vec::new();

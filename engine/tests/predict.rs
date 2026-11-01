@@ -463,8 +463,8 @@ fn every_route_the_owner_named_types_the_word_on_top() {
 
 #[test]
 fn a_word_started_with_shift_vowel_is_korean_and_names_stay_english() {
-    // 있습니다 with Shift on ㅣ (and ㅆ by Shift): Korean, not LTtmqslek.
-    assert_eq!(top("S-KeyL S-KeyT KeyT KeyM KeyQ KeyS KeyL KeyE KeyK"), ("있습니다".into(), Kind::Korean));
+    // 있습니다 with Shift on ㅣ (ㅆ on 5): Korean, not L5tmqslek.
+    assert_eq!(top("S-KeyL Digit5 KeyT KeyM KeyQ KeyS KeyL KeyE KeyK"), ("있습니다".into(), Kind::Korean));
     // A known English word with the same kind of capital stays English for sure.
     assert_eq!(top("S-KeyH KeyE KeyL KeyL KeyO").1, Kind::English);
     // An acronym before a particle is still English + particle.
@@ -488,9 +488,10 @@ fn the_web_demos_easy_words_type_their_word_on_top() {
 
 /// The keys for a word typed lazily: an ㅇ-initial syllable after a final gets no key of its own.
 fn lazy_keys(word: &str) -> String {
-    const I: [&str; 19] = ["KeyR", "S-KeyR", "KeyS", "KeyE", "S-KeyE", "KeyF", "KeyA", "KeyQ", "S-KeyQ", "KeyT", "S-KeyT", "KeyD", "KeyW", "S-KeyW", "KeyC", "KeyZ", "KeyX", "KeyV", "KeyG"];
-    const M: [&str; 21] = ["KeyK", "KeyO", "KeyI", "S-KeyO", "KeyJ", "KeyP", "KeyU", "S-KeyP", "KeyH", "KeyH KeyK", "KeyH KeyO", "KeyH KeyL", "KeyY", "KeyN", "KeyN KeyJ", "KeyN KeyP", "KeyN KeyL", "KeyB", "KeyM", "KeyM KeyL", "KeyL"];
-    const F: [&str; 28] = ["", "KeyR", "S-KeyR", "KeyR KeyT", "KeyS", "KeyS KeyW", "KeyS KeyG", "KeyE", "KeyF", "KeyF KeyR", "KeyF KeyA", "KeyF KeyQ", "KeyF KeyT", "KeyF KeyX", "KeyF KeyV", "KeyF KeyG", "KeyA", "KeyQ", "KeyQ KeyT", "KeyT", "S-KeyT", "KeyD", "KeyW", "KeyC", "KeyZ", "KeyX", "KeyV", "KeyG"];
+    // JIS Moonshot's keys (docs/moonshot.md §9): ㄲ ㄸ ㅃ ㅆ ㅉ on 1–5, ㅒ ㅖ on : and ;.
+    const I: [&str; 19] = ["KeyR", "Digit4", "KeyS", "KeyE", "Digit3", "KeyF", "KeyA", "KeyQ", "Digit1", "KeyT", "Digit5", "KeyD", "KeyW", "Digit2", "KeyC", "KeyZ", "KeyX", "KeyV", "KeyG"];
+    const M: [&str; 21] = ["KeyK", "KeyO", "KeyI", "Quote", "KeyJ", "KeyP", "KeyU", "Semicolon", "KeyH", "KeyH KeyK", "KeyH KeyO", "KeyH KeyL", "KeyY", "KeyN", "KeyN KeyJ", "KeyN KeyP", "KeyN KeyL", "KeyB", "KeyM", "KeyM KeyL", "KeyL"];
+    const F: [&str; 28] = ["", "KeyR", "Digit4", "KeyR KeyT", "KeyS", "KeyS KeyW", "KeyS KeyG", "KeyE", "KeyF", "KeyF KeyR", "KeyF KeyA", "KeyF KeyQ", "KeyF KeyT", "KeyF KeyX", "KeyF KeyV", "KeyF KeyG", "KeyA", "KeyQ", "KeyQ KeyT", "KeyT", "Digit5", "KeyD", "KeyW", "KeyC", "KeyZ", "KeyX", "KeyV", "KeyG"];
     let mut keys = Vec::new();
     let mut prev_final = false;
     for ch in word.chars() {
@@ -629,8 +630,8 @@ fn a_korean_word_then_an_acronym_is_one_mixed_reading() {
     ] {
         assert_eq!(top(keys), (want.into(), Kind::Mixed), "{want}");
     }
-    // Capitals that are Korean typing's own (있 as ⇧L ⇧T) stay Korean.
-    let keys = "KeyE KeyM KeyD KeyF KeyH KeyR KeyE Digit8 KeyJ S-KeyL S-KeyT KeyM KeyM KeyA KeyU";
+    // A capital that is Korean typing's own (있 as ⇧L 5) stays Korean.
+    let keys = "KeyE KeyM KeyD KeyF KeyH KeyR KeyE Digit8 KeyJ S-KeyL Digit5 KeyM KeyM KeyA KeyU";
     assert_eq!(top(keys), ("등록되어있으며".into(), Kind::Korean));
 }
 
@@ -665,17 +666,20 @@ fn a_word_in_capitals_is_an_acronym() {
     assert_eq!(top("S-KeyO S-KeyE S-KeyM"), ("OEM".into(), Kind::English));
     // Not two capitals that end in one Korean typing makes (CCL, not CC이).
     assert_eq!(top("S-KeyC S-KeyC S-KeyL"), ("CCL".into(), Kind::English));
-    // A common Korean word stays Korean: 쓰 typed ⇧T ⇧M, 빠 typed ⇧Q ⇧K.
-    assert_eq!(top("S-KeyT S-KeyM"), ("쓰".into(), Kind::Korean));
-    assert_eq!(top("S-KeyQ S-KeyK"), ("빠".into(), Kind::Korean));
+    // Shift on Q W E R T is no double in JIS Moonshot (docs/moonshot.md §9): ⇧T ⇧M is TM. 쓰 and
+    // 빠 are typed 5 ㅡ and 1 ㅏ, and stay Korean.
+    assert_eq!(top("S-KeyT S-KeyM"), ("TM".into(), Kind::English));
+    assert_eq!(top("Digit5 KeyM"), ("쓰".into(), Kind::Korean));
+    assert_eq!(top("Digit1 KeyK"), ("빠".into(), Kind::Korean));
 }
 
 #[test]
 fn a_lone_capital_beside_latin_pieces_is_a_letter() {
-    assert_eq!(top("S-KeyK S-Semicolon S-KeyI S-KeyF S-KeyR S-KeyS").0, "K-IFRS");
-    assert_eq!(top("S-KeyC S-KeyT S-Semicolon S-KeyP S-Digit1 S-Digit3").0, "CT-P13");
-    // A lowercase one stays Korean: (USD)에.
-    assert_eq!(top("Equal S-KeyU S-KeyS S-KeyD S-Equal KeyP").0, "(USD)에");
+    // Mode A's punctuation is , . · (docs/moonshot.md §9).
+    assert_eq!(top("S-KeyK S-Slash S-KeyI S-KeyF S-KeyR S-KeyS").0, "K·IFRS");
+    assert_eq!(top("S-KeyC S-KeyT S-Slash S-KeyP S-Digit1 S-Digit3").0, "CT·P13");
+    // A lowercase one stays Korean: USD,에.
+    assert_eq!(top("S-KeyU S-KeyS S-KeyD S-Comma KeyP").0, "USD,에");
 }
 
 #[test]

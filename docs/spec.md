@@ -23,9 +23,13 @@ otherwise. (JIS Korean's Modes B and C, for US ANSI and UK ISO, are retired in J
 Every valid standard 2-set key and combination still types what it always did. A dedicated key
 adds a shortcut; it never takes anything away.
 
-- Shift+Q is still ㅃ, even though 1 also types ㅃ.
 - ㅗ then ㅏ is still ㅘ, even though 0 also types ㅘ.
 - Double finals (ㄹ+ㄱ → ㄺ etc.) compose as usual.
+
+JIS Moonshot moves the jamo standard 2-set puts on Shift (moonshot.md §9, 2026-11-02, the owner's
+call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only, and ㅒ ㅖ on `:` and `;`. Shift+Q W E R T type ㅂ ㅈ ㄷ ㄱ
+ㅅ, as Shift on every other consonant does, and Shift+O / Shift+P type ㅔ゜ / ㅖ゜. Everything else
+on the letter keys is standard 2-set, and `engine/tests/baseline.rs` holds it to that.
 
 Two deliberate exceptions (§4.2):
 
@@ -90,21 +94,19 @@ except Hangul jamo, which go into the composition automaton (§4).
 | 8 | ㅚ | 8 | most frequent of ㅟ ㅝ ㅚ; middle finger |
 | 9 | ㅢ | 9 | placed for ergonomics |
 | 0 | ㅘ | 0 | JIS kana わ is on this key |
-| − | ! | ? | |
-| ^ | ( | ) | parentheses, the most-missed symbols (were F8 only) |
-| ¥ | — | ^ | em dash (U+2014); ^ moved here from the ^ key (^^ in chat) |
+| − ^ ¥ | ㅙ 다 나 | 왜゛ 도 니 | moonshot.md §9.2 |
 
-Digits are on Shift, so numbers type with Shift held.
+Digits are on Shift, so numbers type with Shift held. The 12 keys right of 0 type the actions of
+moonshot.md §9.2 (short runs of jamo with ゛ and ゜, §9.1); JIS Korean's symbols on them are gone.
 
 ### 3.2 Q row
 
 | Key | Unshifted | Shift | Notes |
 |---|---|---|---|
-| Q W E R T | ㅂ ㅈ ㄷ ㄱ ㅅ | ㅃ ㅉ ㄸ ㄲ ㅆ | standard 2-set |
-| Y U I | ㅛ ㅕ ㅑ | ㅛ ㅕ ㅑ | standard 2-set (Shift ignored) |
-| O P | ㅐ ㅔ | ㅒ ㅖ | standard 2-set |
-| @ | ' | " | straight quotes, U+0027 / U+0022 |
-| [ | [ | 「 | U+300C |
+| Q W E R T | ㅂ ㅈ ㄷ ㄱ ㅅ | same | Shift ignored, as on every consonant (the doubles are on 1–5, §1) |
+| Y U I | ㅛ ㅕ ㅑ | ㅛ ㅕ ㅑ | standard 2-set (Shift: §4.2) |
+| O P | ㅐ ㅔ | ㅔ゜ ㅖ゜ | moonshot.md §9.2 (ㅒ ㅖ are on : and ;) |
+| @ [ | ㅡㄹ ゜ | 을゛ ゜ | moonshot.md §9.2 |
 
 ### 3.3 A row
 
@@ -112,9 +114,7 @@ Digits are on Shift, so numbers type with Shift held.
 |---|---|---|---|
 | A S D F G | ㅁ ㄴ ㅇ ㄹ ㅎ | same | standard 2-set |
 | H J K L | ㅗ ㅓ ㅏ ㅣ | same | standard 2-set |
-| ; | ~ | - | - is on Shift so phone numbers and dates (010-1234-5678) type without releasing Shift |
-| : | : | ; | * is dropped |
-| ] | ] | 」 | U+300D |
+| ; : ] | ㅖ ㅒ 무 | 예゛ 얘゛ 부 | moonshot.md §9.2 |
 
 ### 3.4 Z row
 
@@ -123,10 +123,8 @@ Digits are on Shift, so numbers type with Shift held.
 | Z | ㅋ | ㅋ | standard 2-set. JIS Korean made Shift+Z F10; JIS Moonshot doesn't (it's っ on the kana layout, moonshot.md §1) |
 | X C V | ㅌ ㅊ ㅍ | same | standard 2-set |
 | B N M | ㅠ ㅜ ㅡ | same | standard 2-set |
-| , | , | , | Shift ignored |
-| . | . | . | Shift ignored |
-| / | · | · | Korean middle dot, U+00B7; Shift ignored |
-| ろ | \ | _ | unchanged JIS |
+| , . / | ㅢ ㅂㅅ 메 | , . · | moonshot.md §9.2; Korean keeps , . · (U+00B7) on Shift |
+| ろ | 로 | 로゜ | moonshot.md §9.2 |
 
 ### 3.5 Keys outside this map
 
@@ -434,7 +432,7 @@ plain implied ㅇ. Backspace removes the
 repeat and gives the first reading back (말이 → 마리).
 
 **Shift+vowel starts a syllable on ㅇ.** Shift on a vowel key whose Shift types nothing else (Y U I
-H J K L B N M; not O and P, which type ㅒ ㅖ) finishes the syllable before it as it is, final
+H J K L B N M; not O and P, which type ㅔ゜ ㅖ゜) finishes the syllable before it as it is, final
 included, and starts a new syllable with ㅇ and that vowel. It's the single-keystroke alternative
 to the double press, and it also keeps two vowels apart that would otherwise combine.
 
@@ -445,10 +443,10 @@ to the double press, and it also keeps two vowels apart that would otherwise com
 | ㅗ ⇧ㅣ | 오이 (plain ㅣ: 외) |
 | ㄱ ㅏ ㄴ ⇧ㅗ ㅏ | 간와 (the new vowel can still combine with the next one) |
 | ⇧ㅏ | 아 (same as the implied ㅇ) |
-| ⇧ㄲ ⇧ㅏ | 까: an initial waiting for its vowel takes it as usual, so Shift held over from a double is harmless |
-| ㄱ ㅏ ⇧ㄲ ⇧ㅏ ㅇ ㅣ | 가까이: right after ㄲ or ㅆ typed with Shift, Shift on a vowel may just be held over, so the vowel takes the double as it takes any final (ㄴ, ㄱ), as on 2-set. Also 비싸, 바깥, and `ㅇ ㅣ ⇧ㅆ ⇧ㅓ` → 이써 |
-| ㅇ ㅣ ⇧ㅆ ㅓ ㅓ, ㅇ ㅣ 5 ⇧ㅓ | 있어: the same vowel again keeps the final; after the dedicated ㅆ key (5), a Shift is new |
-| ㄱ ⇧ㅒ, 간 ⇧ㅖ | 걔, 가녜: O and P are unchanged |
+| ⇧ㄱ ⇧ㅏ | 가: an initial waiting for its vowel takes it as usual, so Shift held over from a consonant is harmless |
+| ㄱ ㅏ ⇧ㄱ ⇧ㅏ ㅇ ㅣ | 가가이: right after a consonant typed with Shift (which changes nothing in JIS Moonshot, §1), Shift on a vowel may just be held over, so the vowel takes the consonant as it takes any final. Also `ㅂ ㅣ ⇧ㅅ ⇧ㅏ` → 비사 |
+| ㅇ ㅣ 5 ⇧ㅓ, ㅇ ㅣ 5 ㅓ | 있어, 이써: after the dedicated ㅆ key (5), a Shift is new |
+| ㄱ ⇧ㅐ, 간 ⇧ㅔ | 게, 가녜: O and P type ㅔ゜ ㅖ゜ (moonshot.md §9.2) |
 
 The ㅇ was asked for, so F6 commits it as it is (unlike an implied ㅇ). Backspace removes the
 whole Shift+vowel in one press. The English reading keeps the shifted letter (⇧L → `L`).
@@ -458,7 +456,8 @@ whole Shift+vowel in one press. The English reading keeps the shifted letter (�
 While composing, Backspace removes the **last jamo keystroke** and recomposes:
 간 → 가 → ㄱ → (empty). A compound medial typed as a sequence comes apart one key at a time
 (과 → 고), and one typed with a dedicated key goes in one press (과 via 0 → ㄱ) *(from prototype)*.
-An implied ㅇ isn't a keystroke, so it goes with its vowel (가어 → 가).
+An implied ㅇ isn't a keystroke, so it goes with its vowel (가어 → 가). A key that types several
+jamo (moonshot.md §9: 다, ㅡㄹ, 로゜) comes off whole: 하다 → 하.
 With nothing unconfirmed, Backspace passes through to the app.
 
 ---
@@ -729,8 +728,12 @@ Scores are in bits per key, positive leaning Korean:
    keys spell a known English word, it then leans English by 2 bits instead of settling it, and a
    known Korean word cancels the lean. Two capitals in a row (an acronym) still settle it: a word
    typed in capitals only, two letters or more, is English (KB, not 아유; OEM, not 얘뜨), unless
-   its Korean reading is a common word (a count of 20 or more, §10.9: 쓰 typed `⇧T ⇧M`, 빠 typed
-   `⇧Q ⇧K`), and so is an English start of two capitals before a particle (KPI와).
+   its Korean reading is a common word (a count of 20 or more, §10.9: 쓰 typed `5 ㅡ`, 빠 typed
+   `1 ㅏ`; in JIS Moonshot ⇧T ⇧M is TM, since Shift on Q W E R T types no double, moonshot.md §9),
+   and so is an English start of two capitals before a particle (KPI와).
+   **Korean-only keys:** a key right of 0 that typed Korean inside the word (ㅢ on `,`,
+   moonshot.md §9.3) lifts Korean over these capital rules and adds 3 bits per key; the last key
+   counts only when the Korean reading is a known word.
    After any key of the word, a number-row key included (있 as `l 5`), a capital on a vowel key is
    Shift+vowel. **Digits then a Korean counter** (개 년 월 일 원 명 건 억 조 배 개월 년간 분기 …,
    maybe with a particle: 3년간, 2개의) or a known Korean word are Korean, at least one step: 2개,

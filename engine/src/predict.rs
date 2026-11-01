@@ -93,6 +93,12 @@ pub struct Readings {
     pub kana: String,
     /// Kana-only keys (symbol keys in Korean) inside the staged keys, not counting the last one.
     pub kana_only: usize,
+    /// Keys right of 0 that typed Korean (docs/moonshot.md §9: ㅢ on `,`, 다 on `^`) inside the
+    /// staged keys, not counting the last one: no English word has those characters inside it.
+    pub korean_only: usize,
+    /// The last key was one of them: it counts too when the Korean reading is a known word (의 typed
+    /// d `,`), not when it may be a comma typed out of habit after English (hello,).
+    pub korean_only_last: bool,
 }
 
 /// A staged word read as a Korean start, an acronym and maybe more Korean (한전KPS은).
@@ -347,7 +353,7 @@ const SIZE: usize = 27;
 const START: usize = 26;
 const END: usize = 26;
 /// Shift on these can be Korean (tense consonants, ㅒ ㅖ); Shift on others mid-word too (Shift+vowel).
-pub(crate) const KOREAN_SHIFTS: &str = "QWERTOP";
+pub(crate) const KOREAN_SHIFTS: &str = "OP";
 pub(crate) const IEUNG_SHIFTS: &str = "YUIHJKLBNM";
 /// Canonical 2-set keys for the dedicated number-row jamo (0 is ㅘ, 1–5 ㅃ ㅉ ㄸ ㄲ ㅆ, 6–9 ㅟ ㅝ ㅚ ㅢ).
 const DIGIT_KEYS: [&str; 10] = ["hk", "q", "w", "e", "r", "t", "nl", "nj", "hl", "ml"];
@@ -362,6 +368,8 @@ const STICKY: f64 = 0.5;
 /// A word count from which a Korean word is common: the business terms' count (§10.9).
 const COMMON: u32 = 20;
 const BARE_JAMO: f64 = 1.5;
+/// Each key right of 0 that typed Korean inside the word (docs/moonshot.md §9), toward Korean.
+const KOREAN_ONLY: f64 = 3.0;
 /// Alternatives rank below the reading they're an alternative to.
 const ALTERNATIVE: f64 = 1.0;
 /// A known particle after an English start (report에): strong evidence of a mixed word.
@@ -1432,6 +1440,20 @@ impl Predictor {
 
     /// Korean minus English, with the rules on top of the model.
     pub(crate) fn margin(&self, readings: &Readings, context: Context) -> f64 {
+        let margin = self.margin_of_keys(readings, context);
+        // A key right of 0 that typed Korean inside the word (ㅢ on `,`, docs/moonshot.md §9): no
+        // English word has that character inside it, so the English reading's capitals and shape
+        // don't count against Korean (의약품 typed `,` ⇧I r v n a isn't ,Irvna).
+        let last = readings.korean_only_last && self.korean_words.contains_key(readings.korean.as_str());
+        let keys = readings.korean_only + last as usize;
+        if keys == 0 || context.command {
+            return margin;
+        }
+        margin.max(0.0) + KOREAN_ONLY * keys as f64
+    }
+
+    /// [`Predictor::margin`] from the keys' shapes and the lexicons alone.
+    fn margin_of_keys(&self, readings: &Readings, context: Context) -> f64 {
         let (korean, english) = (&readings.korean, &readings.english);
         if context.command {
             return -99.0;

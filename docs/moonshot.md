@@ -18,7 +18,7 @@ ways. Where this file and `spec.md` disagree, this file wins until the spec is u
 | 7 | 英数 → English, カタカナ/F18 → Korean, かな left to macOS | 英数 / 無変換 → English, かな / 変換 → predictive (Mode A); again in Mode A → force Korean |
 | 8 | F6 commits Korean, F7 opens hanja; Shift+Z is F10 | **F6 → hiragana, F7 → katakana**, for the text being typed (`A_KANA` is the kana-only mode); **F8 → kanji**, **Shift+F8 → the hanja list**; F9/F10 as before. **Shift+Z is no longer F10**: it's ㅋ in Korean (standard 2-set again) and っ in kana |
 | 9 | Hanja show as predictions | **No hanja predictions**; the kana reading's **kanji conversions** join the predictions instead (§5.1) |
-| 10 | Symbols on the keys right of 0 (! ( — ' [ ~ : ] , . · \\), ㅃ ㅉ ㄸ ㄲ ㅆ ㅒ ㅖ on Shift | **Planned, not built (§9):** those 12 keys type syllables, compound vowels and finals instead (24 slots with Shift), and Shift on Q W E R T O P changes |
+| 10 | Symbols on the keys right of 0 (! ( — ' [ ~ : ] , . · \\), ㅃ ㅉ ㄸ ㄲ ㅆ ㅒ ㅖ on Shift | Those 12 keys type syllables, compound vowels and finals instead (24 slots with Shift), and Shift on Q W E R T O P changes (§9) |
 
 Shift+Z was F10 in JIS Korean (F10 isn't reachable everywhere). In JIS Moonshot it types っ on the
 kana layout, so it's a key like any other: ㅋ (standard 2-set's Shift+Z), っ, or `Z`. The core
@@ -259,12 +259,12 @@ The left half is the taegeuk, cut at the vertical midpoint; the right half is a 
 A transparent gap as wide as the S separates them. Drawn by `docs/logo/make_logo.py` (`moonshot.svg`),
 used for the app and the mode badges.
 
-## 9. Mode A without symbols (planned)
+## 9. Mode A without symbols
 
-Status: **planned, not built** (2026-11-02). Nothing in `/engine` does this yet; the drawing is in
-`docs/layout/jis-moonshot-layouts.html` (piece `mode-a`). When it's built, the core principle in
-`CLAUDE.md` and spec §1, spec §3's key map and the baseline (`engine/tests/baseline.rs`) change in
-the same change: it breaks standard 2-set on Shift+Q W E R T O P.
+Built 2026-11-02 (`engine/src/layout.rs`, `jis_korean` and `moonshot_letter`); drawn in
+`docs/layout/jis-moonshot-layouts.html`. It breaks standard 2-set on Shift+Q W E R T O P, so the
+core principle in `CLAUDE.md` and spec §1, spec §3's key map and the baseline
+(`engine/tests/baseline.rs`) say so.
 
 Mode A types three languages, so its symbol keys are better spent on Korean: symbols come from
 無変換 (English), ー from the kana reading (F6 / F7), and ⌥ `,` `.` `/` `[` `]` still type 、 。 ・ 『 』
@@ -312,11 +312,32 @@ The letter keys change on Shift only:
 The number row, the other letter keys, F6–F10 and the switch keys stay as they are. The kana
 reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ there too).
 
-### 9.3 Open questions
+### 9.3 How the engine types an action
 
-- **[decide]** Shift+O: ㅔ゜ or ㅐ゜ (above).
-- **[decide]** The kana reading counts the symbol keys as kana-only evidence (§5); once they type
-  Korean, that evidence needs another source.
-- **[decide]** What the English reading and F9 / F10 read for a slot key (its stock JIS character,
-  as now, or nothing).
+- **Keys, not jamo.** An action's first jamo carries the key (its stock JIS character, or the
+  letter); the rest are parts of it. **Backspace takes the whole key off** (하다 → 하, 으로゜ → 으),
+  as the kana reading counts keys. F9 / F10 read each key once (`i` ⇧P `h o n e` F10 → iPhone).
+- **Shift still held.** Shift on a consonant changes nothing, so a Shift+vowel right after one is
+  Shift held over: the vowel takes the consonant (가 ⇧ㄱ ⇧ㅏ → 가가; after the ㄲ key, 4 ⇧ㅏ, Shift
+  is new and starts 아゛).
+- **The English reading** reads a slot key as its stock JIS character (`-` for ㅙ), as before.
+  The standard 2-set reading (spec §10.2) types that character too.
+- **Korean-only keys** (spec §10.3): a slot key that typed Korean inside the word means the keys
+  aren't an English word, so it lifts the Korean reading over the English reading's capital rules
+  and adds 3 bits per key (의약품 typed `,` ⇧I r v n a isn't ,Irvna). The last key counts only
+  when the Korean reading is a known word (의 typed `d` `,`), so a habitual comma after English
+  (`hello,`) still reads as English.
+- **Kana evidence** still counts the 12 keys by key: they type kana-only legends (§5).
+- **Capitals.** Shift on Q W E R T no longer types Korean, so it reads as a capital: ⇧T ⇧M is TM,
+  not 쓰 (only O and P are Korean Shifts now, `KOREAN_SHIFTS`).
+- **Legends.** `examples/legends.rs` (the macOS Keyboard Viewer) prints actions in full (다,
+  ㅡㄹ, 왜゛). `jk_legend` / `jk_legend_in` return one code point, the legend's first (다, ㅡ, 왜),
+  so the web playground's board shows that until it gets a string legend.
+
+### 9.4 Open questions
+
+- **[decide]** Shift+O: ㅔ゜ (as asked and built) or ㅐ゜ (its own vowel, like Shift+P's ㅖ゜).
+- **[decide]** A string legend in the C ABI (`jk_legend_text_in`) for the web board and Windows.
+- The learned ranker (`learned.bin`) wasn't retrained on the new keys; the corpus tests pass with
+  it and with the rules alone. Retrain when the corpora are at hand (`engine/tools/train_learned.py`).
 

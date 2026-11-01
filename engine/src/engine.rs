@@ -9,7 +9,7 @@ use crate::learn::{self, Event, Learner};
 use crate::predict::{Context, Head, Kind, Language, Piece, Prediction, Predictor, Ranker, Readings, Split, Weight, Weights};
 use crate::hanja::{Candidate, Dictionary};
 use crate::key::{Key, Mods};
-use crate::layout::{self, Layout, Mode, Out};
+use crate::layout::{self, Layout, Mode, Out, Step};
 
 /// Candidates per page of the hanja list; Digit1–Digit9 pick on the current page.
 pub const PAGE_SIZE: usize = 9;
@@ -31,6 +31,12 @@ enum Token {
     /// Shift+vowel (spec §4.2): the vowel starts its own syllable on ㅇ, leaving the previous
     /// final where it is.
     IeungVowel { jamo: char, raw: Option<char>, kana: Option<char> },
+    /// ゜ (docs/moonshot.md §9.1): the syllable ends with no final. `raw` and `kana` as for a jamo
+    /// when it's the key's first step (the ゜ key itself), none when it ends a longer action (로゜).
+    Break { raw: Option<char>, kana: Option<char> },
+    /// A jamo after the first one of a key's action (the ㅏ of 다): it composes, but the key is the
+    /// first token's (for the English and kana readings and F9/F10).
+    Part(char),
 }
 
 /// How the staged keys are shown and committed (docs/moonshot.md §4). The C ABI id is the
@@ -500,28 +506,51 @@ impl Engine {
             }
             Key::Backspace if self.segment.is_empty() => self.unchanged(false),
             Key::Backspace => {
-                self.segment.pop();
+                // A key comes off whole: an action's parts (the ㅏ of 다, the ゜ of 로゜) go with the
+                // token that carries its key, as the kana reading counts keys (docs/moonshot.md §9).
+                while let Some(Token::Part(_) | Token::Break { raw: None, .. }) = self.segment.pop() {}
                 self.unchanged(true)
             }
             _ => match layout::output_with(self.mode, self.symbols, Layout::JisKorean, key, mods.shift) {
                 Some(Out::Jamo(jamo)) => {
                     let kana = self.mode.kana_scheme().kana(key, mods.shift);
                     let raw = key.letter().map(|c| if mods.shift { c.to_ascii_uppercase() } else { c });
-                    let raw = raw.or(key.digit());
+                    // A jamo on a key right of 0 (docs/moonshot.md §9) is that key's stock JIS character.
+                    let raw = raw.or(key.digit()).or_else(|| {
+                        layout::output_with(self.mode, self.symbols, Layout::Escaped, key, mods.shift).map(Out::char)
+                    });
                     // Shift on a vowel key whose Shift types nothing else (all but O P): the vowel
                     // starts its own syllable on ㅇ (spec §4.2).
-                    // Not right after ㄲ or ㅆ typed with Shift: that Shift may still be held, and the
-                    // double moves to start the vowel's syllable as any final does (가 ⇧ㄲ ⇧ㅏ → 가까,
-                    // as on 2-set).
+                    // Not right after a consonant typed with Shift: that Shift may still be held, and
+                    // the consonant moves to start the vowel's syllable as any final does (가 ⇧ㄱ ⇧ㅏ →
+                    // 가가). Shift on a consonant key changes nothing in JIS Moonshot (docs/moonshot.md
+                    // §9), so it's likely still held.
                     let held = matches!(
                         self.segment.last(),
-                        Some(Token::Jamo { jamo: 'ㄲ' | 'ㅆ', raw: Some(c), .. }) if c.is_ascii_uppercase()
+                        Some(Token::Jamo { jamo, raw: Some(c), .. }) if c.is_ascii_uppercase() && !hangul::is_medial(*jamo)
                     );
                     let ieung = mods.shift
                         && !held
                         && hangul::is_medial(jamo)
                         && layout::output_with(self.mode, self.symbols, Layout::JisKorean, key, false) == Some(Out::Jamo(jamo));
                     self.segment.push(if ieung { Token::IeungVowel { jamo, raw, kana } } else { Token::Jamo { jamo, raw, kana } });
+                    self.unchanged(true)
+                }
+                Some(Out::Keys(action)) => {
+                    // An action (docs/moonshot.md §9): its first step carries the key, like any
+                    // other key's token; the rest are parts of it.
+                    let kana = self.mode.kana_scheme().kana(key, mods.shift);
+                    let raw = key.letter().map(|c| if mods.shift { c.to_ascii_uppercase() } else { c });
+                    let raw = raw.or_else(|| layout::output_with(self.mode, self.symbols, Layout::Escaped, key, mods.shift).map(Out::char));
+                    for (i, step) in action.steps.iter().enumerate() {
+                        let (raw, kana) = if i == 0 { (raw, kana) } else { (None, None) };
+                        self.segment.push(match (*step, i) {
+                            (Step::Jamo(jamo), 0) => Token::Jamo { jamo, raw, kana },
+                            (Step::Jamo(jamo), _) => Token::Part(jamo),
+                            (Step::Ieung(jamo), _) => Token::IeungVowel { jamo, raw, kana },
+                            (Step::Break, _) => Token::Break { raw, kana },
+                        });
+                    }
                     self.unchanged(true)
                 }
                 Some(Out::Char(c)) => {
@@ -641,7 +670,12 @@ impl Engine {
                     .take_while(|t| match t {
                         _ if kana => !matches!(t, Token::Bare),
                         Token::Text(_) | Token::Typed(..) => symbols && in_run(t),
-                        Token::Jamo { raw, .. } | Token::IeungVowel { raw, .. } => !symbols && raw.is_some(),
+                        // An action's parts go with its key (docs/moonshot.md §9).
+                        t if is_part(t) => !symbols,
+                        Token::Jamo { raw, .. } | Token::IeungVowel { raw, .. } | Token::Break { raw, .. } => {
+                            !symbols && raw.is_some()
+                        }
+                        Token::Part(_) => !symbols,
                         Token::Bare => false,
                     })
                     .count();
@@ -658,7 +692,8 @@ impl Engine {
             .original
             .iter()
             .filter_map(|t| match t {
-                Token::Jamo { raw, .. } | Token::IeungVowel { raw, .. } => *raw,
+                Token::Jamo { raw, .. } | Token::IeungVowel { raw, .. } | Token::Break { raw, .. } => *raw,
+                Token::Part(_) => None,
                 // In kana, a symbol key converts to its stock JIS character (ほ → -).
                 Token::Typed(_, english, Some(_)) if self.script.is_kana() => Some(*english),
                 Token::Text(c) | Token::Typed(c, ..) => Some(*c),
@@ -840,40 +875,46 @@ impl Engine {
             // Lean: only a whole word of two syllables or more.
             (reading == korean && reading.chars().count() >= 2).then(|| candidates[0].hanja.clone())
         });
+        // Where each key's tokens start: an action's parts (docs/moonshot.md §9) belong to its key,
+        // and every split and case change below falls between keys.
+        let starts: Vec<usize> = (0..segment.len()).filter(|&k| !is_part(&segment[k])).collect();
+        let at = |i: usize| starts.get(i).copied().unwrap_or(segment.len());
+        let count = starts.len();
         // Every way to read the keys as an English start plus a Korean ending (report에), ending
         // short: the predictor keeps the ones whose ending is a particle.
-        let first = segment.len().saturating_sub(MAX_ENDING_KEYS).max(1);
+        let first = count.saturating_sub(MAX_ENDING_KEYS).max(1);
         // Not after a number-row jamo (ㅘ as 0 in Dynamics와의): that key is the ending's, and an
         // English start's digits are typed as digits (APR1400은).
         let jamo_digit = |t: &Token| matches!(*t, Token::Jamo { raw: Some(c), .. } | Token::IeungVowel { raw: Some(c), .. } if c.is_ascii_digit());
-        let mut splits: Vec<Split> = (first..segment.len())
+        let mut splits: Vec<Split> = (first..count)
+            .map(at)
             .filter(|&k| !segment[..k].iter().any(jamo_digit))
             .map(|k| Split { english: typed_of(&segment[..k]), korean: compose(&segment[k..]) })
             .collect();
-        // The keys token by token, to find where the case changes.
-        let keys: Vec<Option<char>> = segment.iter().map(typed_key).collect();
-        let upper = |k: usize| keys[k].is_some_and(|c| c.is_ascii_uppercase());
-        let lower = |k: usize| keys[k].is_some_and(|c| c.is_ascii_lowercase());
+        // The keys one by one, to find where the case changes.
+        let keys: Vec<Option<char>> = starts.iter().map(|&k| typed_key(&segment[k])).collect();
+        let upper = |i: usize| keys[i].is_some_and(|c| c.is_ascii_uppercase());
+        let lower = |i: usize| keys[i].is_some_and(|c| c.is_ascii_lowercase());
         // A digit typed as a digit, not a number-row jamo (ㅢ as 9).
-        let digit = |k: usize| matches!(segment[k], Token::Text(c) | Token::Typed(c, ..) if c.is_ascii_digit());
-        let capital_run = |from: usize| (from..keys.len()).take_while(|&k| upper(k) || digit(k)).count();
+        let digit = |i: usize| matches!(segment[at(i)], Token::Text(c) | Token::Typed(c, ..) if c.is_ascii_digit());
+        let capital_run = |from: usize| (from..count).take_while(|&i| upper(i) || digit(i)).count();
         // An acronym start then lowercase keys (LG에너지솔루션은, KB국민카드의): also split where the
         // case changes, however far from the end, so the rest can be read as Korean.
         let acronym = capital_run(0);
         if acronym >= 2 && acronym < first && lower(acronym) {
-            splits.push(Split { english: typed_of(&segment[..acronym]), korean: compose(&segment[acronym..]) });
+            splits.push(Split { english: typed_of(&segment[..at(acronym)]), korean: compose(&segment[at(acronym)..]) });
         }
         // A Korean start then an acronym (한전KPS, 에너지ICT): the first place lowercase keys are
         // followed by two capitals.
-        let head = (1..keys.len().saturating_sub(1))
-            .find(|&k| (lower(k - 1) || keys[k - 1].is_some_and(|c| c.is_ascii_digit())) && upper(k) && upper(k + 1))
-            .map(|k| {
-                let end = k + capital_run(k);
+        let head = (1..count.saturating_sub(1))
+            .find(|&i| (lower(i - 1) || keys[i - 1].is_some_and(|c| c.is_ascii_digit())) && upper(i) && upper(i + 1))
+            .map(|i| {
+                let end = i + capital_run(i);
                 Head {
-                    korean: compose(&segment[..k]),
-                    keys: typed_of(&segment[..k]),
-                    acronym: typed_of(&segment[k..end]),
-                    rest: compose(&segment[end..]),
+                    korean: compose(&segment[..at(i)]),
+                    keys: typed_of(&segment[..at(i)]),
+                    acronym: typed_of(&segment[at(i)..at(end)]),
+                    rest: compose(&segment[at(end)..]),
                 }
             });
         Readings {
@@ -890,11 +931,23 @@ impl Engine {
             pieces: Vec::new(),
             head,
             kana: kana_of(segment),
+            // A key right of 0 that typed Korean (docs/moonshot.md §9), before the last key; and
+            // whether the last key is one.
+            korean_only: segment[..at(count.saturating_sub(1))].iter().filter(|t| korean_only_key(t)).count(),
+            korean_only_last: count > 0 && korean_only_key(&segment[at(count - 1)]),
             // A symbol key (not a digit) typed before the last key: punctuation in Korean, kana here.
             kana_only: segment
                 .iter()
-                .take(segment.len().saturating_sub(1))
-                .filter(|t| matches!(t, Token::Typed(c, _, Some(_)) if !c.is_ascii_digit()))
+                .take(at(count.saturating_sub(1)))
+                .filter(|t| match **t {
+                    Token::Typed(c, _, Some(_)) => !c.is_ascii_digit(),
+                    // The keys right of 0 type Korean in JIS Moonshot (docs/moonshot.md §9): they're
+                    // still kana-only keys, by the key (its stock character isn't a letter or digit).
+                    Token::Jamo { raw: Some(c), kana: Some(_), .. }
+                    | Token::IeungVowel { raw: Some(c), kana: Some(_), .. }
+                    | Token::Break { raw: Some(c), kana: Some(_) } => !c.is_alphanumeric(),
+                    _ => false,
+                })
                 .count(),
         }
     }
@@ -1164,9 +1217,9 @@ fn without_kana(mut readings: Readings) -> Readings {
 /// from a conversion or a pick as it is.
 fn kana_of(segment: &[Token]) -> String {
     crate::kana::compose(segment.iter().filter_map(|t| match *t {
-        Token::Jamo { kana, .. } | Token::IeungVowel { kana, .. } | Token::Typed(_, _, kana) => kana,
+        Token::Jamo { kana, .. } | Token::IeungVowel { kana, .. } | Token::Break { kana, .. } | Token::Typed(_, _, kana) => kana,
         Token::Text(c) => Some(c),
-        Token::Bare => None,
+        Token::Bare | Token::Part(_) => None,
     }))
 }
 
@@ -1176,9 +1229,10 @@ fn english_of(segment: &[Token]) -> String {
         .iter()
         .filter_map(|t| match *t {
             Token::Jamo { jamo, raw, .. } | Token::IeungVowel { jamo, raw, .. } => Some(raw.unwrap_or(jamo)),
+            Token::Break { raw, .. } => raw,
             Token::Text(c) => Some(c),
             Token::Typed(_, english, _) => Some(english),
-            Token::Bare => None,
+            Token::Bare | Token::Part(_) => None,
         })
         .collect()
 }
@@ -1235,13 +1289,29 @@ fn typed_of(segment: &[Token]) -> String {
     segment.iter().filter_map(typed_key).collect()
 }
 
+/// Whether a token is a key right of 0 that typed Korean (docs/moonshot.md §9: its stock character
+/// isn't a letter or digit).
+#[cfg(feature = "predict")]
+fn korean_only_key(token: &Token) -> bool {
+    match *token {
+        Token::Jamo { raw: Some(c), .. } | Token::IeungVowel { raw: Some(c), .. } | Token::Break { raw: Some(c), .. } => !c.is_alphanumeric(),
+        _ => false,
+    }
+}
+
+/// Whether a token is part of the key before it (the ㅏ of 다, the ゜ of 로゜), docs/moonshot.md §9.
+fn is_part(token: &Token) -> bool {
+    matches!(token, Token::Part(_) | Token::Break { raw: None, .. })
+}
+
 /// One token's key as [`typed_of`] reads it; none for a bare-vowel marker.
 #[cfg(feature = "predict")]
 fn typed_key(token: &Token) -> Option<char> {
     match *token {
         Token::Jamo { jamo, raw, .. } | Token::IeungVowel { jamo, raw, .. } => Some(raw.unwrap_or(jamo)),
+        Token::Break { raw, .. } => raw,
         Token::Text(c) | Token::Typed(c, ..) => Some(c),
-        Token::Bare => None,
+        Token::Bare | Token::Part(_) => None,
     }
 }
 
@@ -1264,7 +1334,8 @@ fn composer_with(segment: &[Token], options: Options) -> Composer {
     let mut composer = Composer::with(options);
     for token in segment {
         match *token {
-            Token::Jamo { jamo, .. } => composer.jamo(jamo),
+            Token::Jamo { jamo, .. } | Token::Part(jamo) => composer.jamo(jamo),
+            Token::Break { .. } => composer.syllable_break(),
             Token::Text(c) | Token::Typed(c, ..) => composer.text(c),
             Token::Bare => composer.bare(),
             Token::IeungVowel { jamo, .. } => composer.ieung_vowel(jamo),
@@ -1285,15 +1356,26 @@ fn compose_with(segment: &[Token], options: Options) -> String {
 /// their stock JIS characters (composing then happens with `Options::standard`).
 #[cfg(feature = "predict")]
 fn two_set_tokens(segment: &[Token]) -> Vec<Token> {
-    segment
-        .iter()
-        .map(|t| match *t {
-            Token::Jamo { raw: Some(d), .. } if d.is_ascii_digit() => Token::Text(d),
-            Token::Typed(_, english, _) => Token::Text(english),
-            Token::Bare => Token::Bare,
-            ref other => other.clone(),
-        })
-        .collect()
+    let mut out = Vec::new();
+    // A key right of 0 (docs/moonshot.md §9) is its stock JIS character on plain 2-set: its first
+    // token becomes that character and the rest of its action goes.
+    let mut symbol_key = false;
+    for t in segment {
+        let keyed_symbol = |raw: Option<char>| raw.is_some_and(|c| !c.is_alphanumeric());
+        match *t {
+            Token::Jamo { raw: Some(d), .. } if d.is_ascii_digit() => out.push(Token::Text(d)),
+            Token::Jamo { raw, .. } | Token::IeungVowel { raw, .. } | Token::Break { raw, .. } if keyed_symbol(raw) => {
+                symbol_key = true;
+                out.push(Token::Text(raw.unwrap_or_default()));
+                continue;
+            }
+            Token::Part(_) | Token::Break { raw: None, .. } if symbol_key => continue,
+            Token::Typed(_, english, _) => out.push(Token::Text(english)),
+            ref other => out.push(other.clone()),
+        }
+        symbol_key = false;
+    }
+    out
 }
 
 /// Characters with a full-width and a half-width form beyond printable ASCII (Unicode's

@@ -344,7 +344,8 @@ impl Keymap {
                                 ways.push(Press { key, shift });
                             }
                         }
-                        None => {}
+                        // Actions (docs/moonshot.md §9) aren't planned: the planner types jamo by jamo.
+                        Some(Out::Keys(_)) | None => {}
                     }
                 }
             }

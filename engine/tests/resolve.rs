@@ -18,8 +18,11 @@ fn has(found: &[Vec<String>], keys: &str) -> bool {
 fn a_key_alone_types_its_character_in_the_mode() {
     let a = in_mode(Mode::A);
     assert_eq!(key_input(&a, "KeyG").as_deref(), Some("ㅎ"));
-    assert_eq!(key_input(&a, "S-KeyQ").as_deref(), Some("ㅃ"));
-    assert_eq!(key_input(&a, "Equal").as_deref(), Some("("));
+    // docs/moonshot.md §9: Shift+Q is ㅂ, and the keys right of 0 show their actions.
+    assert_eq!(key_input(&a, "S-KeyQ").as_deref(), Some("ㅂ"));
+    assert_eq!(key_input(&a, "Equal").as_deref(), Some("다"));
+    assert_eq!(key_input(&a, "BracketLeft").as_deref(), Some("ㅡㄹ"));
+    assert_eq!(key_input(&a, "S-IntlRo").as_deref(), Some("로゜"));
     // Shift+Z is no longer F10 (docs/moonshot.md §1): ㅋ, as on standard 2-set.
     assert_eq!(key_input(&a, "S-KeyZ").as_deref(), Some("ㅋ"));
     // Not characters: F-keys, Space, unknown keys.
@@ -43,8 +46,9 @@ fn a_key_after_context_shows_the_whole_field() {
 #[test]
 fn keys_for_a_character() {
     let e = Engine::new();
+    // ㅃ is only on 1 in JIS Moonshot (docs/moonshot.md §9).
     let found = keys_for_output(&e, "ㅃ", 1, 1);
-    assert!(has(&found, "Digit1") && has(&found, "S-KeyQ"), "{found:?}");
+    assert!(has(&found, "Digit1") && !has(&found, "S-KeyQ"), "{found:?}");
     assert!(found.iter().all(|route| route.len() == 1));
     // Fewest presses, then fewest Shifts, first.
     assert_eq!(found[0], ["Digit1"]);
@@ -62,15 +66,16 @@ fn keys_for_a_word_within_the_range() {
 
 #[test]
 fn keys_follow_the_mode() {
-    // " is Shift+@ in Mode A.
-    assert!(has(&keys_for_output(&in_mode(Mode::A), "\"", 1, 1), "S-BracketLeft"));
+    // 다 is the ^ key in Mode A (docs/moonshot.md §9), and , is Shift+,.
+    assert!(has(&keys_for_output(&in_mode(Mode::A), "다", 1, 1), "Equal"));
+    assert!(has(&keys_for_output(&in_mode(Mode::A), ",", 1, 1), "S-Comma"));
 }
 
 #[test]
 fn every_combination_types_the_text() {
-    // ! is the − key in Mode A. (Bare vowels like ㅠㅠ aren't here: F6 no longer drops the implied
+    // , is Shift+, in Mode A. (Bare vowels like ㅠㅠ aren't here: F6 no longer drops the implied
     // ㅇ, docs/moonshot.md §4.)
-    for (e, symbol) in [(in_mode(Mode::A), "가!")] {
+    for (e, symbol) in [(in_mode(Mode::A), "가,")] {
         for text in ["까", "와", "읽", "한 ", "1", symbol] {
             let found = keys_for_output(&e, text, 1, 4);
             assert!(!found.is_empty(), "{text}");

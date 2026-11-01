@@ -29,4 +29,4 @@ pub mod trust;
 pub use engine::{Candidates, Engine, Output, PAGE_SIZE, Script, full_width, half_width};
 pub use hanja::{Candidate, Dictionary};
 pub use key::{Key, Mods};
-pub use layout::{Layout, Mode, Out, output, output_in, output_with};
+pub use layout::{Action, Layout, Mode, Out, Step, output, output_in, output_with};

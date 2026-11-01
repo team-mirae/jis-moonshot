@@ -56,7 +56,7 @@ fn every_mode_keeps_standard_two_set_on_the_letter_keys() {
         for layout in [Layout::JisKorean, Layout::Escaped] {
             for key in letter_keys() {
                 for shift in [false, true] {
-                    assert_eq!(output_in(mode, layout, key, shift), output_in(Mode::A, Layout::JisKorean, key, shift), "{mode:?} {key:?}");
+                    assert_eq!(output_in(mode, layout, key, shift), output_in(Mode::A, layout, key, shift), "{mode:?} {key:?}");
                 }
             }
         }
@@ -131,7 +131,8 @@ fn mode_a_is_unchanged() {
     for (code, shift) in [("Digit2", true), ("BracketLeft", false), ("Equal", false)] {
         e.key(Key::from_code(code), if shift { Mods::SHIFTED } else { Mods::NONE });
     }
-    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("2'(", "\"@^"));
+    // docs/moonshot.md §9: @ is ㅡㄹ and ^ is 다; English still reads the stock keys.
+    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("2을다", "\"@^"));
 }
 
 /// Spec §3.6.1 over the C ABI: modes are listed by position, and an unknown id is refused.

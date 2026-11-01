@@ -223,6 +223,14 @@ impl Composer {
         self.advance();
     }
 
+    /// ゜ (docs/moonshot.md §9.1): ends the syllable being composed with no final, so the next
+    /// consonant starts a syllable and a vowel gets an implied ㅇ (갈 ゜ ㅏ → 갈아, not 가라).
+    pub fn syllable_break(&mut self) {
+        self.moved = None;
+        self.flush();
+        self.advance();
+    }
+
     /// Ends the syllable being composed and lets the next vowel stand without an implied ㅇ.
     pub fn bare(&mut self) {
         self.moved = None;

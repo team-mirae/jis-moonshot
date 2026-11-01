@@ -9,12 +9,42 @@ pub enum Out {
     Jamo(char),
     /// A character that goes into the text as-is.
     Char(char),
+    /// A short run of jamo with ゛ / ゜ marks (docs/moonshot.md §9.1), as if its keys were pressed.
+    Keys(&'static Action),
+}
+
+/// One step of an [`Out::Keys`] action (docs/moonshot.md §9.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step {
+    /// A jamo, as its 2-set key types it (a bare vowel joins the consonant before it).
+    Jamo(char),
+    /// ゛: a vowel on a real ㅇ, starting its own syllable (what Shift+vowel does, spec §4.2).
+    Ieung(char),
+    /// ゜: the syllable ends with no final; the next consonant starts one, a vowel gets an implied ㅇ.
+    Break,
+}
+
+/// A key's action: its legend (how docs/moonshot.md §9.2 writes it) and its steps.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Action {
+    pub legend: &'static str,
+    pub steps: &'static [Step],
 }
 
 impl Out {
+    /// The character a key types, for legends; an action's first legend character (다 for 다).
     pub fn char(self) -> char {
         match self {
             Out::Jamo(c) | Out::Char(c) => c,
+            Out::Keys(action) => action.legend.chars().next().unwrap_or(' '),
+        }
+    }
+
+    /// The key's legend in full (다, 왜゛, ㅡㄹ).
+    pub fn legend(self) -> String {
+        match self {
+            Out::Jamo(c) | Out::Char(c) => c.to_string(),
+            Out::Keys(action) => action.legend.to_string(),
         }
     }
 }
@@ -218,6 +248,10 @@ pub fn output_with(mode: Mode, symbols: bool, layout: Layout, key: Key, shift: b
         if let Some(letter) = mode.letter(key) {
             return Some(Out::Char(if shift { letter.to_ascii_uppercase() } else { letter }));
         }
+    } else if layout == Layout::JisKorean
+        && let Some((base, shifted)) = moonshot_letter(key)
+    {
+        return Some(if shift { shifted } else { base });
     } else if let Some((base, shifted)) = two_set(key) {
         return Some(Out::Jamo(if shift { shifted } else { base }));
     }
@@ -271,10 +305,26 @@ fn two_set(key: Key) -> Option<(char, char)> {
     Some(pair)
 }
 
-/// Mode A's non-letter keys (spec §3.1–3.4): (unshifted, shifted).
+/// JIS Moonshot's letter keys (docs/moonshot.md §9.2): standard 2-set, except Shift. Shift+Q W E
+/// R T type the plain consonant (ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5), Shift+O P type ㅔ゜ ㅖ゜ (ㅒ ㅖ are on
+/// : and ;). The standard 2-set reading (`Layout::Escaped`) keeps KS X 5002.
+fn moonshot_letter(key: Key) -> Option<(Out, Out)> {
+    use Key::*;
+    let (base, _) = two_set(key)?;
+    let shifted = match key {
+        KeyO => Out::Keys(&Action { legend: "ㅔ゜", steps: &[Step::Jamo('ㅔ'), Step::Break] }),
+        KeyP => Out::Keys(&Action { legend: "ㅖ゜", steps: &[Step::Jamo('ㅖ'), Step::Break] }),
+        _ => Out::Jamo(base),
+    };
+    Some((Out::Jamo(base), shifted))
+}
+
+/// Mode A's non-letter keys: the number row (spec §3.1) and JIS Moonshot's 12 keys right of 0
+/// (docs/moonshot.md §9.2): (unshifted, shifted).
 fn jis_korean(key: Key) -> Option<(Out, Out)> {
     use Key::*;
-    use Out::{Char as C, Jamo as J};
+    use Out::{Char as C, Jamo as J, Keys as K};
+    use Step::{Break as B, Ieung as I, Jamo as S};
     let pair = match key {
         Digit1 => (J('ㅃ'), C('1')),
         Digit2 => (J('ㅉ'), C('2')),
@@ -286,18 +336,21 @@ fn jis_korean(key: Key) -> Option<(Out, Out)> {
         Digit8 => (J('ㅚ'), C('8')),
         Digit9 => (J('ㅢ'), C('9')),
         Digit0 => (J('ㅘ'), C('0')),
-        Minus => (C('!'), C('?')),
-        Equal => (C('('), C(')')),
-        IntlYen => (C('\u{2014}'), C('^')),
-        BracketLeft => (C('\''), C('"')),
-        BracketRight => (C('['), C('\u{300C}')),
-        Semicolon => (C('~'), C('-')),
-        Quote => (C(':'), C(';')),
-        Backslash => (C(']'), C('\u{300D}')),
-        Comma => (C(','), C(',')),
-        Period => (C('.'), C('.')),
-        Slash => (C('\u{00B7}'), C('\u{00B7}')),
-        IntlRo => (C('\\'), C('_')),
+        Minus => (J('ㅙ'), K(&Action { legend: "왜゛", steps: &[I('ㅙ')] })),
+        Equal => (K(&Action { legend: "다", steps: &[S('ㄷ'), S('ㅏ')] }), K(&Action { legend: "도", steps: &[S('ㄷ'), S('ㅗ')] })),
+        IntlYen => (K(&Action { legend: "나", steps: &[S('ㄴ'), S('ㅏ')] }), K(&Action { legend: "니", steps: &[S('ㄴ'), S('ㅣ')] })),
+        BracketLeft => (
+            K(&Action { legend: "ㅡㄹ", steps: &[S('ㅡ'), S('ㄹ')] }),
+            K(&Action { legend: "을゛", steps: &[I('ㅡ'), S('ㄹ')] }),
+        ),
+        BracketRight => (K(&Action { legend: "゜", steps: &[B] }), K(&Action { legend: "゜", steps: &[B] })),
+        Semicolon => (J('ㅖ'), K(&Action { legend: "예゛", steps: &[I('ㅖ')] })),
+        Quote => (J('ㅒ'), K(&Action { legend: "얘゛", steps: &[I('ㅒ')] })),
+        Backslash => (K(&Action { legend: "무", steps: &[S('ㅁ'), S('ㅜ')] }), K(&Action { legend: "부", steps: &[S('ㅂ'), S('ㅜ')] })),
+        Comma => (J('ㅢ'), C(',')),
+        Period => (K(&Action { legend: "ㅂㅅ", steps: &[S('ㅂ'), S('ㅅ')] }), C('.')),
+        Slash => (K(&Action { legend: "메", steps: &[S('ㅁ'), S('ㅔ')] }), C('\u{00B7}')),
+        IntlRo => (K(&Action { legend: "로", steps: &[S('ㄹ'), S('ㅗ')] }), K(&Action { legend: "로゜", steps: &[S('ㄹ'), S('ㅗ'), B] })),
         _ => return None,
     };
     Some(pair)

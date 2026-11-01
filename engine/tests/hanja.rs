@@ -149,7 +149,8 @@ fn enter_picks_without_a_new_line() {
 fn other_keys_pick_then_act() {
     check("KeyG KeyK KeyS S-F8 Space", "韓 ", "");
     check("KeyG KeyK KeyS S-F8 KeyR KeyK", "", "韓가");
-    check("KeyG KeyK KeyS S-F8 Minus", "", "韓!");
+    check("KeyG KeyK KeyS S-F8 S-Comma", "", "韓,");
+    check("KeyG KeyK KeyS S-F8 Minus", "", "韓왜");
 }
 
 #[test]
@@ -212,17 +213,17 @@ fn cancelling_a_reading_off_a_keystroke_boundary_keeps_the_keys_as_typed() {
 #[test]
 fn f9_converts_trailing_symbols_and_digits() {
     check("S-Digit2 S-Digit0 S-Digit2 S-Digit6 F9", "", "２０２６");
-    check("KeyG KeyK KeyS Minus F9", "", "한！");
-    check("Minus S-Minus F9 F10", "", "!?");
+    check("KeyG KeyK KeyS S-Comma F9", "", "한，");
+    check("S-Comma S-Period F9 F10", "", ",.");
 }
 
 #[test]
 fn a_symbol_run_never_takes_letters_an_earlier_conversion_left() {
     // §5.3: the run and a word never mix, also when the word was converted first.
-    check("KeyG KeyK KeyS F10 Minus F9", "", "gks！");
-    check("KeyG KeyK KeyS F10 Minus F9 F9", "", "gks！");
+    check("KeyG KeyK KeyS F10 S-Comma F9", "", "gks，");
+    check("KeyG KeyK KeyS F10 S-Comma F9 F9", "", "gks，");
     // Symbols an earlier conversion left are still part of the run.
-    check("Minus F9 F10 S-Minus F9", "", "！？");
+    check("S-Comma F9 F10 S-Period F9", "", "，．");
 }
 
 #[test]

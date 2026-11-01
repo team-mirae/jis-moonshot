@@ -1,12 +1,16 @@
-//! Non-negotiable baselines: the core principle (spec §1). Every way of typing Korean on
-//! conventional 2-set (KS X 5002) still types what it always did, in every mode, with the
-//! Dedicated symbol keys setting on and off.
+//! Non-negotiable baselines: the core principle (spec §1), as JIS Moonshot has it. Every way of
+//! typing Korean on 2-set still types what it always did, in every mode, with the Dedicated symbol
+//! keys setting on and off.
+//!
+//! JIS Moonshot moved the keys standard 2-set (KS X 5002) puts on Shift (docs/moonshot.md §9,
+//! 2026-11-02, the owner's call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 and ㅒ ㅖ on : and ;, and Shift on Q W E R
+//! T types the plain consonant, as it does on every other consonant key. Everything else is KS X
+//! 5002 and is held to it here, as strictly as before.
 //!
 //! "Conventional" means each syllable starts with its consonant key (ㅇ included), compound vowels
-//! and double finals are typed as two keys, and double consonants and ㅒ ㅖ take Shift. Typing this
-//! way never leaves a bare vowel, so the spec's exceptions (the implied ㅇ, Shift+vowel) never come
-//! into play. Shift+Z was a third (it was F10); in JIS Moonshot it's ㅋ, as on standard 2-set
-//! (docs/moonshot.md §1), and is held to that here.
+//! and double finals are typed as two keys, and double consonants and ㅒ ㅖ take their own keys.
+//! Typing this way never leaves a bare vowel, so the spec's exceptions (the implied ㅇ, Shift+vowel)
+//! never come into play. Shift+Z is ㅋ, as on standard 2-set (docs/moonshot.md §1).
 //!
 //! The 2-set tables below are written out here, independent of the engine's own tables, so a
 //! change to the engine can't quietly change what these tests expect. A failure here is a spec
@@ -26,23 +30,24 @@ const FINALS: &str = " ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅ
 /// A key press: a `KeyboardEvent.code` and Shift.
 type Press = (&'static str, bool);
 
-/// KS X 5002: the key (and Shift) for each jamo that has its own key.
+/// KS X 5002's keys, with JIS Moonshot's doubles and ㅒ ㅖ (docs/moonshot.md §9): the key (and
+/// Shift) for each jamo that has its own key.
 fn key_of(jamo: char) -> Press {
     match jamo {
         'ㄱ' => ("KeyR", false),
-        'ㄲ' => ("KeyR", true),
+        'ㄲ' => ("Digit4", false),
         'ㄴ' => ("KeyS", false),
         'ㄷ' => ("KeyE", false),
-        'ㄸ' => ("KeyE", true),
+        'ㄸ' => ("Digit3", false),
         'ㄹ' => ("KeyF", false),
         'ㅁ' => ("KeyA", false),
         'ㅂ' => ("KeyQ", false),
-        'ㅃ' => ("KeyQ", true),
+        'ㅃ' => ("Digit1", false),
         'ㅅ' => ("KeyT", false),
-        'ㅆ' => ("KeyT", true),
+        'ㅆ' => ("Digit5", false),
         'ㅇ' => ("KeyD", false),
         'ㅈ' => ("KeyW", false),
-        'ㅉ' => ("KeyW", true),
+        'ㅉ' => ("Digit2", false),
         'ㅊ' => ("KeyC", false),
         'ㅋ' => ("KeyZ", false),
         'ㅌ' => ("KeyX", false),
@@ -51,11 +56,11 @@ fn key_of(jamo: char) -> Press {
         'ㅏ' => ("KeyK", false),
         'ㅐ' => ("KeyO", false),
         'ㅑ' => ("KeyI", false),
-        'ㅒ' => ("KeyO", true),
+        'ㅒ' => ("Quote", false),
         'ㅓ' => ("KeyJ", false),
         'ㅔ' => ("KeyP", false),
         'ㅕ' => ("KeyU", false),
-        'ㅖ' => ("KeyP", true),
+        'ㅖ' => ("Semicolon", false),
         'ㅗ' => ("KeyH", false),
         'ㅛ' => ("KeyY", false),
         'ㅜ' => ("KeyN", false),
@@ -106,10 +111,10 @@ fn every_syllable() -> impl Iterator<Item = char> {
 /// How a typist presses a jamo: the conventional key, or one of the variants below.
 #[derive(Clone, Copy)]
 enum Style {
-    /// KS X 5002 as taught: Shift only for ㄲ ㄸ ㅃ ㅆ ㅉ ㅒ ㅖ.
+    /// 2-set as taught, the doubles and ㅒ ㅖ on their own keys.
     Conventional,
-    /// Shift held anyway on the consonant keys where 2-set ignores it (Shift+A is still ㅁ, Shift+Z
-    /// still ㅋ): all but Q W E R T, where Shift types the double.
+    /// Shift held anyway on the consonant letter keys, where it changes nothing (Shift+A is still ㅁ,
+    /// Shift+Z still ㅋ, and in JIS Moonshot Shift+Q still ㅂ).
     ShiftHeldOnConsonants,
     /// JIS Korean's shortcuts: 1–5 for ㅃ ㅉ ㄸ ㄲ ㅆ, 6–0 for ㅟ ㅝ ㅚ ㅢ ㅘ (spec §3.1).
     DedicatedKeys,
@@ -138,7 +143,7 @@ fn jamo_presses(jamo: char, style: Style) -> Vec<Press> {
         return [jamo_presses(a, style), jamo_presses(b, style)].concat();
     }
     let (code, shift) = key_of(jamo);
-    let shift_ignored = INITIALS.contains(jamo) && !["KeyQ", "KeyW", "KeyE", "KeyR", "KeyT"].contains(&code);
+    let shift_ignored = INITIALS.contains(jamo) && code.starts_with("Key");
     let shift = shift || (matches!(style, Style::ShiftHeldOnConsonants) && shift_ignored);
     vec![(code, shift)]
 }
@@ -154,8 +159,11 @@ fn syllable_presses(syllable: char, style: Style) -> Vec<Press> {
 }
 
 /// The keys for a text: Hangul as `style`, a space as Space, anything else on the mode's key for it.
-fn text_presses(text: &str, mode: Mode, symbols: bool, style: Style) -> Vec<Press> {
+/// ASCII punctuation the mode has no key for is left out (JIS Moonshot's Mode A types symbols from
+/// English, docs/moonshot.md §9); the text it types is returned with the presses.
+fn text_presses(text: &str, mode: Mode, symbols: bool, style: Style) -> (Vec<Press>, String) {
     let mut presses = Vec::new();
+    let mut typable = String::new();
     for c in text.chars() {
         match c {
             '가'..='힣' => presses.extend(syllable_presses(c, style)),
@@ -164,13 +172,17 @@ fn text_presses(text: &str, mode: Mode, symbols: bool, style: Style) -> Vec<Pres
                 let press = Key::ALL
                     .iter()
                     .flat_map(|&key| [(key, false), (key, true)])
-                    .find(|&(key, shift)| output_with(mode, symbols, Layout::JisKorean, key, shift) == Some(Out::Char(c)))
-                    .unwrap_or_else(|| panic!("no key types {c:?} in {mode:?}"));
-                presses.push((press.0.code(), press.1));
+                    .find(|&(key, shift)| output_with(mode, symbols, Layout::JisKorean, key, shift) == Some(Out::Char(c)));
+                match press {
+                    Some(press) => presses.push((press.0.code(), press.1)),
+                    None if c.is_ascii_punctuation() => continue,
+                    None => panic!("no key types {c:?} in {mode:?}"),
+                }
             }
         }
+        typable.push(c);
     }
-    presses
+    (presses, typable)
 }
 
 /// Types the presses into a fresh engine, then commits: the text that ends up in the document.
@@ -214,8 +226,11 @@ fn the_pangram_types_conventionally_in_every_mode() {
     for &mode in Mode::ALL.iter().filter(|m| m.is_korean()) {
         for symbols in [true, false] {
             for style in [Style::Conventional, Style::ShiftHeldOnConsonants, Style::DedicatedKeys] {
-                let presses = text_presses(PANGRAM, mode, symbols, style);
-                assert_eq!(typed_with(mode, symbols, &presses), PANGRAM, "{mode:?} symbols {symbols}");
+                let (presses, typable) = text_presses(PANGRAM, mode, symbols, style);
+                // Only ASCII punctuation may be left out, never Hangul or a space.
+                let left_out: String = PANGRAM.chars().filter(|c| !c.is_ascii_punctuation()).collect();
+                assert_eq!(typable.chars().filter(|c| !c.is_ascii_punctuation()).collect::<String>(), left_out);
+                assert_eq!(typed_with(mode, symbols, &presses), typable, "{mode:?} symbols {symbols}");
             }
         }
     }
@@ -253,9 +268,13 @@ fn every_syllable_then_every_initial_types_both() {
 #[test]
 fn the_core_principle_examples() {
     let presses = |keys: &[Press]| keys.to_vec();
-    // Shift+Q is still ㅃ, even though 1 also types ㅃ.
-    assert_eq!(typed(Mode::A, &presses(&[("KeyQ", true), ("KeyK", false)])), "빠");
+    // ㅃ is on 1, and Shift+Q types ㅂ like Shift on any other consonant (docs/moonshot.md §9).
     assert_eq!(typed(Mode::A, &presses(&[("Digit1", false), ("KeyK", false)])), "빠");
+    assert_eq!(typed(Mode::A, &presses(&[("KeyQ", true), ("KeyK", false)])), "바");
+    // ㅒ ㅖ are on : and ;, and Shift+O / Shift+P type ㅔ゜ / ㅖ゜.
+    assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("Quote", false)])), "걔");
+    assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("Semicolon", false)])), "계");
+    assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("KeyO", true), ("KeyS", false), ("KeyK", false)])), "게나");
     // ㅗ then ㅏ is still ㅘ, even though 0 also types ㅘ.
     assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("KeyH", false), ("KeyK", false)])), "과");
     assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("Digit0", false)])), "과");

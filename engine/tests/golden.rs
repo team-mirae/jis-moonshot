@@ -76,9 +76,10 @@ fn doc(keys: &str, expected_doc: &str, expected_preedit: &str) {
 // §1 Core principle
 
 #[test]
-fn shift_q_and_key_1_both_type_ssangbieup() {
-    pre("S-KeyQ KeyK", "빠");
+fn key_1_types_ssangbieup_and_shift_q_bieup() {
+    // docs/moonshot.md §9: the doubles are on 1–5; Shift on Q types ㅂ like Shift on any consonant.
     pre("Digit1 KeyK", "빠");
+    pre("S-KeyQ KeyK", "바");
 }
 
 #[test]
@@ -94,13 +95,13 @@ fn double_finals_compose() {
 }
 
 #[test]
-fn double_consonant_keys_match_shifted_letters() {
-    for (digit, letter) in [("Digit1", "S-KeyQ"), ("Digit2", "S-KeyW"), ("Digit3", "S-KeyE"), ("Digit4", "S-KeyR"), ("Digit5", "S-KeyT")] {
+fn shift_on_q_w_e_r_t_types_the_plain_consonant() {
+    for letter in ["KeyQ", "KeyW", "KeyE", "KeyR", "KeyT"] {
         let mut a = Host::new();
         let mut b = Host::new();
-        a.keys(&format!("{digit} KeyK {digit}"));
-        b.keys(&format!("{letter} KeyK {letter}"));
-        assert_eq!(a.preedit, b.preedit, "{digit} vs {letter}");
+        a.keys(&format!("{letter} KeyK {letter}"));
+        b.keys(&format!("S-{letter} KeyK S-{letter}"));
+        assert_eq!(a.preedit, b.preedit, "{letter}");
     }
 }
 
@@ -125,44 +126,65 @@ fn shift_number_row_types_digits() {
 
 #[test]
 fn phone_numbers_type_with_shift_held() {
-    pre("S-Digit0 S-Digit1 S-Digit0 S-Semicolon S-Digit1 S-Digit2", "010-12");
+    pre("S-Digit0 S-Digit1 S-Digit0 S-Digit1 S-Digit2", "01012");
 }
 
 #[test]
-fn symbol_keys() {
-    pre("Minus S-Minus", "!?");
-    pre("Equal S-Equal", "()");
-    pre("IntlYen S-IntlYen", "—^");
-    pre("BracketLeft S-BracketLeft", "'\"");
-    pre("BracketRight S-BracketRight Backslash S-Backslash", "[「]」");
-    pre("Semicolon S-Semicolon", "~-");
-    pre("Quote S-Quote", ":;");
-    pre("Comma S-Comma Period S-Period Slash S-Slash", ",,..··");
-    pre("IntlRo S-IntlRo", "\\_");
+fn the_keys_right_of_0_type_their_actions() {
+    // docs/moonshot.md §9.2: each action as if its 2-set keys were pressed, with ゛ and ゜.
+    pre("Minus S-Minus", "왜왜");
+    pre("KeyE Minus", "돼");
+    pre("KeyA KeyK KeyF Minus", "마뢔");
+    pre("KeyA KeyK KeyF S-Minus", "말왜");
+    pre("KeyG KeyK Equal", "하다");
+    pre("KeyS KeyK S-Equal", "나도");
+    pre("KeyG KeyK IntlYen", "하나");
+    pre("KeyG KeyK S-IntlYen", "하니");
+    pre("KeyR BracketLeft", "글");
+    pre("KeyA KeyK BracketLeft", "마을");
+    pre("KeyA KeyK KeyF BracketLeft", "마를");
+    pre("KeyC KeyO KeyR S-BracketLeft", "책을");
+    pre("KeyA KeyK KeyF S-BracketLeft", "말을");
+    pre("KeyR KeyK KeyF BracketRight KeyK", "갈아");
+    pre("KeyR KeyK KeyF S-BracketRight KeyK", "갈아");
+    pre("KeyR KeyK BracketRight KeyT", "가ㅅ");
+    pre("KeyR Semicolon", "계");
+    pre("KeyA KeyK KeyF S-Semicolon", "말예");
+    pre("KeyR Quote", "걔");
+    pre("S-Quote KeyR KeyL", "얘기");
+    pre("KeyS KeyK Backslash", "나무");
+    pre("KeyR KeyH KeyD S-Backslash", "공부");
+    pre("KeyG Comma", "희");
+    pre("KeyD KeyJ Period", "없");
+    pre("Slash KeyD KeyL KeyF", "메일");
+    pre("KeyD KeyM IntlRo", "으로");
+    pre("IntlRo KeyR", "록");
+    pre("KeyD KeyM S-IntlRo KeyR", "으로ㄱ");
+    // Korean keeps , . · on Shift.
+    pre("S-Comma S-Period S-Slash", ",.·");
 }
 
 #[test]
-fn parentheses_on_the_caret_key_and_caret_on_shift_yen() {
-    // The ^ key types ( and ) (spec §3.1); ^ is on Shift+¥, so ^^ is two Shift+¥.
-    pre("Equal KeyG KeyK KeyS S-Equal", "(한)");
-    pre("S-IntlYen S-IntlYen", "^^");
-    // F9 / F10 never turn them into ^ ~: a word after ( converts and ( stays; text ending in )
-    // converts that symbol run, as typed (§5.3: ) half-width is ) ).
-    pre("Equal KeyR KeyK F10", "(rk");
-    pre("Equal KeyR KeyK S-Equal F10", "(가)");
-    pre("Equal KeyR KeyK S-Equal F9", "(가）");
+fn f10_reads_every_key_of_an_action_once() {
+    // An action's parts belong to its key: Shift+P (ㅖ゜) converts to one P, ^ (다) to one ^.
+    pre("KeyI S-KeyP KeyH KeyO KeyN KeyE F10", "iPhone");
+    pre("KeyR Equal F10", "r^");
+}
+
+#[test]
+fn backspace_takes_a_whole_key_off() {
+    pre("KeyG KeyK Equal Backspace", "하");
+    pre("KeyD KeyM S-IntlRo Backspace", "으");
+    pre("KeyD KeyJ Period Backspace", "어");
+    pre("KeyA KeyK KeyF S-BracketLeft Backspace", "말");
 }
 
 #[test]
 fn f9_and_f10_convert_every_symbol_with_a_form_in_that_width() {
-    // 「 」 are full-width already: F10 makes them half-width, F9 leaves them.
-    pre("S-BracketRight KeyR KeyK S-Backslash F10", "「가｣");
-    pre("S-BracketRight KeyR KeyK S-Backslash F9", "「가」");
-    pre("S-BracketRight KeyR KeyK S-Backslash F10 F9", "「가」");
-    // A symbol with no other form stays, and the run goes on past it: · and — have none.
-    pre("Minus Slash Minus F9", "！·！");
-    pre("IntlYen S-Digit1 F9", "—１");
-    pre("Minus Slash Minus F9 F10", "!·!");
+    pre("S-Comma S-Period F9", "，．");
+    // A symbol with no other form stays, and the run goes on past it: · has none.
+    pre("S-Comma S-Slash S-Comma F9", "，·，");
+    pre("S-Comma S-Slash S-Comma F9 F10", ",·,");
 }
 
 #[test]
@@ -171,17 +193,16 @@ fn shift_ignored_on_vowels_without_shifted_forms() {
 }
 
 #[test]
-fn shift_still_held_after_a_double_final_moves_it_like_any_final() {
-    // ㄲ and ㅆ can be finals: the vowel after them takes them, as after ㄴ or ㄱ (2-set too).
-    pre("KeyR KeyK S-KeyR S-KeyK KeyD KeyL", "가까이");
-    pre("KeyQ KeyL S-KeyT S-KeyK", "비싸");
-    pre("KeyQ KeyK S-KeyR S-KeyK KeyX", "바깥");
-    pre("KeyD KeyL S-KeyT S-KeyJ", "이써");
-    // 있어 the other ways: the same vowel again, or the dedicated ㅆ key, after which Shift is new.
-    pre("KeyD KeyL S-KeyT KeyJ KeyJ", "있어");
+fn shift_still_held_after_a_consonant_moves_it_like_any_final() {
+    // Shift on a consonant changes nothing, so a Shift+vowel right after it is Shift still held:
+    // the vowel takes the consonant, as after any final.
+    pre("KeyR KeyK S-KeyR S-KeyK KeyD KeyL", "가가이");
+    pre("KeyQ KeyL S-KeyT S-KeyK", "비사");
+    // After the dedicated ㅆ key, Shift is new: the vowel starts on ㅇ.
     pre("KeyD KeyL Digit5 S-KeyJ", "있어");
-    // Only right after the double: a Shift+vowel later still starts on ㅇ.
-    pre("KeyD KeyL S-KeyT S-KeyJ S-KeyK", "이써아");
+    pre("KeyD KeyL Digit5 KeyJ", "이써");
+    // Only right after the consonant: a Shift+vowel later still starts on ㅇ.
+    pre("KeyD KeyL S-KeyT S-KeyJ S-KeyK", "이서아");
 }
 
 // §4.1 Automaton
@@ -201,8 +222,8 @@ fn double_final_splits_before_consonant_that_cannot_join() {
 
 #[test]
 fn tense_consonants_that_cannot_be_finals_start_a_syllable() {
-    pre("KeyR KeyK S-KeyE", "가ㄸ");
-    pre("KeyR KeyK S-KeyE KeyK", "가따");
+    pre("KeyR KeyK Digit3", "가ㄸ");
+    pre("KeyR KeyK Digit3 KeyK", "가따");
     pre("KeyR KeyK Digit1 KeyK", "가빠");
 }
 
@@ -224,7 +245,7 @@ fn vowel_with_no_initial_gets_implied_ieung() {
     pre("KeyK", "아");
     pre("KeyH KeyK", "와");
     pre("KeyK KeyS", "안");
-    pre("Minus KeyK", "!아");
+    pre("Minus KeyK", "왜아");
 }
 
 #[test]
@@ -325,8 +346,8 @@ fn modifier_alone_changes_nothing() {
 #[test]
 fn flush_commits_everything() {
     let mut h = Host::new();
-    h.keys("KeyG KeyK KeyS Minus").flush();
-    assert_eq!((h.doc.as_str(), h.preedit.as_str()), ("한!", ""));
+    h.keys("KeyG KeyK KeyS S-Comma").flush();
+    assert_eq!((h.doc.as_str(), h.preedit.as_str()), ("한,", ""));
 }
 
 // §6 Function keys
@@ -396,7 +417,7 @@ fn conversion_uses_raw_keys() {
 
 #[test]
 fn conversion_word_ends_at_symbols_and_commits() {
-    pre("KeyG KeyK KeyS Minus KeyG KeyK KeyS F10", "한!gks");
+    pre("KeyG KeyK KeyS S-Comma KeyG KeyK KeyS F10", "한,gks");
     doc("KeyG KeyK S-Enter KeyG KeyK F10", "하", "gk");
 }
 
@@ -439,7 +460,8 @@ fn english_keeps_case_dedicated_digits_and_symbols() {
     for (code, shift) in [("KeyQ", true), ("Digit1", false), ("Minus", false), ("Slash", false), ("IntlYen", false)] {
         e.key(Key::from_code(code), if shift { Mods::SHIFTED } else { Mods::NONE });
     }
-    assert_eq!(e.preedit(), "ㅃㅃ!·—");
+    // Shift+Q is ㅂ, 1 ㅃ, − ㅙ, / 메, ¥ 나 (docs/moonshot.md §9); English reads the keys.
+    assert_eq!(e.preedit(), "ㅂ뽸메나");
     assert_eq!(e.english(), "Q1-/¥");
 }
 
@@ -478,7 +500,7 @@ fn shift_vowel_can_still_combine_with_the_vowel_after() {
 #[test]
 fn shift_vowel_on_its_own_is_like_the_implied_ieung() {
     pre("S-KeyK", "아");
-    pre("Minus S-KeyK", "!아");
+    pre("Minus S-KeyK", "왜아");
 }
 
 #[test]
@@ -487,16 +509,18 @@ fn backspace_removes_the_shift_vowel_in_one_press() {
 }
 
 #[test]
-fn shift_on_o_and_p_still_types_yae_and_ye() {
-    pre("KeyR S-KeyO", "걔");
-    pre("KeyR KeyK KeyS S-KeyO", "가냬");
+fn shift_on_o_and_p_types_e_and_ye_then_a_break() {
+    // docs/moonshot.md §9.2: ㅔ゜ and ㅖ゜; ㅒ ㅖ are on : and ;.
+    pre("KeyR S-KeyO", "게");
+    pre("KeyR S-KeyO KeyS KeyK", "게나");
     pre("KeyR KeyK KeyS S-KeyP", "가녜");
+    pre("KeyR KeyK KeyS Quote", "가냬");
 }
 
 #[test]
 fn shift_on_consonants_is_unchanged() {
     pre("KeyR KeyK S-KeyS KeyK", "가나");
-    pre("KeyR KeyK S-KeyR KeyK", "가까");
+    pre("KeyR KeyK S-KeyR KeyK", "가가");
 }
 
 #[test]
@@ -509,9 +533,10 @@ fn english_reading_keeps_the_shifted_vowel_letter() {
 }
 
 #[test]
-fn shift_still_held_after_a_double_types_the_syllable() {
-    pre("S-KeyR S-KeyK", "까");
-    pre("S-KeyT S-KeyK S-KeyD", "쌍");
+fn shift_still_held_after_a_consonant_types_the_syllable() {
+    pre("S-KeyR S-KeyK", "가");
+    pre("S-KeyT S-KeyK S-KeyD", "상");
+    pre("Digit4 S-KeyK", "까");
     pre("KeyR S-KeyK", "가");
 }
 
