@@ -163,10 +163,19 @@ Mode A's predictions get a **kana** reading, of kind `Kana` (hiragana) or `Katak
   きのと 5766 out), so common words the hand-written list lacks read as Japanese and get their kanji.
 - **Korean-only keys** (§9.3) lift Korean over English; a known Japanese word gets the same lift, so
   those keys (kana-only keys too) don't push Korean past it: どようび, typed with ゛ on `@`.
-- **Score** (bits, the predictor's units): the best other reading's score, minus 3, plus the
-  evidence: coverage by known words (up to +5 for a whole known word, scaled down for 2–3 kana),
-  each **kana-only key** inside the run (− ^ ¥ @ [ ; : ] , . / ろ, which type symbols in Korean:
-  +1.5, at most +4.5), each bare jamo in the Korean reading (+0.5), the previous word's language
+- **Key model** (2026-11-02): `predict/ranker.bin` carries a three-language key model after the
+  Korean-vs-English tables: order-4 key n-grams over the 48 JIS keys (Shift dropped), one each
+  for Korean on JIS Moonshot's keys, English and JIS kana typing (Mozc's readings and
+  `common-ja.txt`), Witten-Bell smoothed, format `JKR3` (`engine/src/keymodel.rs`, built by
+  `engine/tools/corpora/build_keymodel.py`, about 5 MB). Held out: Korean 99.5%, English 99.5%,
+  kana 99.0% (97.6% for common words not trained on). Only the kana reading uses it so far: the
+  rules are tuned on the older Korean-vs-English tables, which keep that job.
+- **Score** (bits, the predictor's units): the best other reading's score, plus the **kana key
+  model's** bits against the likelier of its Korean and English models (×0.5, −1, within ±6;
+  without the model, a fixed −3), plus the evidence: coverage by known words (up to +5 for a
+  whole known word, scaled down for 2–3 kana), each **kana-only key** inside the run (− ^ ¥ @ [ ;
+  : ] , . / ろ: +1.5, at most +4.5; only without the key model, which already has them), each bare
+  jamo in the Korean reading (+0.5), the previous word's language
   (Japanese +2, Korean or English −1), and the user's Kana weight. A ゛ or ゜ that attaches to
   nothing, or small kana / ん / ー at the start, cost 6 bits; a Korean reading that is a known word
   costs 3. The learned ranker doesn't score kana (it wasn't trained on them); the kana reading is

@@ -706,7 +706,9 @@ Scores are in bits per key, positive leaning Korean:
 
 1. **Model:** the same keys under two key-trigram models, English spelling vs JIS Korean typing
    (`engine/predict/ranker.bin`, built by `engine/tools/corpora/build_ranker.py`; held-out accuracy
-   about 99% on words, 96% on real Korean text). English nouns train at 3× weight.
+   about 99% on words, 96% on real Korean text). The same file then carries JIS Moonshot's
+   three-language order-4 key model (`JKR3`, moonshot.md §5), which so far scores only the kana
+   reading. English nouns train at 3× weight.
    **Nouns weigh more than verbs:** an English reading that is a noun in its normalized form
    (Princeton WordNet 3.0 lemmas, 3+ letters: report, server, model) gets a bonus; verbs,
    adjectives and inflected or other forms (published, reports) don't. In mixed Korean text English

@@ -462,6 +462,12 @@ const IMPLIED_AFTER_FLOOR: f64 = 1.5;
 /// The kana reading's score (docs/moonshot.md §5), in bits: it starts this far below the top
 /// reading, and the evidence moves it.
 const KANA_BELOW: f64 = 3.0;
+/// With the three-language key model: the kana reading's step from the best other reading is its
+/// key model's bits against the likelier of Korean and English, times this, plus the bias, within
+/// ± the cap (tuned on tests/moonshot.rs, tests/kanji.rs and the corpora).
+const KANA_KEYS: f64 = 0.5;
+const KANA_KEYS_BIAS: f64 = -1.0;
+const KANA_KEYS_CAP: f64 = 6.0;
 /// A whole known word of 4 kana or more, or a phrase entirely of known words and particles.
 const KANA_WHOLE: f64 = 5.0;
 /// Coverage by known words short of all of it: 90% is +1.8, none −3.6 (times this over 6).
@@ -491,10 +497,15 @@ const PIECEWISE: f64 = 1.0;
 /// The trained model and word lists.
 #[derive(Clone)]
 pub struct Predictor {
-    /// Key n-gram order of the model: 3 or 4.
+    /// Key n-gram order of the two-language model: 3 or 4.
     order: usize,
     english: Vec<u8>,
     korean: Vec<u8>,
+    /// The three-language key model (`JKR3`): the kana reading's key score. When the file is only
+    /// that model, it scores Korean against English too (`keys_for_margin`); when it follows the
+    /// two-language tables, those keep scoring Korean against English (the rules are tuned on them).
+    keys: Option<std::sync::Arc<crate::keymodel::KeyModel>>,
+    keys_for_margin: bool,
     /// Lexicon words with their counts in the training sentences (hand-written ones: [`HAND_COUNT`]).
     english_words: HashMap<String, u32>,
     korean_words: HashMap<String, u32>,
@@ -524,21 +535,36 @@ impl Predictor {
     /// `model`: `predict/ranker.bin`. `english_words` / `korean_words`: `predict/common-*.txt`.
     /// `english_nouns`: `predict/english-nouns.txt` (may be empty: no noun bonus).
     pub fn parse(model: &[u8], english_words: &str, korean_words: &str, english_nouns: &str) -> Result<Predictor, BadModel> {
+        // `JKR3`: the three-language key model (Korean, English, kana; order 4, sparse), alone or
+        // after the two-language tables (`JKRK` then `JKR3`).
+        let three_way = crate::keymodel::KeyModel::is_model(model);
+        let parse_keys = |data: &[u8]| crate::keymodel::KeyModel::parse(data).map(std::sync::Arc::new).ok_or(BadModel);
         // Version 1: key trigrams; version 2: key 4-grams. One byte per entry, English then Korean.
         let order = match model.get(4..8) {
+            _ if three_way => 4,
             Some([0, 1, 0, s]) if *s as usize == SIZE => 3,
             Some([0, 2, 0, s]) if *s as usize == SIZE => 4,
             _ => return Err(BadModel),
         };
         let table = SIZE.pow(order as u32);
-        if model.len() != 8 + 2 * table || &model[..4] != b"JKRK" {
+        let base = 8 + 2 * table;
+        let keys = if three_way {
+            Some(parse_keys(model)?)
+        } else if model.len() > base && crate::keymodel::KeyModel::is_model(&model[base..]) {
+            Some(parse_keys(&model[base..])?)
+        } else {
+            None
+        };
+        if !three_way && (keys.is_none() && model.len() != base || &model[..4] != b"JKRK") {
             return Err(BadModel);
         }
         let words = word_counts;
         Ok(Predictor {
             order,
-            english: model[8..8 + table].to_vec(),
-            korean: model[8 + table..].to_vec(),
+            english: if three_way { Vec::new() } else { model[8..8 + table].to_vec() },
+            korean: if three_way { Vec::new() } else { model[8 + table..base].to_vec() },
+            keys,
+            keys_for_margin: three_way,
             english_words: words(english_words),
             korean_words: words(korean_words),
             english_nouns: words(english_nouns).into_keys().collect(),
@@ -767,7 +793,11 @@ impl Predictor {
             if i > 0 {
                 e -= ALTERNATIVE;
             }
-            e += KANA_ONLY_KEY * readings.kana_only.min(3) as f64;
+            // Without the kana key model, kana-only keys stand in for it (with it, they're in its
+            // score below).
+            if self.keys.is_none() {
+                e += KANA_ONLY_KEY * readings.kana_only.min(3) as f64;
+            }
             // The keys right of 0 that typed Korean (docs/moonshot.md §9) lifted the Korean reading
             // over English (`korean_only`), but they're kana-only keys as much: the same lift here,
             // so it doesn't push Korean past kana (どようび typed with ゛ on @). Only for a known
@@ -803,7 +833,16 @@ impl Predictor {
         }
         let (e, text) = best?;
         let reference = others.first().map_or(0.0, |p| p.score);
-        let score = reference - KANA_BELOW + e + w.bits(Weight::Kana);
+        // How much better the kana key model explains the keys than the likelier of the Korean and
+        // English ones (spec §10.3), bounded; without the model, a fixed step below.
+        // Not with digits typed as digits (2026, ㅅ7): the Korean and English models never saw the
+        // number row as digits, so the kana model would win them by default.
+        let digits = readings.korean.chars().any(|c| c.is_ascii_digit());
+        let keys = match self.kana_bits(&readings.english).filter(|_| !digits) {
+            Some(bits) => (KANA_KEYS * bits + KANA_KEYS_BIAS).clamp(-KANA_KEYS_CAP, KANA_KEYS_CAP),
+            None => -KANA_BELOW,
+        };
+        let score = reference + keys + e + w.bits(Weight::Kana);
         // Katakana where that's the word the lexicon knows: the whole (コーヒー), or words inside a
         // phrase (あなたのギターになりたい).
         let katakana = crate::kana::katakana(&text);
@@ -1574,8 +1613,13 @@ impl Predictor {
         margin
     }
 
-    /// Korean minus English in average log2 probability per key, over the letter runs.
+    /// Korean minus English in average log2 probability per key, over the letter runs (the keys
+    /// runs, with the three-language model).
     pub(crate) fn key_margin(&self, english: &str) -> f64 {
+        if let Some(model) = self.keys.as_ref().filter(|_| self.keys_for_margin) {
+            use crate::keymodel::Class;
+            return per_key(english, |run| model.log_probability(Class::Korean, run) - model.log_probability(Class::English, run));
+        }
         let (mut total, mut keys) = (0.0, 0usize);
         let mut run = String::new();
         for c in english.chars().chain([' ']) {
@@ -1591,6 +1635,39 @@ impl Predictor {
         }
         if keys == 0 { 0.0 } else { total / keys as f64 }
     }
+
+    /// Kana minus the likelier of Korean and English, in log2 probability over the whole staged
+    /// word: how much better the JIS kana model explains the keys (docs/moonshot.md §5). None
+    /// without the three-language model.
+    pub(crate) fn kana_bits(&self, english: &str) -> Option<f64> {
+        use crate::keymodel::Class;
+        let model = self.keys.as_ref()?;
+        let symbols: Vec<u8> = english.chars().filter_map(crate::keymodel::symbol).collect();
+        if symbols.is_empty() {
+            return None;
+        }
+        let other = model.log_probability(Class::Korean, &symbols).max(model.log_probability(Class::English, &symbols));
+        Some(model.log_probability(Class::Kana, &symbols) - other)
+    }
+}
+
+/// `score` summed over the runs of keys in `english` (the characters a key types, `keymodel::symbol`),
+/// per key (each run's END counts as one). 0 with no keys.
+fn per_key(english: &str, score: impl Fn(&[u8]) -> f64) -> f64 {
+    let (mut total, mut keys) = (0.0, 0usize);
+    let mut run: Vec<u8> = Vec::new();
+    for c in english.chars().map(Some).chain([None]) {
+        match c.and_then(crate::keymodel::symbol) {
+            Some(s) => run.push(s),
+            None if !run.is_empty() => {
+                total += score(&run);
+                keys += run.len() + 1;
+                run.clear();
+            }
+            None => {}
+        }
+    }
+    if keys == 0 { 0.0 } else { total / keys as f64 }
 }
 
 fn log_probability(table: &[u8], order: usize, keys: &str) -> f64 {
