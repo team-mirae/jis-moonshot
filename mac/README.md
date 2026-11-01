@@ -48,7 +48,9 @@ keys of the text not yet committed, to rank their readings), that it stays on th
 learning is separate and off, and that terminals and password managers start with predictions off.
 Until you choose **Accept**, every key passes through untouched and the input menu has only
 **Accept Predictive Typing…**. The answer is stored as `PredictiveAccepted` (the version of the
-notice; a changed notice asks again).
+notice; a changed notice asks again). If the alert never appears and nothing types in any mode, no app has
+connected to JIS Moonshot yet, so setting `PredictiveAccepted` by hand won't help: see
+[the unsigned-bundle case](../docs/troubleshooting/macos-unsigned-bundle.md).
 
 The marked text shows the **top reading** of what you typed, Korean, English or kana. When more
 than one reading is listed, ↓ and Tab move down the suggestion list and ↑ and Shift+Tab up, Enter
@@ -199,3 +201,7 @@ is answered with an `error` instead.
 
 - Input method installed but not launching after a reinstall, or Keyboard Viewer showing ABC
   legends: see [docs/troubleshooting/macos-input-method-not-launching.md](../docs/troubleshooting/macos-input-method-not-launching.md).
+- Selectable but nothing types in any mode, and the predictive-typing alert never appears: check
+  `codesign --verify --deep --strict ~/Library/Input\ Methods/JISMoonshot.app`. An unsigned
+  bundle gets its connection refused by `imklaunchagent`. Rebuild with `touch Info.plist && make && make install`:
+  see [docs/troubleshooting/macos-unsigned-bundle.md](../docs/troubleshooting/macos-unsigned-bundle.md).
