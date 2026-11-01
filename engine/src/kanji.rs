@@ -191,6 +191,11 @@ impl Kanji {
     }
 
     /// The entries of `reading`, if it's a word.
+    /// The lowest cost of `hiragana` as a whole word (lower is more common), if it is one.
+    pub fn word_cost(&self, hiragana: &str) -> Option<u16> {
+        self.lookup(hiragana).iter().map(|e| e.cost).min()
+    }
+
     fn lookup(&self, reading: &str) -> &[Entry] {
         let key = reading.as_bytes();
         let n = self.at.len() - 1;

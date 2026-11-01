@@ -1,5 +1,4 @@
-// The list under the text: hanja candidates after F7 (spec §7), or the predictions while typing
-// (spec §10). A small topmost popup that never takes focus; a click picks a row. Excluded from
+// The list under the text: the predictions while typing (spec §10). A small topmost popup that never takes focus; a click picks a row. Excluded from
 // screen capture.
 #pragma once
 
@@ -14,7 +13,7 @@ namespace jk {
 class CandidateWindow {
 public:
     struct Row {
-        std::wstring label;  // "1"…"9" for hanja on the page, empty for predictions
+        std::wstring label;  // a row number ("1"…"9"); empty for predictions
         std::wstring text;
         std::wstring comment;
         // A Japanese reading (kanji, kana): drawn in a Japanese font, so kanji take their Japanese

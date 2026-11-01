@@ -5,7 +5,7 @@ export function MacPage() {
     <>
       <PageHead title="macOS" folder="mac/">
         An InputMethodKit input method, in Swift, around the engine. It turns macOS key events into engine keys and
-        shows what the engine says: inserted text, marked text, hanja candidates and the suggestion list. macOS is JIS
+        shows what the engine says: inserted text, marked text, the English modes' letter variants and the suggestion list. macOS is JIS
         Moonshot's first platform.
       </PageHead>
 
@@ -79,7 +79,7 @@ make dist                # build/<variant>/JISMoonshot-<version>[-legacy].zip
           ["かな (and カタカナ, F18)", "To Mode A. In Mode A with something staged: force Korean. From JIS Kana: Mode A, the staged keys forced Korean."],
           ["F6 / F7", "Hiragana / katakana: the staged keys read as kana until the next commit, then predictive again. With nothing staged, the next segment is kana. In JIS Kana they switch its script for good."],
           ["F8", "Kanji: the kana reading's conversions on top until the next commit (nothing staged: the next segment). In JIS Kana, the conversions above the kana."],
-          ["Shift+F8", "The hanja list (Mode A)."],
+          ["Shift+F8", "The same as F8: there are no hanja."],
           ["F9 / F10", "Full-width / half-width letters, as in JIS Korean."],
           ["⌥Space", "A full-width space (U+3000) in JIS Moonshot and JIS Kana, committing what's typed first; _ in the English modes."],
           ["Shift+Z", "ㅋ, っ or Z, like any other key."],

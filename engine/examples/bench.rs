@@ -7,20 +7,15 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use jis_korean::plan::keys_for_word;
-use jis_korean::{Dictionary, Engine, Mods};
+use jis_korean::{Engine, Mods};
 
 fn main() {
     let what = std::env::args().nth(1).unwrap_or_else(|| "lite".into());
     let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
     let text = std::fs::read_to_string(format!("{root}../web/public/long-sample-text.txt")).unwrap();
 
-    let t = Instant::now();
-    let tsv = std::fs::read_to_string(format!("{root}dict/hanja.tsv")).unwrap();
-    let dictionary = Arc::new(Dictionary::parse(&tsv));
-    println!("dictionary: {} readings, parsed in {:.1} ms", dictionary.len(), t.elapsed().as_secs_f64() * 1e3);
 
     let mut engine = Engine::new();
-    engine.set_dictionary(dictionary);
     #[cfg(feature = "predict")]
     if what != "lite" {
         let read = |f: &str| std::fs::read_to_string(format!("{root}predict/{f}")).unwrap();

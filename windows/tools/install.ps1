@@ -118,8 +118,8 @@ New-Item $dest -ItemType Directory -Force | Out-Null
 if ($User) { icacls $dest /grant "*${User}:(OI)(CI)M" | Out-Null }
 Copy-Dlls
 # The licenses of the data inside the DLL.
-foreach ($f in "$root\..\engine\dict\LICENSE-libhangul-hanja.txt", "$root\..\engine\dict\LICENSE-unicode.txt",
-               "$root\..\engine\predict\LICENSE-corpora.txt", "$root\..\engine\predict\LICENSE-wordnet.txt",
+foreach ($f in "$root\..\engine\predict\LICENSE-corpora.txt", "$root\..\engine\predict\LICENSE-wordnet.txt",
+               "$root\..\engine\predict\LICENSE-mozc.txt",
                "$root\..\LICENSE") {
     Copy-Item $f $dest -Force
 }

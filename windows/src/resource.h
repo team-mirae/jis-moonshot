@@ -7,7 +7,7 @@
 #define IDS_PROFILE 201
 
 // Engine data, embedded so every process maps one copy from the DLL image.
-#define IDR_HANJA 301
+// 301 was the hanja dictionary (gone).
 #define IDR_RANKER 302
 #define IDR_COMMON_EN 303
 #define IDR_COMMON_KO 304

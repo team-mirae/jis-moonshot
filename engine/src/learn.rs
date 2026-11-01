@@ -45,7 +45,6 @@ pub fn scenario(kind: Kind) -> Weight {
         Kind::Mixed => Weight::Mixed,
         Kind::TwoSet => Weight::TwoSet,
         Kind::KoreanKeepFinals => Weight::KeepFinals,
-        Kind::Hanja => Weight::Hanja,
         Kind::ImpliedL | Kind::Aspirated => Weight::ImpliedL,
         Kind::Kana | Kind::Katakana | Kind::Kanji => Weight::Kana,
     }
@@ -93,7 +92,7 @@ impl Learner {
                     return next;
                 }
                 // A choice between the Korean reading and one of its alternatives (bare vowels,
-                // kept finals, 2-set, English + particle, hanja) is that alternative's business;
+                // kept finals, 2-set, English + particle) is that alternative's business;
                 // only Korean against English moves those two.
                 let base = |w: Weight| matches!(w, Weight::Korean | Weight::English);
                 if pick == top {

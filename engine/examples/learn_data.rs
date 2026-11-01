@@ -35,7 +35,7 @@ mod imp {
     use std::io::Write;
     use std::sync::Arc;
 
-    use jis_korean::{Dictionary, Key, Mods};
+    use jis_korean::{Key, Mods};
     use jis_korean::learned::{self, DEFAULT_BITS};
     use jis_korean::plan::{Style, normalize};
     use jis_korean::predict::{Predictor, Ranker};
@@ -82,7 +82,6 @@ mod imp {
         let model = std::fs::read(format!("{root}/predict/ranker.bin")).unwrap();
         let predictor =
             Arc::new(Predictor::parse(&model, &read("common-en.txt"), &read("common-ko.txt"), &read("english-nouns.txt")).unwrap());
-        let dictionary = Arc::new(Dictionary::parse(&std::fs::read_to_string(format!("{root}/dict/hanja.tsv")).unwrap()));
 
         let lines: Vec<Line> = std::fs::read_to_string(&plan)
             .expect("read the plan")
@@ -120,7 +119,7 @@ mod imp {
             let handles: Vec<_> = blocks
                 .chunks(per)
                 .map(|chunk| {
-                    let (predictor, dictionary, lines, excluded, done) = (&predictor, &dictionary, &lines, &excluded, &done);
+                    let (predictor, lines, excluded, done) = (&predictor, &lines, &excluded, &done);
                     scope.spawn(move || {
                         let mut rows: Vec<Row> = Vec::new();
                         let mut index: HashMap<u128, usize> = HashMap::new();
@@ -180,7 +179,6 @@ mod imp {
                             type_text_observed(
                                 &text,
                                 predictor.clone(),
-                                Some(dictionary.clone()),
                                 Ranker::Rules,
                                 style,
                                 true,

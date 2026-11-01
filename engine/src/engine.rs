@@ -1,5 +1,6 @@
-//! The unconfirmed segment, commit rules and F6–F10 (spec §5, §6 and §7).
+//! The unconfirmed segment, commit rules and F6–F10 (spec §5 and §6).
 
+#[cfg(feature = "predict")]
 use std::sync::Arc;
 
 use crate::hangul::{self, Composer, Options};
@@ -7,19 +8,27 @@ use crate::hangul::{self, Composer, Options};
 use crate::learn::{self, Event, Learner};
 #[cfg(feature = "predict")]
 use crate::predict::{Context, Head, Kind, Language, Piece, Prediction, Predictor, Ranker, Readings, Split, Weight, Weights};
-use crate::hanja::{Candidate, Dictionary};
 use crate::key::{Key, Mods};
 use crate::layout::{self, Layout, Mode, Out, Step};
 
-/// Candidates per page of the hanja list; Digit1–Digit9 pick on the current page.
+/// Candidates per page of a list (the English modes' letter variants); Digit1–Digit9 pick on the
+/// current page.
 pub const PAGE_SIZE: usize = 9;
+
+/// One row of a list the engine shows (the English modes' letter variants, spec §3.6.3).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Candidate {
+    pub text: String,
+    /// A note beside it. Often empty.
+    pub comment: String,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Token {
     /// A jamo, with the Latin letter or digit of the key that typed it (for F9/F10), and the
     /// key's JIS kana (the kana reading, docs/moonshot.md §5).
     Jamo { jamo: char, raw: Option<char>, kana: Option<char> },
-    /// Text from a conversion or a hanja pick.
+    /// Text from a conversion or a chosen prediction.
     Text(char),
     /// A character typed by a non-letter key, with what that key types on stock JIS (for the
     /// English reading) and its JIS kana.
@@ -82,18 +91,6 @@ struct Conversion {
     case: u8,
 }
 
-/// An open hanja candidate list (spec §7). The segment is left as typed until a pick.
-#[derive(Clone)]
-struct HanjaList {
-    /// Tokens from here on are replaced by the pick.
-    start: usize,
-    /// The segment as typed, when opening the list turned it into plain characters (a reading
-    /// not on a keystroke boundary): closing the list without a pick puts it back.
-    typed: Option<Vec<Token>>,
-    candidates: Vec<Candidate>,
-    selected: usize,
-}
-
 /// The candidate list to show, while one is open.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Candidates {
@@ -110,7 +107,7 @@ pub struct Output {
     pub preedit: String,
     /// `false`: after applying `commit` and `preedit`, pass the key on to the app.
     pub consumed: bool,
-    /// The hanja candidate list, while one is open.
+    /// The list to show (the English modes' letter variants), while one is open.
     pub candidates: Option<Candidates>,
     /// The same keystrokes read as English on stock JIS (see [`Engine::english`]).
     pub english: String,
@@ -120,7 +117,6 @@ pub struct Output {
 pub struct Engine {
     segment: Vec<Token>,
     conversion: Option<Conversion>,
-    hanja: Option<HanjaList>,
     /// The mode: which keyboard's key map (spec §3.6).
     mode: Mode,
     /// How the staged keys show (docs/moonshot.md §4): Auto in Mode A until forced.
@@ -136,7 +132,6 @@ pub struct Engine {
     /// Setting: ⌥Space types a full-width space (Korean and kana) or `_` (English). macOS only:
     /// on Windows Alt+Space is the window menu (docs/moonshot.md §4).
     option_space: bool,
-    dictionary: Option<Arc<Dictionary>>,
     /// The English modes' ⌥ + letter list of variants, while one is open (spec §3.6.3).
     #[cfg(feature = "english")]
     held: Option<crate::hold::Held>,
@@ -185,7 +180,6 @@ impl Engine {
         Engine {
             segment: Vec::new(),
             conversion: None,
-            hanja: None,
             mode: Mode::A,
             script: Script::Auto,
             kana_script: Script::Hiragana,
@@ -193,7 +187,6 @@ impl Engine {
             symbols: true,
             enter_commits: false,
             option_space: false,
-            dictionary: None,
             #[cfg(feature = "english")]
             held: None,
             #[cfg(feature = "predict")]
@@ -228,16 +221,6 @@ impl Engine {
     /// first) and `_` in the English modes. Off by default; the macOS shell turns it on.
     pub fn set_option_space(&mut self, on: bool) {
         self.option_space = on;
-    }
-
-    /// The hanja dictionary for F7. Without one, F7 does nothing. Engines can share one.
-    pub fn set_dictionary(&mut self, dictionary: Arc<Dictionary>) {
-        self.dictionary = Some(dictionary);
-    }
-
-    /// The hanja dictionary, if one was set.
-    pub fn dictionary(&self) -> Option<Arc<Dictionary>> {
-        self.dictionary.clone()
     }
 
     /// Setting: the mode (spec §3.6, docs/moonshot.md §2). Takes effect from the next key. Mode A
@@ -304,10 +287,9 @@ impl Engine {
         self.kanji
     }
 
-    /// Undoes an F9/F10 conversion and closes the hanja list without a pick, so the staged keys
-    /// are as typed again (forcing a script re-reads them).
+    /// Undoes an F9/F10 conversion, so the staged keys are as typed again (forcing a script
+    /// re-reads them).
     fn restore_typed(&mut self) {
-        self.close_hanja();
         if let Some(conversion) = self.conversion.take() {
             self.segment.truncate(conversion.start);
             self.segment.extend(conversion.original);
@@ -331,11 +313,6 @@ impl Engine {
         self.mode
     }
 
-    /// Whether a hanja candidate list is open (F7).
-    pub fn hanja_open(&self) -> bool {
-        self.hanja.is_some()
-    }
-
     /// Always false: the F8 escape is retired (spec §6). Kept for hosts built against it.
     pub fn is_escaped(&self) -> bool {
         false
@@ -346,9 +323,7 @@ impl Engine {
     pub fn activate(&mut self) {}
 
     /// Commits everything unconfirmed. Call on focus loss, app switch and IME switch.
-    /// An open hanja list commits its selected candidate.
     pub fn flush(&mut self) -> Output {
-        self.accept_hanja();
         // Not the user's choice: nothing is learned from it (spec §10.11).
         self.commit_quietly(String::new(), true)
     }
@@ -358,12 +333,11 @@ impl Engine {
     pub fn clear(&mut self) {
         self.segment.clear();
         self.conversion = None;
-        self.hanja = None;
         self.kanji = false;
     }
 
     /// The unconfirmed keystrokes read as English: each key as it types on the stock keyboard,
-    /// JIS or US ANSI (letters with their case, digits, the keyboard's symbols). Converted and hanja text stays as shown.
+    /// JIS or US ANSI (letters with their case, digits, the keyboard's symbols). Converted text stays as shown.
     pub fn english(&self) -> String {
         english_of(&self.segment)
     }
@@ -374,12 +348,9 @@ impl Engine {
         compose_with(&self.segment, Options { no_implied: true, ..Options::default() })
     }
 
-    /// The unconfirmed text, with the selected hanja candidate in place while a list is open.
+    /// The unconfirmed text, as the script shows it.
     pub fn preedit(&self) -> String {
-        match &self.hanja {
-            Some(list) => compose(&self.segment[..list.start]) + &list.candidates[list.selected].hanja,
-            None => self.shown(&self.segment),
-        }
+        self.shown(&self.segment)
     }
 
     /// Staged tokens as the script shows them: kana in a kana script, else Korean.
@@ -428,11 +399,6 @@ impl Engine {
                 self.accepted = Some((kind, after - 1));
             }
         }
-        if self.hanja.is_some()
-            && let Some(out) = self.hanja_key(key, mods)
-        {
-            return out;
-        }
         // ⌥Space (the setting): commit, then a full-width space (docs/moonshot.md §4).
         if key == Key::Space && self.option_space && mods.alt && !mods.ctrl && !mods.meta {
             return self.commit("\u{3000}".into(), true);
@@ -463,9 +429,10 @@ impl Engine {
         if matches!(key, Key::F6 | Key::F7) && !mods.shift {
             return self.to_kana(if key == Key::F6 { Script::Hiragana } else { Script::Katakana });
         }
-        // F8: kanji conversions on top, until the next commit (docs/moonshot.md §4). Taken with
-        // nothing staged too: the next segment converts.
-        if key == Key::F8 && !mods.shift {
+        // F8 (and Shift+F8, the same since the hanja list is gone): kanji conversions on top, until
+        // the next commit (docs/moonshot.md §4). Taken with nothing staged too: the next segment
+        // converts.
+        if key == Key::F8 {
             return self.to_kanji();
         }
         // With nothing unconfirmed, the other function keys are the app's: spec §6.
@@ -479,14 +446,6 @@ impl Engine {
         match key {
             // Shift+F6, Shift+F7: nothing (reserved).
             Key::F6 | Key::F7 => self.unchanged(true),
-            // Shift+F8: the hanja list, in Mode A (it moved from F7, then Shift+F7,
-            // docs/moonshot.md §4).
-            Key::F8 => {
-                if self.mode.is_korean() {
-                    self.open_hanja();
-                }
-                self.unchanged(true)
-            }
             Key::F9 => {
                 self.convert(Width::Full);
                 self.unchanged(true)
@@ -566,80 +525,6 @@ impl Engine {
         }
     }
 
-    /// A key while the hanja list is open. `None`: the list took the pick and the key goes on
-    /// to the normal handling.
-    fn hanja_key(&mut self, key: Key, mods: Mods) -> Option<Output> {
-        let list = self.hanja.as_mut()?;
-        let count = list.candidates.len();
-        let page_start = list.selected / PAGE_SIZE * PAGE_SIZE;
-        if !mods.is_shortcut() {
-            match key {
-                Key::F8 | Key::ArrowDown if mods.shift || key == Key::ArrowDown => list.selected = (list.selected + 1) % count,
-                Key::ArrowUp => list.selected = (list.selected + count - 1) % count,
-                Key::ArrowRight => list.selected = (page_start + PAGE_SIZE).min(count - 1),
-                Key::ArrowLeft => list.selected = page_start.saturating_sub(PAGE_SIZE),
-                Key::Enter => {
-                    self.accept_hanja();
-                }
-                Key::Escape | Key::Backspace => self.close_hanja(),
-                // F6 / F7 / F8: the list closes, then kana or kanji as usual (docs/moonshot.md §4).
-                // Shift+F6 / Shift+F7 too: they're reserved, and close it like any other key.
-                Key::F6 | Key::F7 | Key::F8 => {
-                    self.close_hanja();
-                    return None;
-                }
-                _ => match key.digit().and_then(|d| d.to_digit(10)) {
-                    Some(n @ 1..=9) if !mods.shift && page_start + (n as usize) <= count => {
-                        list.selected = page_start + n as usize - 1;
-                        self.accept_hanja();
-                    }
-                    _ => {
-                        self.accept_hanja();
-                        return None;
-                    }
-                },
-            }
-            return Some(self.unchanged(true));
-        }
-        self.accept_hanja();
-        None
-    }
-
-    /// F7: open the candidate list for the longest dictionary word at the end of the segment.
-    fn open_hanja(&mut self) {
-        let Some(dictionary) = &self.dictionary else { return };
-        let text = compose(&self.segment);
-        let Some((reading, candidates)) = dictionary.longest_suffix(&text) else { return };
-        let prefix = &text[..text.len() - reading.len()];
-        // The tokens that typed the reading, so earlier tokens stay editable. When the reading
-        // doesn't fall on a token boundary (a final it took, say), the prefix becomes plain text.
-        let mut typed = None;
-        let start = (0..self.segment.len())
-            .rev()
-            .find(|&k| compose(&self.segment[k..]) == reading && compose(&self.segment[..k]) == prefix)
-            .unwrap_or_else(|| {
-                let text = prefix.chars().map(Token::Text).chain(reading.chars().map(Token::Text)).collect();
-                typed = Some(std::mem::replace(&mut self.segment, text));
-                prefix.chars().count()
-            });
-        self.hanja = Some(HanjaList { start, typed, candidates: candidates.to_vec(), selected: 0 });
-    }
-
-    /// Closes the hanja list without a pick: the segment is as it was typed, still editable
-    /// (spec §7.2).
-    fn close_hanja(&mut self) {
-        if let Some(typed) = self.hanja.take().and_then(|list| list.typed) {
-            self.segment = typed;
-        }
-    }
-
-    fn accept_hanja(&mut self) {
-        if let Some(list) = self.hanja.take() {
-            self.segment.truncate(list.start);
-            self.segment.extend(list.candidates[list.selected].hanja.chars().map(Token::Text));
-        }
-    }
-
     /// F9/F10: the current word as its keys' alphanumerics, or a run of typed symbols and digits,
     /// in the other width, cycling case on repeat presses. Every character with a form in that
     /// width takes it; one without stays as it is (spec §5.3).
@@ -653,8 +538,7 @@ impl Engine {
             }
             None => {
                 // A symbol run (spec §5.3) is typed symbols and digits, and symbols an earlier
-                // conversion left; letters and digits it left belong to a word, which never mixes in,
-                // and so do hanja picks.
+                // conversion left; letters and digits it left belong to a word, which never mixes in.
                 let in_run = |t: &Token| match *t {
                     Token::Typed(c, ..) => !c.is_whitespace(),
                     Token::Text(c) => !c.is_alphanumeric() && !c.is_whitespace(),
@@ -783,7 +667,6 @@ impl Engine {
             }
         };
         let mut scratch = Engine::new();
-        scratch.dictionary = self.dictionary.clone();
         scratch.predictor = Some(self.predictor.clone()?);
         scratch.weights = self.weights;
         scratch.manual = self.manual;
@@ -870,11 +753,6 @@ impl Engine {
     #[cfg(feature = "predict")]
     fn readings_of(&self, segment: &[Token]) -> Readings {
         let korean = compose(segment);
-        let hanja = self.dictionary.as_ref().and_then(|d| {
-            let (reading, candidates) = d.longest_suffix(&korean)?;
-            // Lean: only a whole word of two syllables or more.
-            (reading == korean && reading.chars().count() >= 2).then(|| candidates[0].hanja.clone())
-        });
         // Where each key's tokens start: an action's parts (docs/moonshot.md §9) belong to its key,
         // and every split and case change below falls between keys.
         let starts: Vec<usize> = (0..segment.len()).filter(|&k| !is_part(&segment[k])).collect();
@@ -927,7 +805,6 @@ impl Engine {
             bare: compose_with(segment, Options { no_implied: true, ..Options::default() }),
             implied: composer_for(segment).implied_count(),
             splits,
-            hanja,
             korean,
             pieces: Vec::new(),
             head,
@@ -958,7 +835,7 @@ impl Engine {
     pub fn predictions(&self) -> Vec<Prediction> {
         match &self.predictor {
             Some(p) if !self.segment.is_empty() && self.script == Script::Auto && self.mode.is_korean() => {
-                p.predict(&self.readings(), self.prediction_context(), self.dictionary.as_deref())
+                p.predict(&self.readings(), self.prediction_context())
             }
             // JIS Kana after F8: the conversions, then the kana as typed (docs/moonshot.md §4).
             Some(p) if !self.segment.is_empty() && self.kanji && self.mode.is_kana() => {
@@ -988,7 +865,7 @@ impl Engine {
     pub fn prediction_features(&self, bits: u32) -> Vec<crate::learned::Featured> {
         match &self.predictor {
             Some(p) if !self.segment.is_empty() => {
-                crate::learned::featurize(p, &self.readings(), self.prediction_context(), self.dictionary.as_deref(), bits)
+                crate::learned::featurize(p, &self.readings(), self.prediction_context(), bits)
             }
             _ => Vec::new(),
         }
@@ -1019,7 +896,6 @@ impl Engine {
         self.learn(&Event::Chose { shown: kinds, chosen: index });
         self.previous = Some(Language::of(chosen.kind));
         self.conversion = None;
-        self.hanja = None;
         self.segment = chosen.text.chars().map(Token::Text).collect();
         // The choice is learned above: the key's own commit learns nothing more.
         let learning = std::mem::replace(&mut self.learning, false);
@@ -1039,7 +915,7 @@ impl Engine {
     /// other keys (jamo, symbols, Backspace, F6–F10) go to [`Engine::key`]. Keeping the list here
     /// keeps the shells from deciding what a key does.
     pub fn commits(&self, key: Key, mods: Mods) -> bool {
-        if self.hanja.is_some() || matches!(key, Key::Modifier) {
+        if matches!(key, Key::Modifier) {
             return false;
         }
         if mods.is_shortcut() {
@@ -1070,7 +946,6 @@ impl Engine {
         #[cfg(not(feature = "english"))]
         let held = String::new();
         self.conversion = None;
-        self.hanja = None;
         let segment = std::mem::take(&mut self.segment);
         let text = self.shown(&segment);
         // F8 lasts until the commit. Mode A's next segment starts in Auto again; JIS Kana stays in
@@ -1160,7 +1035,7 @@ impl Engine {
     #[cfg(feature = "english")]
     fn held_output(&self) -> Output {
         let Some(held) = &self.held else { return Output { consumed: true, ..Output::default() } };
-        let items = held.variants.iter().map(|v| Candidate { hanja: v.to_string(), comment: String::new() }).collect();
+        let items = held.variants.iter().map(|v| Candidate { text: v.to_string(), comment: String::new() }).collect();
         Output {
             preedit: held.shown().to_string(),
             consumed: true,
@@ -1174,7 +1049,7 @@ impl Engine {
     /// and the context for the next word (§10.3).
     fn commit(&mut self, suffix: String, consumed: bool) -> Output {
         #[cfg(feature = "predict")]
-        if !self.segment.is_empty() && self.hanja.is_none() && self.script == Script::Auto {
+        if !self.segment.is_empty() && self.script == Script::Auto {
             let shown = self.predictions();
             if let Some(top) = shown.first()
                 && top.kind == crate::predict::Kind::Korean
@@ -1198,11 +1073,7 @@ impl Engine {
     }
 
     fn unchanged(&self, consumed: bool) -> Output {
-        let candidates = self
-            .hanja
-            .as_ref()
-            .map(|list| Candidates { items: list.candidates.clone(), selected: list.selected });
-        Output { preedit: self.preedit(), consumed, candidates, english: self.english(), ..Output::default() }
+        Output { preedit: self.preedit(), consumed, english: self.english(), ..Output::default() }
     }
 }
 

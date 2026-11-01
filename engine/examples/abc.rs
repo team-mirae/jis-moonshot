@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use jis_korean::plan::{Metric, Press, Robot, each_jamo, keys_of};
 use jis_korean::predict::{Effort, Predictor, Preference, Ranker};
-use jis_korean::{Dictionary, Engine, Key, Mods};
+use jis_korean::{Engine, Key, Mods};
 
 const LABELS: [&str; 3] = ["A", "B", "C"];
 
@@ -48,7 +48,7 @@ fn word_keys(word: &str) -> Option<Vec<Press>> {
         } else if run.chars().all(|c| ('ㄱ'..='ㅣ').contains(&c)) {
             keys.extend(each_jamo(&run)?);
         } else {
-            let mut robot = Robot::new(None);
+            let mut robot = Robot::new();
             robot.metric = Metric::Presses;
             robot.type_text(&run);
             if !robot.report.failures.is_empty() {
@@ -99,12 +99,10 @@ fn main() {
     let read = |f: &str| std::fs::read_to_string(format!("{root}/predict/{f}")).unwrap();
     let model = std::fs::read(format!("{root}/predict/ranker.bin")).unwrap();
     let predictor = Arc::new(Predictor::parse(&model, &read("common-en.txt"), &read("common-ko.txt"), &read("english-nouns.txt")).unwrap());
-    let dictionary = Arc::new(Dictionary::parse(&std::fs::read_to_string(format!("{root}/dict/hanja.tsv")).unwrap()));
     let mut engines: Vec<Engine> = rankers
         .iter()
         .map(|&r| {
             let mut e = Engine::new();
-            e.set_dictionary(dictionary.clone());
             e.set_predictor(Some(predictor.clone()));
             e.set_ranker(r);
             e

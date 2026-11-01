@@ -73,7 +73,7 @@ weight set here counts as **set by hand**, so it wins over anything learned from
 | `mixed` | English word + Korean particle (report를, GPU랙) | more English + particle readings |
 | `two-set` | plain 2-set reading (number-row keys as digits) | more digit readings |
 | `keep-finals` | a final kept before a vowel (말이 for 마리's keys) | more kept-final readings |
-| `hanja` | hanja (always below the top) | hanja listed sooner |
+| `hanja` | retired: JIS Moonshot has no hanja (moonshot.md §5.1); accepted and ignored | nothing |
 | `implied-l` | an implied ㄹ after ㄴ (전력 for 저녁's keys) | more 전력-style readings |
 | `kana` | the keys read on the JIS kana layout (`byiaf` → こんにちは) | kana wins close calls; 0 turns the kana reading off (F6 / F7 still type kana) |
 
@@ -108,7 +108,7 @@ bare word; one `avoid` entry for god fixes it with every particle.
 - Each entry is `{ "word", "language", "strength"? }`.
   - **language:** `korean` (Hangul, no spaces), `english` (Latin letters) or `japanese` (kana).
   - **strength:** `soft` (the default) pushes the word down by 4 bits, as if it were 16 times less
-    likely. `strong` also keeps it off the top whatever the scores, the way hanja are kept off it.
+    likely. `strong` also keeps it off the top whatever the scores.
 - It covers the word alone and followed by a particle (god, god을, god에서; 마리, 마리가).
 - It's still listed lower down, so you can pick it on purpose.
 - English ignores case, but keys you start with Shift are taken as meant (God typed with Shift+G).
@@ -205,12 +205,11 @@ conversation. Follow these rules.
 | # | Ask | Answer → weights |
 |---|---|---|
 | 1 | "When you type the keys of 저녁, should 전력 also be offered? (ㄴ then ㄹ sounds like ㄹㄹ)" | no → `implied-l: 0`; yes → leave out |
-| 2 | "Do you write hanja?" | never → `hanja: 0`; sometimes → leave out; often → `hanja: 2` |
-| 3 | "Do you type chat jamo like ㅠㅠ, ㅋㅋ, ㅇㅇ a lot?" | a lot → `implied: 0.7`; rarely → leave out |
-| 4 | "How much English do you mix into Korean (report를, GPU랙)?" | a lot → `mixed: 1.5`, `english: 1.2`; little → `english: 0.8` |
-| 5 | "Do you skip the double press, so 말이 comes out as 마리 and you fix it?" | often → `keep-finals: 1.5`; never → leave out |
-| 6 | "Do you use the number-row keys for digits, as on plain 2-set?" | yes → `two-set: 1.5`; no → leave out |
-| 7 | "How often will you type Japanese kana, compared with Korean?" | often → `kana: 1.5`; rarely → `kana: 0.5`; never → `kana: 0` |
+| 2 | "Do you type chat jamo like ㅠㅠ, ㅋㅋ, ㅇㅇ a lot?" | a lot → `implied: 0.7`; rarely → leave out |
+| 3 | "How much English do you mix into Korean (report를, GPU랙)?" | a lot → `mixed: 1.5`, `english: 1.2`; little → `english: 0.8` |
+| 4 | "Do you skip the double press, so 말이 comes out as 마리 and you fix it?" | often → `keep-finals: 1.5`; never → leave out |
+| 5 | "Do you use the number-row keys for digits, as on plain 2-set?" | yes → `two-set: 1.5`; no → leave out |
+| 6 | "How often will you type Japanese kana, compared with Korean?" | often → `kana: 1.5`; rarely → `kana: 0.5`; never → `kana: 0` |
 
 **Signals in a typo log, when you have one:**
 - **"Prediction picked the wrong language or script"** (wrong English) means the data supports

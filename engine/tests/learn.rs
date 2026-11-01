@@ -10,7 +10,7 @@ use jis_korean::learn::{self, Learner};
 use jis_korean::plan::Style;
 use jis_korean::predict::{Kind, Predictor, Ranker, Weight};
 use jis_korean::trust::type_text;
-use jis_korean::{Dictionary, Engine, Key, Mods};
+use jis_korean::{Engine, Key, Mods};
 
 fn predictor() -> Arc<Predictor> {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/predict/");
@@ -20,10 +20,6 @@ fn predictor() -> Arc<Predictor> {
     // The learned ranker (spec §10.13); the legacy build ignores it and ranks by the rules.
     let p = Predictor::parse(&model, &read("common-en.txt"), &read("common-ko.txt"), &read("english-nouns.txt")).unwrap();
     Arc::new(p.with_learned(&learned).unwrap())
-}
-
-fn dictionary() -> Arc<Dictionary> {
-    Arc::new(Dictionary::parse(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap()))
 }
 
 /// A round of (keys, wanted text). The first `habit` items are the user's habit; the rest are
@@ -49,10 +45,9 @@ const KOREAN_FIRST: User = User {
 };
 
 /// Types `rounds` rounds of the user's items with learning on. Returns, per round, how many habit
-/// items were the top prediction, and the learner at the end. Asserts no hanja is ever on top.
+/// items were the top prediction, and the learner at the end.
 fn simulate(user: &User, rounds: usize) -> (Vec<usize>, Learner) {
     let mut e = Engine::new();
-    e.set_dictionary(dictionary());
     e.set_predictor(Some(predictor()));
     e.set_learning(true);
     let mut hits = Vec::new();
@@ -63,7 +58,6 @@ fn simulate(user: &User, rounds: usize) -> (Vec<usize>, Learner) {
                 e.key(Key::from_code(&format!("Key{}", c.to_ascii_uppercase())), Mods::NONE);
             }
             let list = e.predictions();
-            assert_ne!(list.first().map(|p| p.kind), Some(Kind::Hanja), "{}: hanja on top for {keys}: {list:?}", user.name);
             let at = list.iter().position(|p| p.text == *want);
             round += (i < user.habit && at == Some(0)) as usize;
             e.commit_prediction(at.unwrap_or(0));
@@ -170,7 +164,7 @@ fn deleting_only_the_space_after_an_accepted_word_is_no_regret() {
 fn the_owners_texts_stay_clean_while_learning() {
     // An attentive typist with learning on types the owner's texts five times over, in several
     // styles: no failures, and no more ↓ in the last round (the cheapest way) than in the first.
-    let (p, d) = (predictor(), dictionary());
+    let p = predictor();
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/corpora-en-ko/");
     let text = ["mixed-script-1-business.txt", "korean-1-business.txt"]
         .map(|f| std::fs::read_to_string(format!("{dir}{f}")).unwrap())
@@ -179,9 +173,8 @@ fn the_owners_texts_stay_clean_while_learning() {
     let mut arrows = Vec::new();
     // Typed the cheapest way, then in mixes of the valid ways (as real typists do).
     for style in [Style::Optimal, Style::Mixed(1), Style::Mixed(2), Style::Mixed(3), Style::Optimal] {
-        let (report, learned) = type_text(&text, p.clone(), Some(d.clone()), Ranker::Rules, style, true, Some(learner));
+        let (report, learned) = type_text(&text, p.clone(), Ranker::Rules, style, true, Some(learner));
         assert!(report.failures.is_empty(), "{:?}", report.failures);
-        assert!(report.hanja_on_top.is_empty());
         arrows.push(report.arrows);
         learner = learned.unwrap();
     }

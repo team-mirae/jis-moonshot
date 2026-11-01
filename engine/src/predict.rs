@@ -11,7 +11,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::Dictionary;
 
 /// Which reading a prediction is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -29,9 +28,7 @@ pub enum Kind {
     TwoSet = 4,
     /// Korean with every final kept where a vowel would take it (말이, not 마리).
     KoreanKeepFinals = 5,
-    /// Hanja: the dictionary form of a whole Korean word (lean, penalized to last), or one of the
-    /// everyday exceptions (news country names, dates, weekdays), which aren't penalized.
-    Hanja = 6,
+    // 6 was Hanja, retired with the hanja dictionary: the other ids stay.
     /// JIS Korean with the implied ㅇ left out: bare vowels (ㅠㅠ, not 유유).
     BareVowels = 7,
     /// An English word with a Korean particle or ending attached (report에, Anthropic에서).
@@ -80,8 +77,6 @@ pub struct Readings {
     /// Korean with ㄶ where a ㄴ final met ㅋ, ㅌ or ㅊ, one variant per place and one with all
     /// (않고 for 안코).
     pub aspirated: Vec<String>,
-    /// The hanja form of the whole Korean reading, when it's a dictionary word of 2+ syllables.
-    pub hanja: Option<String>,
     /// JIS Korean without the implied ㅇ.
     pub bare: String,
     /// How many syllables of the Korean reading have an implied ㅇ.
@@ -234,6 +229,8 @@ pub enum Weight {
     Mixed = 3,
     TwoSet = 4,
     KeepFinals = 5,
+    /// Retired with the hanja dictionary: no reading uses it. The slot keeps the ids of the
+    /// weights after it (hosts store weights by id).
     Hanja = 6,
     /// An implied ㄹ after a ㄴ final (전력). 0 turns it off.
     ImpliedL = 7,
@@ -322,9 +319,6 @@ pub enum Origin {
     ImpliedL,
     /// ㄶ for ㄴ + ㅋ / ㅌ / ㅊ (않고 for 안코).
     Aspirated,
-    Hanja,
-    /// An everyday hanja (§10.4: 2026年, 韓美).
-    EverydayHanja,
     Bare,
     /// An English start and a Korean ending (report에).
     Mixed,
@@ -378,6 +372,9 @@ const COMMON: u32 = 20;
 const BARE_JAMO: f64 = 1.5;
 /// Each key right of 0 that typed Korean inside the word (docs/moonshot.md §9), toward Korean.
 const KOREAN_ONLY: f64 = 3.0;
+/// The highest Mozc word cost that counts as a common Japanese word (lower is more common):
+/// どようび 3353, とけい 4331 in; きのと 5766, はちの 6421 out.
+const COMMON_KANJI_WORD: u16 = 4500;
 /// Alternatives rank below the reading they're an alternative to.
 const ALTERNATIVE: f64 = 1.0;
 /// A known particle after an English start (report에): strong evidence of a mixed word.
@@ -684,7 +681,13 @@ impl Predictor {
 
     /// Whether a kana word is in the Japanese lexicon, in hiragana or katakana.
     fn japanese_count(&self, word: &str) -> Option<u32> {
-        self.japanese_words.get(word).copied().or_else(|| self.japanese_words.get(&crate::kana::katakana(word)).copied())
+        self.japanese_words.get(word).copied().or_else(|| self.japanese_words.get(&crate::kana::katakana(word)).copied()).or_else(|| {
+            // A common whole word in the kanji dictionary (どようび, 土曜日), from three kana: shorter
+            // ones are nearly all some word there, and rare ones (きのと, 乙) aren't a typist's.
+            // Counted like a hand-written word.
+            let common = |k: &crate::kanji::Kanji| k.word_cost(&crate::kana::hiragana(word)).is_some_and(|cost| cost <= COMMON_KANJI_WORD);
+            (word.chars().count() >= 3 && self.kanji.as_deref().is_some_and(common)).then_some(HAND_COUNT)
+        })
     }
 
     /// The share of `kana` (hiragana) covered by known words and particles, by a longest-match
@@ -765,6 +768,13 @@ impl Predictor {
                 e -= ALTERNATIVE;
             }
             e += KANA_ONLY_KEY * readings.kana_only.min(3) as f64;
+            // The keys right of 0 that typed Korean (docs/moonshot.md §9) lifted the Korean reading
+            // over English (`korean_only`), but they're kana-only keys as much: the same lift here,
+            // so it doesn't push Korean past kana (どようび typed with ゛ on @). Only for a known
+            // Japanese word: junk kana (ねにすひみち for 의약품) gets none of it.
+            if exact.is_some() || coverage >= 1.0 {
+                e += KOREAN_ONLY * readings.korean_only as f64;
+            }
             // A small kana typed with Shift after the first key (っ ゃ ゅ ょ ぁ…): Korean never
             // shifts Z, and Shift+digits rarely sit inside a word.
             let small = readings.kana.chars().skip(1).filter(|&c| "ぁぃぅぇぉゃゅょっ".contains(c)).count();
@@ -813,7 +823,6 @@ impl Predictor {
             return out;
         }
         let at = out.iter().position(|p| p.score < kana.score).unwrap_or(out.len());
-        // A hanja reading is never on top: the kana one can't sit under it there either.
         out.insert(at, kana);
         out.truncate(MAX_WITH_KANA);
         out
@@ -901,9 +910,6 @@ impl Predictor {
                 PARTICLES.iter().find_map(|particle| text.strip_suffix(particle).and_then(|word| list.get(word).copied()))
             })
         };
-        if p.kind == Kind::Hanja {
-            return None;
-        }
         if p.kind.language() == Language::Korean && p.kind != Kind::Mixed {
             return if self.avoided_korean.is_empty() { None } else { find(&self.avoided_korean, &p.text) };
         }
@@ -919,33 +925,33 @@ impl Predictor {
         self.avoided_english.get(&start.to_lowercase()).copied()
     }
 
-    /// The readings, ranked, without duplicates, at most [`MAX_PREDICTIONS`]. The dictionary (if
+    /// The readings, ranked, without duplicates, at most [`MAX_PREDICTIONS`].
     /// any) is only used for stems in front of 曰. With a learned model (spec §10.13) and the
     /// rules ranker, the model ranks; otherwise the rules do.
-    pub fn predict(&self, readings: &Readings, context: Context, dictionary: Option<&Dictionary>) -> Vec<Prediction> {
+    pub fn predict(&self, readings: &Readings, context: Context) -> Vec<Prediction> {
         #[cfg(not(feature = "legacy-predict"))]
         if let Some(model) = &self.learned
             && context.ranker == Ranker::Rules
         {
-            let ranked = crate::learned::rank(self, model, readings, context, dictionary);
+            let ranked = crate::learned::rank(self, model, readings, context);
             let ranked = self.with_kana(ranked, readings, context);
             return self.with_kanji_conversions(ranked, readings, context);
         }
-        let ranked = self.predict_by_rules(readings, context, dictionary);
+        let ranked = self.predict_by_rules(readings, context);
         let ranked = self.with_kana(ranked, readings, context);
         self.with_kanji_conversions(ranked, readings, context)
     }
 
     /// [`Predictor::predict`] by the rules only (the legacy ranker), whatever model is loaded.
-    pub fn predict_by_rules(&self, readings: &Readings, context: Context, dictionary: Option<&Dictionary>) -> Vec<Prediction> {
-        let candidates = self.candidates(readings, context, dictionary);
+    pub fn predict_by_rules(&self, readings: &Readings, context: Context) -> Vec<Prediction> {
+        let candidates = self.candidates(readings, context);
         self.finish_by_rules(candidates.into_iter().map(|c| c.prediction).collect(), &readings.english)
     }
 
     /// Every reading of the staged text with its rule-based score, before the avoid list, the
     /// hard guards, duplicates and the cut to [`MAX_PREDICTIONS`]. A scenario weighed 0 scores
     /// −∞ (or isn't generated).
-    pub fn candidates(&self, readings: &Readings, context: Context, dictionary: Option<&Dictionary>) -> Vec<Candidate> {
+    pub fn candidates(&self, readings: &Readings, context: Context) -> Vec<Candidate> {
         if readings.korean.is_empty() && readings.english.is_empty() {
             return Vec::new();
         }
@@ -1011,7 +1017,7 @@ impl Predictor {
         // odds learned from the corpora. Same row as the kept finals; the higher copy stays.
         for kept in &readings.kept {
             // Only what it keeps beyond the typed reading counts (술의 typed with d is in both).
-            let bits = self.implied_after_bits(kept, dictionary) - self.implied_after_bits(&readings.korean, dictionary);
+            let bits = self.implied_after_bits(kept) - self.implied_after_bits(&readings.korean);
             // Both ways: a common typed word (아니) keeps beating a rare kept reading (안이).
             let known = self.lexicon_odds(readings, kept);
             let score = margin - ALTERNATIVE + bits + known + w.bits(Weight::KeepFinals);
@@ -1035,8 +1041,6 @@ impl Predictor {
                 origins.push((Origin::Aspirated, None));
             }
         }
-        // No hanja readings (docs/moonshot.md §5.1): they'd compete with the kanji conversions.
-        // The hanja list is on Shift+F8; `readings.hanja` still counts as evidence of a word.
         if let Some(bare) = bare {
             out.push(bare);
             origins.push((Origin::Bare, None));
@@ -1047,7 +1051,6 @@ impl Predictor {
             // Korean (slack에 as 님차에) doesn't hold it back.
             // A word started with Shift+vowel (오픈 as H v m s) counts as Korean the same way.
             let word = self.korean_words.contains_key(readings.korean.as_str())
-                || readings.hanja.is_some()
                 || self.shift_vowel_start(&readings.english);
             if margin > 0.0 && word {
                 mixed.score = mixed.score.min(margin - ALTERNATIVE);
@@ -1067,7 +1070,7 @@ impl Predictor {
             let tops: Vec<String> = readings
                 .pieces
                 .iter()
-                .map(|piece| self.predict(&piece.readings, context, dictionary).into_iter().next().map_or(String::new(), |p| p.text))
+                .map(|piece| self.predict(&piece.readings, context).into_iter().next().map_or(String::new(), |p| p.text))
                 .collect();
             let latin = |text: &str| text.starts_with(|c: char| c.is_ascii_alphabetic());
             let text: String = readings
@@ -1124,17 +1127,15 @@ impl Predictor {
         out.sort_by(|a, b| b.score.total_cmp(&a.score));
         let mut seen = HashSet::new();
         out.retain(|p| !p.text.is_empty() && seen.insert(p.text.clone()));
-        // Hard guard: a hanja reading is never on top, whatever the weights (a user's 10×, or
-        // learning): hanja are picked with ↓. Nor is a strongly avoided word. The first other
-        // reading moves up.
-        let held = |p: &Prediction| p.kind == Kind::Hanja || strong.contains(&p.text);
+        // Hard guard: a strongly avoided word is never on top, whatever the weights (a user's 10×,
+        // or learning). The first other reading moves up.
+        let held = |p: &Prediction| strong.contains(&p.text);
         if out.first().is_some_and(held)
             && let Some(i) = out.iter().position(|p| !held(p))
         {
             let other = out.remove(i);
             out.insert(0, other);
         }
-        // The hanja penalty keeps it last; it shows only when there's room.
         out.truncate(MAX_PREDICTIONS);
         out
     }
@@ -1237,11 +1238,9 @@ impl Predictor {
     /// syllables or more and the rest begins with a particle or ending (기준 + 입니다); else the
     /// corpus odds for ㄴ and ㄹ (산이 against 사니), and a step against for other finals. A double
     /// final always counts as kept (값이).
-    fn implied_after_bits(&self, text: &str, dictionary: Option<&Dictionary>) -> f64 {
+    fn implied_after_bits(&self, text: &str) -> f64 {
         const FINALS: &str = " ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ";
         let chars: Vec<char> = text.chars().collect();
-        // The lexicon only: the hanja dictionary's rare readings (세민) aren't a typist's nouns.
-        let _ = dictionary;
         // A word ending in a 하다 / 되다 modifier (반영한, 사용될) is a verb form, not a noun a
         // particle follows: its final is an ending's (반영하는, not 반영한은).
         let known = |word: &str| {
@@ -1417,7 +1416,7 @@ impl Predictor {
         }
         let mut score = margin.abs() + PARTICLE + ALTERNATIVE;
         // A known Korean word as a whole still comes first, as for a mixed split.
-        if margin > 0.0 && (self.korean_words.contains_key(readings.korean.as_str()) || readings.hanja.is_some()) {
+        if margin > 0.0 && self.korean_words.contains_key(readings.korean.as_str()) {
             score = score.min(margin - ALTERNATIVE);
         }
         Some(Prediction { text: format!("{}{}{}", head.korean, head.acronym, head.rest), kind: Kind::Mixed, score })
@@ -1492,7 +1491,7 @@ impl Predictor {
             && !self.english_words.contains_key(&lower)
             && !self.english_nouns.contains(&lower)
         {
-            let known = self.korean_words.contains_key(korean.as_str()) || readings.hanja.is_some();
+            let known = self.korean_words.contains_key(korean.as_str());
             margin = self.english_margin_with(english, true) - if known { 0.0 } else { CAPITAL_LEAN };
         }
         if self.korean_words.contains_key(korean.as_str()) {

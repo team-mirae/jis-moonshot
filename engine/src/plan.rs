@@ -4,18 +4,18 @@
 //! and checks after every character that the screen (committed + unconfirmed text) shows exactly
 //! the text so far. Keys come from the engine's own layout tables, not a copy. It plays the layout
 //! the way a fluent typist would: dedicated keys, the implied ㅇ, Shift+vowel and the double press
-//! where they save keystrokes, F10 or an input-source switch for
-//! Latin words, and Shift+F8 for hanja. Where several plans work it takes the cheapest (Shift counts as
+//! where they save keystrokes, and F10 or an input-source switch for
+//! Latin words. Where several plans work it takes the cheapest (Shift counts as
 //! a press).
 //!
 //! [`count`] wraps it for hosts (the web playground) together with the conventional estimate.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 use crate::travel::Hand;
-use crate::{Dictionary, Engine, Key, Layout, Mods, Out, Output, PAGE_SIZE, output};
+use crate::{Engine, Key, Layout, Mods, Out, Output, output};
 
 /// What a symbol costs when it isn't on a layout's legends: an OS shortcut, the character palette or
 /// copying it from a search all take at least this many presses. Applies to both layouts.
@@ -36,10 +36,10 @@ pub struct Counts {
     pub dropped: usize,
 }
 
-/// Counts the key presses for `text` on JIS Korean and on conventional 2-set. With a dictionary,
-/// hanja are typed with Shift+F8; without one they're left out.
-pub fn count(text: &str, dictionary: Option<Arc<Dictionary>>) -> Counts {
-    let mut robot = Robot::new(dictionary);
+/// Counts the key presses for `text` on JIS Moonshot and on conventional 2-set. Hanja have no key:
+/// they're entered from outside the keyboard.
+pub fn count(text: &str) -> Counts {
+    let mut robot = Robot::new();
     let typed = robot.type_text(text);
     let report = &robot.report;
     Counts {
@@ -126,7 +126,7 @@ pub fn cheapest(text: &str) -> Option<Effort> {
 
 /// [`cheapest`], with the keys of that route.
 pub fn cheapest_route(text: &str) -> Option<(Effort, Vec<Press>)> {
-    let mut robot = Robot::new(None);
+    let mut robot = Robot::new();
     robot.metric = Metric::Travel;
     robot.type_text(text);
     let report = &robot.report;
@@ -166,7 +166,7 @@ pub fn keys_for_word(word: &str) -> Option<Vec<Press>> {
         } else if run.chars().all(is_compat_jamo) {
             keys.extend(each_jamo(&run)?);
         } else {
-            let mut robot = Robot::new(None);
+            let mut robot = Robot::new();
             robot.type_text(&run);
             if !robot.report.failures.is_empty() || robot.report.pasted > 0 {
                 return None;
@@ -264,7 +264,6 @@ pub struct Report {
     pub dedicated_keys: usize,
     pub implied_ieung: usize,
     pub double_presses: usize,
-    pub hanja: usize,
     pub latin_words: usize,
     /// Latin words typed by switching the input source to English and back (when cheaper than F10).
     pub latin_switches: usize,
@@ -296,7 +295,6 @@ impl fmt::Display for Report {
         writeln!(f, "dedicated keys    {}", self.dedicated_keys)?;
         writeln!(f, "implied ㅇ        {}", self.implied_ieung)?;
         writeln!(f, "double presses    {}", self.double_presses)?;
-        writeln!(f, "hanja via ⇧F8     {}", self.hanja)?;
         writeln!(f, "Shift+vowel       {}", self.shift_vowels)?;
         writeln!(f, "Latin via F10     {}", self.latin_words)?;
         writeln!(f, "Latin via switch  {}", self.latin_switches)?;
@@ -509,15 +507,12 @@ impl Plan {
 
 pub struct Robot {
     keymap: &'static Keymap,
-    dictionary: Option<Arc<Dictionary>>,
     /// What to minimize; the report counts both either way.
     pub metric: Metric,
     /// Which valid way to take (the cheapest unless set).
     pub style: Style,
     /// The state of [`Style::Mixed`]'s choices.
     draws: u64,
-    /// hanja → reading, for Shift+F8.
-    readings: HashMap<char, String>,
     screen: Screen,
     expected: String,
     pub log: Vec<Press>,
@@ -525,63 +520,17 @@ pub struct Robot {
 }
 
 impl Robot {
-    /// Without a dictionary, hanja can't be typed and are left out.
-    pub fn new(dictionary: Option<Arc<Dictionary>>) -> Robot {
-        let mut engine = Engine::new();
-        // hanja → its single-syllable reading where it ranks highest.
-        let mut readings: HashMap<char, (String, usize)> = HashMap::new();
-        let kept = dictionary.clone();
-        if let Some(dictionary) = dictionary {
-            for (reading, candidates) in dictionary.entries() {
-                if reading.chars().count() != 1 {
-                    continue;
-                }
-                for (position, candidate) in candidates.iter().enumerate() {
-                    let mut chars = candidate.hanja.chars();
-                    if let (Some(h), None) = (chars.next(), chars.next()) {
-                        let best = readings.entry(h).or_insert((reading.to_string(), position));
-                        // Ties go to the first reading in Unicode order, so runs agree (the
-                        // dictionary is a hash map).
-                        if (position, reading) < (best.1, best.0.as_str()) {
-                            *best = (reading.to_string(), position);
-                        }
-                    }
-                }
-            }
-            engine.set_dictionary(dictionary);
-        }
+    pub fn new() -> Robot {
         Robot {
             keymap: keymap(),
-            dictionary: kept,
             metric: Metric::Presses,
             style: Style::Optimal,
             draws: 0,
-            readings: readings.into_iter().map(|(h, (r, _))| (h, r)).collect(),
-            screen: Screen { engine, doc: String::new(), hand: Hand::default() },
+            screen: Screen { engine: Engine::new(), doc: String::new(), hand: Hand::default() },
             expected: String::new(),
             log: Vec::new(),
             report: Report::default(),
         }
-    }
-
-    /// The reading the robot types a hanja by (for Shift+F8), if it can.
-    pub fn hanja_reading(&self, c: char) -> Option<&str> {
-        self.readings.get(&c).map(String::as_str)
-    }
-
-    /// Every single-syllable reading of a hanja in the dictionary, best-ranked first.
-    pub fn hanja_readings(&self, c: char) -> Vec<String> {
-        let mut found: Vec<(usize, String)> = self
-            .dictionary
-            .iter()
-            .flat_map(|d| d.entries())
-            .filter(|(reading, _)| reading.chars().count() == 1)
-            .filter_map(|(reading, candidates)| {
-                candidates.iter().position(|cand| cand.hanja.chars().eq([c])).map(|i| (i, reading.to_string()))
-            })
-            .collect();
-        found.sort();
-        found.into_iter().map(|(_, r)| r).collect()
     }
 
     /// How a character other than Hangul and Latin letters is typed on JIS Korean: its key. None:
@@ -597,7 +546,6 @@ impl Robot {
             || c == '\n'
             || (is_compat_jamo(c) && !self.keymap.jamo_ways(Layout::JisKorean, c).is_empty())
             || self.keymap.char_press(Layout::JisKorean, c).is_some()
-            || (is_hanja(c) && self.readings.contains_key(&c))
     }
 
     /// Types `text` after normalizing it. Returns the normalized text the screen should show.
@@ -705,7 +653,7 @@ impl Robot {
         Some(plan)
     }
 
-    /// A character no key types (①, ×, emoji, a hanja without a dictionary): entered from outside
+    /// A character no key types (①, ×, emoji, a hanja): entered from outside
     /// the keyboard, which commits what's composing, for a flat [`OFF_LEGEND`] presses.
     fn paste(&mut self, c: char) {
         let out = self.screen.engine.flush();
@@ -715,7 +663,7 @@ impl Robot {
         self.report.pasted += 1;
     }
 
-    /// Commits first if the unconfirmed text ends in Hangul that Shift+F8 or F10 would pick up.
+    /// Commits first if the unconfirmed text ends in Hangul that F10 would pick up.
     /// Shift+Enter commits (JIS Moonshot's F6 types hiragana, docs/moonshot.md §4).
     fn break_word(&mut self) {
         if self.screen.ends_in_hangul() {
@@ -726,7 +674,7 @@ impl Robot {
     fn type_char(&mut self, c: char, next: Option<char>) -> Result<(), ()> {
         let want = format!("{}{c}", self.expected);
         if is_syllable(c) {
-            // The commit before Latin, hanja or a bare jamo (Shift+Enter) keeps an implied ㅇ.
+            // The commit before Latin or a bare jamo (Shift+Enter) keeps an implied ㅇ.
             let _ = next;
             let plans = self.syllable_plans(c, true);
             let plan = self.try_plans(plans, &want).ok_or(())?;
@@ -734,8 +682,6 @@ impl Robot {
             self.report.implied_ieung += plan.implied as usize;
             self.report.shift_vowels += plan.shift_vowel as usize;
             self.report.double_presses += plan.double as usize;
-        } else if is_hanja(c) && self.readings.contains_key(&c) {
-            self.type_hanja(c, &want)?;
         } else if is_hanja(c) {
             self.paste(c);
         } else if is_compat_jamo(c) {
@@ -839,25 +785,6 @@ impl Robot {
             std::cmp::Reverse(p.dedicated + p.implied as usize + p.double as usize + p.shift_vowel as usize)
         });
         plans
-    }
-
-    fn type_hanja(&mut self, c: char, want: &str) -> Result<(), ()> {
-        let reading = self.readings.get(&c).cloned().ok_or(())?;
-        self.break_word();
-        let shown = format!("{}{reading}", self.expected);
-        let syllable = reading.chars().next().ok_or(())?;
-        let plans = self.syllable_plans(syllable, false);
-        self.try_plans(plans, &shown).ok_or(())?;
-        // The hanja list is on Shift+F8 (docs/moonshot.md §4).
-        let out = self.press_all(&[Press { key: Key::F8, shift: true }]);
-        let candidates = out.candidates.ok_or(())?;
-        let index = candidates.items.iter().position(|cand| cand.hanja.chars().eq([c])).ok_or(())?;
-        let pages = vec![Press::new(Key::ArrowRight); index / PAGE_SIZE];
-        let digit = Key::from_code(&format!("Digit{}", index % PAGE_SIZE + 1));
-        self.press_all(&pages);
-        self.press_all(&[Press::new(digit)]);
-        self.report.hanja += 1;
-        if self.screen.text() == want { Ok(()) } else { Err(()) }
     }
 
     /// A Latin word: its keys, then F10 once (as typed), twice (UPPER) or three times

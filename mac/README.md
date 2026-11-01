@@ -69,7 +69,7 @@ Tune the readings with multipliers on each one's learned probability (spec §10.
 ```sh
 defaults write me.sjun.inputmethod.JISMoonshot Weight.Kana -float 0.5      # kana readings half as likely
 defaults write me.sjun.inputmethod.JISMoonshot Weight.English -float 0.8
-# Also Weight.Korean, Weight.Implied, Weight.Mixed, Weight.TwoSet, Weight.KeepFinals, Weight.Hanja,
+# Also Weight.Korean, Weight.Implied, Weight.Mixed, Weight.TwoSet, Weight.KeepFinals,
 # Weight.ImpliedL (default 1.0; 0 turns an alternative off)
 ```
 
@@ -88,7 +88,7 @@ that's strongly recommended.
 | ⌥Space | A full-width space (U+3000) in JIS Moonshot and JIS Kana, committing what's typed first; `_` in the English modes. |
 | ⌥ + symbol / digit | Its legend in full-width (⇧⌥1 → ！), and ⌥ , . / → 、。・, committing what's typed first (JIS Moonshot and JIS Kana). ⌥ [ ] → 『』 in JIS Moonshot, 「」 in JIS Kana, « » in the English modes. |
 | F8 | Kanji: the kana reading's conversions on top until the next commit (nothing staged: the next segment). In JIS Kana, the conversions above the kana. |
-| Shift+F8 | The hanja list (Mode A). |
+| Shift+F8 | The same as F8 (JIS Moonshot has no hanja). |
 | F9 / F10 | Full-width / half-width letters, as in JIS Korean. |
 | Shift+Z | ㅋ, っ or Z, like any other key. |
 
@@ -182,7 +182,7 @@ is answered with an `error` instead.
 | `Sources/KoreanKeyTap.swift` | The system-wide key tap for 英数, かな (カタカナ) and the Korean Key (spec §8.2.1). Accessibility only. |
 | `Sources/Consent.swift` | The predictive-typing notice and `PredictiveAccepted` (docs/moonshot.md §6). |
 | `Sources/Training.swift` | The training file (docs/training-contract.md); its examples are learned in the background. |
-| `Sources/SuggestionWindow.swift` | The suggestion list under the marked text (predictions, hanja candidates, letter variants). |
+| `Sources/SuggestionWindow.swift` | The suggestion list under the marked text (predictions, letter variants). |
 | `Sources/KeyboardViewerLayout.swift` | Names each mode's Keyboard Viewer layout to the app (spec §8.1), kept per app. |
 | `Sources/DisabledApps.swift`, `Sources/DisabledAppsWindow.swift`, `Sources/DefaultOffApps.swift`, `Sources/KnownApps.swift` | Per-app predictions and learning (spec §10.11): the apps the user excluded, "Manage Disabled Apps…", and the apps where predictions start off. |
 | `Sources/DiagnosticLog.swift` | `~/Library/Logs/JISMoonshot.log` (Notes below). |

@@ -26,7 +26,7 @@ fn option(engine: &mut Engine, code: &str, shift: bool) -> Output {
 }
 
 fn list(out: &Output) -> Vec<String> {
-    out.candidates.as_ref().map_or(Vec::new(), |c| c.items.iter().map(|i| i.hanja.clone()).collect())
+    out.candidates.as_ref().map_or(Vec::new(), |c| c.items.iter().map(|i| i.text.clone()).collect())
 }
 
 #[test]

@@ -26,8 +26,8 @@ inline constexpr GUID kLangBarItemInputMode = {
 inline constexpr GUID kDisplayAttributeInput = {
     0xdae8d0c3, 0x482d, 0x4624, {0x97, 0x6f, 0x06, 0xc5, 0xbc, 0xd6, 0xc8, 0x82}};
 
-// Display attribute of a reading shown in place of the typed one: a hanja candidate or a
-// prediction (thick underline). {11816B59-0283-4416-975C-78128F1D21DC}
+// Display attribute of a reading shown in place of the typed one: a prediction (thick
+// underline). {11816B59-0283-4416-975C-78128F1D21DC}
 inline constexpr GUID kDisplayAttributeConverted = {
     0x11816b59, 0x0283, 0x4416, {0x97, 0x5c, 0x78, 0x12, 0x8f, 0x1d, 0x21, 0xdc}};
 

@@ -10,7 +10,6 @@
 
 use std::sync::Arc;
 
-use jis_korean::Dictionary;
 use jis_korean::predict::{Effort, Predictor, Preference, Ranker};
 use jis_korean::plan::Style;
 use jis_korean::trust::{Trusting, type_text, type_trusting};
@@ -34,19 +33,14 @@ fn predictor() -> Arc<Predictor> {
     Arc::new(p.with_learned(&learned).unwrap())
 }
 
-fn dictionary() -> Arc<Dictionary> {
-    Arc::new(Dictionary::parse(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap()))
-}
-
 fn summary(name: &str, t: &Trusting) -> String {
     format!(
-        "{name}: {}/{} words failed ({:.1}%), {} of {} characters wrong, {} hanja words picked with {} ↓; {} presses + {} to correct = {} to the right text, against {} without predictions ({:+.1}%)",
+        "{name}: {}/{} words failed ({:.1}%), {} of {} characters wrong, {} ↓; {} presses + {} to correct = {} to the right text, against {} without predictions ({:+.1}%)",
         t.failures.len(),
         t.words,
         100.0 * t.failures.len() as f64 / t.words as f64,
         t.char_errors,
         t.chars,
-        t.hanja_picked,
         t.arrows,
         t.presses,
         t.corrections,
@@ -58,19 +52,18 @@ fn summary(name: &str, t: &Trusting) -> String {
 
 #[test]
 fn owner_texts_typed_trusting_the_predictions() {
-    let (p, d) = (predictor(), dictionary());
+    let p = predictor();
     for &(file, max) in MAX_FAILURES {
         let text = std::fs::read_to_string(format!("{}/tests/corpora-en-ko/{file}", env!("CARGO_MANIFEST_DIR"))).unwrap();
-        let rules = type_trusting(&text, p.clone(), Some(d.clone()), Ranker::Rules);
+        let rules = type_trusting(&text, p.clone(), Ranker::Rules);
         eprintln!("\n{}", summary(&format!("{file} (rules)"), &rules));
         for f in &rules.failures {
             eprintln!("  ✗ {:24} → {:24} [{}]  shown: {}", f.want, f.got, f.keys, f.list.join(" · "));
         }
         for (name, ranker) in [("travel", Ranker::Travel(Effort::default())), ("route", Ranker::Route(Preference::default()))] {
-            eprintln!("{}", summary(&format!("{file} ({name})"), &type_trusting(&text, p.clone(), Some(d.clone()), ranker)));
+            eprintln!("{}", summary(&format!("{file} ({name})"), &type_trusting(&text, p.clone(), ranker)));
         }
         assert!(rules.failures.len() <= max, "{file}: {} failures, at most {max} allowed", rules.failures.len());
-        assert!(rules.hanja_on_top.is_empty(), "{file}: hanja ranked first for {:?}", rules.hanja_on_top);
     }
 }
 
@@ -96,20 +89,19 @@ fn extended() -> Vec<(String, String)> {
 
 #[test]
 fn ai_extended_texts_weigh_less() {
-    let (p, d) = (predictor(), dictionary());
+    let p = predictor();
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/corpora-en-ko/");
     let human: Vec<Trusting> = MAX_FAILURES
         .iter()
-        .map(|(file, _)| type_trusting(&std::fs::read_to_string(format!("{dir}{file}")).unwrap(), p.clone(), Some(d.clone()), Ranker::Rules))
+        .map(|(file, _)| type_trusting(&std::fs::read_to_string(format!("{dir}{file}")).unwrap(), p.clone(), Ranker::Rules))
         .collect();
     let (mut ai_words, mut ai_failures) = (0, 0);
     for (name, text) in extended() {
-        let t = type_trusting(&text, p.clone(), Some(d.clone()), Ranker::Rules);
+        let t = type_trusting(&text, p.clone(), Ranker::Rules);
         eprintln!("{}", summary(&format!("{name} (rules)"), &t));
         for f in &t.failures {
             eprintln!("  ✗ {:24} → {:24} [{}]  shown: {}", f.want, f.got, f.keys, f.list.join(" · "));
         }
-        assert!(t.hanja_on_top.is_empty(), "{name}: hanja ranked first for {:?}", t.hanja_on_top);
         ai_words += t.words;
         ai_failures += t.failures.len();
     }
@@ -126,27 +118,28 @@ fn ai_extended_texts_weigh_less() {
 /// for doubles, two keys for compound vowels), and mixes of the valid ways per syllable (의 as 9,
 /// d9 or dml; 당신이 as ekdtlsL, ekdtlsll or ekdtlsdl). Failed words allowed in extended/ per
 /// style, with the default ranker; the owner's texts allow none in any style.
+/// Without the hanja dictionary (2026-11-02) Sino-Korean words it knew (인재, 응대, 여의도) no longer
+/// count as known words, so the rules lose a few more Shift+vowel starts (Mixed(1) 5 → 8, Mixed(3) 4 → 5).
 #[cfg(feature = "legacy-predict")]
-const STYLES: &[(Style, usize)] = &[(Style::EveryJamo, 1), (Style::Mixed(1), 5), (Style::Mixed(2), 5), (Style::Mixed(3), 4)];
+const STYLES: &[(Style, usize)] = &[(Style::EveryJamo, 1), (Style::Mixed(1), 8), (Style::Mixed(2), 5), (Style::Mixed(3), 5)];
 /// The learned ranker (spec §10.13), tighter where it does better.
 #[cfg(not(feature = "legacy-predict"))]
 const STYLES: &[(Style, usize)] = &[(Style::EveryJamo, 1), (Style::Mixed(1), 4), (Style::Mixed(2), 4), (Style::Mixed(3), 4)];
 
 #[test]
 fn every_typing_style_works() {
-    let (p, d) = (predictor(), dictionary());
+    let p = predictor();
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/corpora-en-ko/");
     let owner: String = MAX_FAILURES.iter().map(|(f, _)| std::fs::read_to_string(format!("{dir}{f}")).unwrap()).collect::<Vec<_>>().join("\n");
     let ai: String = extended().into_iter().map(|(_, t)| t).collect::<Vec<_>>().join("\n");
     for &(style, max_ai) in STYLES {
-        let o = type_text(&owner, p.clone(), Some(d.clone()), Ranker::Rules, style, false, None).0;
-        let a = type_text(&ai, p.clone(), Some(d.clone()), Ranker::Rules, style, false, None).0;
+        let o = type_text(&owner, p.clone(), Ranker::Rules, style, false, None).0;
+        let a = type_text(&ai, p.clone(), Ranker::Rules, style, false, None).0;
         eprintln!("{style:?}: owner's texts {}/{} failed, AI-extended {}/{}", o.failures.len(), o.words, a.failures.len(), a.words);
         for f in o.failures.iter().chain(&a.failures) {
             eprintln!("  ✗ {:24} → {:24} [{}]", f.want, f.got, f.keys);
         }
         assert!(o.failures.is_empty(), "{style:?}: the owner's texts failed {:?}", o.failures.iter().map(|f| &f.want).collect::<Vec<_>>());
         assert!(a.failures.len() <= max_ai, "{style:?}: {} AI-extended failures, at most {max_ai}", a.failures.len());
-        assert!(o.hanja_on_top.is_empty() && a.hanja_on_top.is_empty());
     }
 }

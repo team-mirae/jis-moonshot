@@ -13,6 +13,7 @@
 namespace jk {
 namespace {
 
+#ifdef JK_PREDICT
 struct Bytes {
     const std::uint8_t* data = nullptr;
     size_t size = 0;
@@ -26,9 +27,6 @@ Bytes Resource(int id) {
     return {static_cast<const std::uint8_t*>(LockResource(handle)), SizeofResource(DllInstance(), info)};
 }
 
-std::once_flag g_dict_once;
-JkDict* g_dict = nullptr;
-#ifdef JK_PREDICT
 std::once_flag g_predictor_once;
 JkPredictor* g_predictor = nullptr;
 #endif
@@ -72,28 +70,13 @@ void Preload() {
 #ifdef JK_PREDICT
     static std::once_flag once;
     std::call_once(once, [] {
-        // Predictions are always on (docs/moonshot.md §6), and the dictionary is part of
-        // predicting (hanja readings, the learned ranker). In a program excluded from predictions
-        // it's parsed at the first F7 instead: 50 MB of text, about 100 ms, not in every process.
+        // Predictions are always on (docs/moonshot.md §6). A program excluded from predictions
+        // never parses the model.
         RunInBackground([] {
-            if (settings::AppPredicting(settings::ExeName())) {
-                SharedPredictor();
-                SharedDictionary();
-            }
+            if (settings::AppPredicting(settings::ExeName())) SharedPredictor();
         });
     });
 #endif
-}
-
-const JkDict* SharedDictionary() {
-    std::call_once(g_dict_once, [] {
-        const ULONGLONG start = GetTickCount64();
-        const Bytes tsv = Resource(IDR_HANJA);
-        if (tsv.data) g_dict = jk_dict_new(tsv.data, tsv.size);
-        if (!g_dict) log::Write(L"hanja dictionary unavailable");
-        log::Write(L"hanja dictionary loaded in %llu ms", GetTickCount64() - start);
-    });
-    return g_dict;
 }
 
 #ifdef JK_PREDICT
@@ -151,8 +134,6 @@ const JkPredictor* SharedPredictor() {
 void ReleaseSharedData() {
     // DLL unload: no engine is left (DllCanUnloadNow) and no background job runs (it holds a
     // module reference until it has returned).
-    if (g_dict) jk_dict_free(g_dict);
-    g_dict = nullptr;
 #ifdef JK_PREDICT
     if (g_predictor) jk_predictor_free(g_predictor);
     g_predictor = nullptr;

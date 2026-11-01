@@ -1,16 +1,16 @@
 //! Finds easy key sequences that type real Korean words: short runs on the number row (the
 //! dedicated keys: 98 → 의외, 09 → 와의, 675 → 위웠), on the home row, or both. Each is typed
-//! through the engine; a word counts when the corpus lexicon has seen it (count ≥ 20) or it's a
-//! hanja-dictionary word. Writes docs/easy-words.md.
+//! through the engine; a word counts when the corpus lexicon has seen it (count ≥ 20). Writes
+//! docs/easy-words.md.
 //! Usage: cargo run --release --example easy
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::sync::Arc;
 
-use jis_korean::predict::{Kind, Predictor};
+use jis_korean::predict::Predictor;
 use jis_korean::travel::travel;
-use jis_korean::{Dictionary, Engine, Key, Mods};
+use jis_korean::{Engine, Key, Mods};
 
 const MIN_COUNT: u32 = 20;
 
@@ -27,7 +27,6 @@ fn main() {
     let read = |f: &str| std::fs::read_to_string(format!("{root}/predict/{f}")).unwrap();
     let model = std::fs::read(format!("{root}/predict/ranker.bin")).unwrap();
     let predictor = Arc::new(Predictor::parse(&model, &read("common-en.txt"), &read("common-ko.txt"), &read("english-nouns.txt")).unwrap());
-    let dictionary = Arc::new(Dictionary::parse(&std::fs::read_to_string(format!("{root}/dict/hanja.tsv")).unwrap()));
     // Korean words with their counts in the corpora (hand-written ones count as common).
     let counts: HashMap<String, u32> = read("common-ko.txt")
         .lines()
@@ -55,7 +54,7 @@ fn main() {
         "Short runs of keys on the number row (JIS Korean's dedicated keys) and the home row that type real words, \
         thanks to the dedicated keys and the implied ㅇ: `98` is 의외, `09` is 와의, `675` is 위웠. Keys are the \
         letters and digits on the keys, no Shift. A word counts when the corpus lexicon has seen it at least \
-        {MIN_COUNT} times or it's in the hanja dictionary (marked *dictionary*). **Top** is whether it's the top \
+        {MIN_COUNT} times. **Top** is whether it's the top \
         prediction when typed alone. Travel is finger travel in key widths (`engine/src/travel.rs`).\n"
     )
     .unwrap();
@@ -80,7 +79,6 @@ fn main() {
                 || (ks.chars().any(|c| c.is_ascii_digit()) && ks.chars().any(|c| c.is_ascii_alphabetic()));
             if mixed_ok && !seen.contains(&ks) {
                 let mut e = Engine::new();
-                e.set_dictionary(dictionary.clone());
                 let presses: Vec<Key> = ks
                     .chars()
                     .map(|c| Key::from_code(&if c.is_ascii_digit() { format!("Digit{c}") } else { format!("Key{}", c.to_ascii_uppercase()) }))
@@ -90,10 +88,9 @@ fn main() {
                 }
                 let word = e.preedit();
                 let count = counts.get(&word).copied().unwrap_or(0);
-                let in_dictionary = word.chars().count() >= 2 && !dictionary.lookup(&word).is_empty();
-                if syllables(&word) && (count >= MIN_COUNT || in_dictionary) {
+                if syllables(&word) && count >= MIN_COUNT {
                     e.set_predictor(Some(predictor.clone()));
-                    let top = e.predictions().first().is_some_and(|p| p.text == word && p.kind != Kind::Hanja);
+                    let top = e.predictions().first().is_some_and(|p| p.text == word);
                     found.push(Found { keys: ks.clone(), word, count, travel: travel(presses), top });
                     seen.insert(ks);
                 }
@@ -128,7 +125,7 @@ fn main() {
         writeln!(out, "## {title}\n\n{about} {} found; {} shown.\n", found.len(), shown.len()).unwrap();
         writeln!(out, "| Keys | Word | Seen in corpora | Top | Travel |\n|---|---|---|---|---|").unwrap();
         for f in shown {
-            let seen_in = if f.count >= MIN_COUNT { f.count.to_string() } else { "*dictionary*".to_string() };
+            let seen_in = f.count.to_string();
             writeln!(out, "| `{}` | {} | {} | {} | {:.1} |", f.keys, f.word, seen_in, if f.top { "✓" } else { "" }, f.travel).unwrap();
         }
         writeln!(out).unwrap();

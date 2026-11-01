@@ -123,7 +123,6 @@ LAYOUTS_TO    := $(HOME)/Library/Keyboard Layouts
 
 # --- bundle
 
-DICT    := $(ENGINE)/dict
 PREDICT_FILES := $(ENGINE)/predict/ranker.bin $(ENGINE)/predict/common-en.txt $(ENGINE)/predict/common-ko.txt \
                  $(ENGINE)/predict/common-ja.txt $(ENGINE)/predict/kanji.bin $(ENGINE)/predict/LICENSE-mozc.txt \
                  $(ENGINE)/predict/english-nouns.txt $(ENGINE)/predict/LICENSE-wordnet.txt \
@@ -132,14 +131,13 @@ ifneq ($(LEGACY_PREDICT),1)
   PREDICT_FILES += $(ENGINE)/predict/learned.bin
 endif
 
-$(APP): $(BUILD)/JISMoonshot $(ICONS) Info.plist $(DICT)/hanja.tsv $(KEYLAYOUTS) \
+$(APP): $(BUILD)/JISMoonshot $(ICONS) Info.plist $(KEYLAYOUTS) \
        Resources/JISMoonshotKeyboardLayouts-Info.plist Resources/en.lproj/InfoPlist.strings Resources/ko.lproj/InfoPlist.strings
 	rm -rf $@
 	mkdir -p $@/Contents/MacOS $@/Contents/Resources
 	cp Info.plist $@/Contents/Info.plist
 	cp $(BUILD)/JISMoonshot $@/Contents/MacOS/JISMoonshot
 	cp $(ICONS) $@/Contents/Resources/
-	cp $(DICT)/hanja.tsv $(DICT)/LICENSE-libhangul-hanja.txt $(DICT)/LICENSE-unicode.txt $@/Contents/Resources/
 	cp $(KEYLAYOUTS) Resources/JISMoonshotKeyboardLayouts-Info.plist $@/Contents/Resources/
 	@# JIS English, Dvorak and Colemak (spec §3.6.2, §8.2.1): English input modes of this input
 	@# method, Roman script, so System Settings lists them under English and 英数 can select them.

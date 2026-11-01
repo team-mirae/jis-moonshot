@@ -189,12 +189,6 @@ uint32_t jk_resolve_keys_for_output(JkEngine *engine, const uint8_t *text, size_
 const uint8_t *jk_resolved_ptr(JkEngine *engine);
 size_t jk_resolved_len(JkEngine *engine);
 
-/* Hanja (F7). Parse the dictionary once and share it; engines keep their own reference. */
-typedef struct JkDict JkDict;
-JkDict *jk_dict_new(const uint8_t *tsv, size_t len); /* NULL if not UTF-8 */
-void jk_dict_free(JkDict *dict);
-void jk_set_dictionary(JkEngine *engine, const JkDict *dict);
-
 /* The open candidate list on the last result. Count 0 = no list. Show a page of
  * jk_candidate_page_size() around the selected one; keys 1-9 pick on that page. A selected index
  * equal to the count means none is selected (JIS English's press-and-hold list, spec §3.6.3). */
@@ -213,8 +207,8 @@ size_t jk_english_len(JkEngine *engine);
 /* Discards everything unconfirmed without committing it. */
 void jk_clear(JkEngine *engine);
 
-/* Key presses for a text on JIS Korean and on conventional 2-set (plan.rs; Shift counts as a
- * press, symbols off a layout's legends count 3). Uses the engine's hanja dictionary if set. */
+/* Key presses for a text on JIS Moonshot and on conventional 2-set (plan.rs; Shift counts as a
+ * press; symbols off a layout's legends, and hanja, count 3). */
 void jk_plan(JkEngine *engine, const uint8_t *text, size_t len);
 size_t jk_plan_jis(JkEngine *engine);
 size_t jk_plan_conventional(JkEngine *engine);
@@ -232,7 +226,7 @@ enum {
     JK_PREDICTION_ENGLISH_UPPER = 3,
     JK_PREDICTION_TWO_SET = 4,
     JK_PREDICTION_KOREAN_KEEP_FINALS = 5,
-    JK_PREDICTION_HANJA = 6,
+    /* 6 was JK_PREDICTION_HANJA: hanja are gone (docs/moonshot.md §5.1). */
     JK_PREDICTION_BARE_VOWELS = 7,
     JK_PREDICTION_MIXED = 8,
     JK_PREDICTION_IMPLIED_L = 9, /* an implied ㄹ after a ㄴ final: 전력 for 저녁 */
@@ -270,7 +264,7 @@ enum {
     JK_WEIGHT_MIXED = 3,
     JK_WEIGHT_TWO_SET = 4,
     JK_WEIGHT_KEEP_FINALS = 5,
-    JK_WEIGHT_HANJA = 6,
+    JK_WEIGHT_HANJA = 6,     /* retired: no reading uses it; kept so the ids after it stay */
     JK_WEIGHT_IMPLIED_L = 7, /* 0 turns it off */
     JK_WEIGHT_KANA = 8,      /* the kana reading; 0 turns it off */
 };

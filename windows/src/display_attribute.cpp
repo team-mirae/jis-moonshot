@@ -16,8 +16,8 @@ struct AttributeSpec {
     TF_DA_ATTR_INFO info;
 };
 
-// Unconfirmed text: a solid underline, as on macOS. A reading shown in its place (a hanja
-// candidate, a prediction): a thick one. Colors are the app's (TF_CT_NONE).
+// Unconfirmed text: a solid underline, as on macOS. A reading shown in its place (a
+// prediction): a thick one. Colors are the app's (TF_CT_NONE).
 constexpr AttributeSpec kAttributes[] = {
     {&kDisplayAttributeInput, L"JIS Moonshot unconfirmed text", TF_LS_SOLID, FALSE, TF_ATTR_INPUT},
     {&kDisplayAttributeConverted, L"JIS Moonshot reading shown", TF_LS_SOLID, TRUE,

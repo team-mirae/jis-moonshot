@@ -38,7 +38,6 @@ $cases = @(
     @('F7: the staged keys as katakana', 0, 0, 'KeyG KeyK KeyS F7', 'キノト'),
     @('変換 in JIS Kana: back to Mode A, forced Korean', 0, 0, 'KeyG KeyK KeyS F6 Convert Space', '한 '),
     @('無変換 commits, ABC types English, 変換 back to 한글', 0, 0, 'KeyG KeyK KeyS NonConvert KeyG Convert KeyG KeyK Space', '한g하 '),
-    @('Shift+F7 hanja, Enter picks', 0, 0, 'KeyG KeyK KeyR KeyR KeyY S-F7 Enter Space', '學校 '),
     @('Mode A slot keys: @ key → ㅡㄹ (을)', 0, 0, 'BracketLeft Space', '을 '),
     @('한/영: ABC types English, back to 한글', 0, 0, 'KeyG KeyK Hangul KeyG KeyK Space Hangul KeyG KeyK Space', '하gk 하 '),
     @('predictions: hello', 0, 1, 'KeyH KeyE KeyL KeyL KeyO Space', 'hello '),

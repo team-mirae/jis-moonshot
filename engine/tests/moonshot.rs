@@ -267,18 +267,6 @@ fn option_brackets_type_guillemets_in_english() {
     assert!(!e.key(Key::BracketRight, Mods { alt: true, shift: true, ..Mods::NONE }).consumed);
 }
 
-#[test]
-fn the_hanja_list_moved_to_shift_f8() {
-    let dict = jis_korean::Dictionary::parse(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap());
-    let mut e = Engine::new();
-    e.set_dictionary(std::sync::Arc::new(dict));
-    press(&mut e, "KeyR KeyK KeyR KeyY");
-    assert!(e.key(Key::F7, Mods::SHIFTED).candidates.is_none(), "Shift+F7 is reserved");
-    let out = e.key(Key::F8, Mods::SHIFTED);
-    assert!(out.candidates.is_some(), "{out:?}");
-    assert_eq!(e.mode(), Mode::A);
-}
-
 #[cfg(feature = "predict")]
 mod predictions {
     use std::sync::Arc;
