@@ -166,8 +166,10 @@ int main() {
     Check((Type(0, {{0x5A, 0x2C, true}, k}, &preedit), preedit == "카"), "Shift+Z K → 카");
     // Number row: 1 → ㅃ.
     Check((Type(0, {{0x31, 0x02}}, &preedit), preedit == "ㅃ"), "1 → ㅃ");
-    // Mode A: the @ key (US [) is ' (spec §3.2).
-    Check((Type(0, {{0xDB, 0x1A}}, &preedit), preedit == "'"), "Mode A @ → '");
+    // Mode A: the @ key (US [) types ㅡㄹ, 을 on its own (docs/moonshot.md §9.2).
+    Check((Type(0, {{0xDB, 0x1A}}, &preedit), preedit == "을"), "Mode A @ → 을");
+    // The key left of 1 (the HHKB's ` key; 半角/全角 on a full JIS board) types ` (spec §3.6).
+    Check((Type(0, {{0xC0, 0x29}}, &preedit), preedit == "`"), "Mode A ` → `");
     // The modes (docs/moonshot.md §2): A, the three JIS English modes and JIS Kana. Ids have gaps:
     // the menu lists them by index; the retired 1, 2, 9, 10 and unknown ids are refused, which the
     // shell turns into Mode A (SetMode).

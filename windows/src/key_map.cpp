@@ -26,7 +26,7 @@ struct ScanTable {
                                       JK_KEY_KEYG, JK_KEY_KEYH, JK_KEY_KEYJ, JK_KEY_KEYK,
                                       JK_KEY_KEYL, JK_KEY_SEMICOLON, JK_KEY_QUOTE};
         for (int i = 0; i < 11; ++i) keys[0x1E + i] = a_row[i];
-        keys[0x29] = JK_KEY_BACKQUOTE;  // US `; on JIS the 半角/全角 key, which Mode A passes on
+        keys[0x29] = JK_KEY_BACKQUOTE;  // US `; on JIS the 半角/全角 key; types ` ~ (spec §3.6)
         keys[0x2B] = JK_KEY_BACKSLASH;  // US \; JIS ]
         const std::uint8_t z_row[] = {JK_KEY_KEYZ, JK_KEY_KEYX, JK_KEY_KEYC,  JK_KEY_KEYV,
                                       JK_KEY_KEYB, JK_KEY_KEYN, JK_KEY_KEYM,  JK_KEY_COMMA,
