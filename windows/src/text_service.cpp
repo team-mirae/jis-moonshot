@@ -571,7 +571,8 @@ void TextService::HandleKey(ITfContext* context, unsigned vk, std::uint32_t key,
                             std::uint32_t mods, BOOL* eaten) {
     Settle();  // a queued session's refusal, before the engine sees the next key
     CheckOrphan();
-    if (key == JK_KEY_F7) EnsureDictionary();  // the first F7 in this program parses it
+    // The hanja list (Shift+F8, docs/moonshot.md §4): the first one in this program parses it.
+    if (key == JK_KEY_F8 && (mods & JK_MOD_SHIFT)) EnsureDictionary();
 #ifdef JK_PREDICT
     if (HandleList(context, vk, key, mods)) {
         *eaten = TRUE;

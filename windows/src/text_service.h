@@ -124,7 +124,7 @@ private:
     void ApplySettings(bool force = false);  // unless forced, only when settings::Version changed
     void Activated();  // settings, then a changed training file (spec §10.12)
     void EnsureData();  // the predictor, before the first key
-    void EnsureDictionary();  // the hanja dictionary: at the first F7, or with predictions
+    void EnsureDictionary();  // the hanja dictionary: at the first Shift+F8, or with predictions
     void SetMode(unsigned mode);  // by engine id; one the engine refuses (1, 2, 9, 10): Mode A
 
 #ifdef JK_PREDICT

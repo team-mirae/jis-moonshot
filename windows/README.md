@@ -212,7 +212,7 @@ What the shell does differently from what TSF's documentation suggests, and why,
 | `src/candidate_window.*` | The hanja / prediction list |
 | `src/settings.*` | The registry settings, the consent value and the default-off apps |
 | `src/training.*`, `src/training_lines.*`, `src/json.*` | Training files (spec §10.12), applied off the UI thread; `training_lines` is unit-tested |
-| `src/shared_data.*` | The dictionary and predictor (with `common-ja.txt`), parsed once per process: off the UI thread unless predictions are excluded in the program, else the dictionary at the first F7 |
+| `src/shared_data.*` | The dictionary and predictor (with `common-ja.txt`), parsed once per process: off the UI thread unless predictions are excluded in the program, else the dictionary at the first Shift+F8 |
 | `src/edit_session.*` | TSF edit sessions, the only way to change the document |
 | `src/log.*` | The diagnostic log (`DiagnosticLog`) |
 | `src/registration.*`, `src/dllmain.cpp` | COM and TSF registration (`regsvr32`) |
