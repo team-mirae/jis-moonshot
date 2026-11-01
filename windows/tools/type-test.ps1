@@ -20,6 +20,8 @@ if (-not (Test-Path $appKey)) { New-Item $appKey -Force | Out-Null }
 
 # name, Mode (0 A, 11 JIS Kana), Predictions, keys, expected text in the control[, EnglishMode:
 # ABC's layout id, 'unset' for the default (JIS English), 'windows' for Windows' own]
+# Cases end committed: classic controls (edit, rich) hold only the first character of an open
+# composition (docs/troubleshooting/windows-tsf-notes.md).
 $cases = @(
     @('한글 안녕 (Space commits)', 0, 0, 'KeyG KeyK KeyS KeyR KeyM KeyF Space KeyD KeyK KeyS KeyS KeyU KeyD Space', '한글 안녕 '),
     @('Enter commits, new line', 0, 0, 'KeyG KeyK KeyS Enter KeyG KeyK Space', "한`r`n하 "),
@@ -34,8 +36,8 @@ $cases = @(
     @('F10 → gks, F10 → GKS', 0, 0, 'KeyG KeyK KeyS F10 F10 Space', 'GKS '),
     @('Shift+Z is ㅋ', 0, 0, 'S-KeyZ KeyK Space', '카 '),
     @('F9 full width', 0, 0, 'KeyG KeyK KeyS F9 Space', 'ｇｋｓ '),
-    @('F6: the staged keys as hiragana', 0, 0, 'KeyG KeyK KeyS F6', 'きのと'),
-    @('F7: the staged keys as katakana', 0, 0, 'KeyG KeyK KeyS F7', 'キノト'),
+    @('F6: the staged keys as hiragana', 0, 0, 'KeyG KeyK KeyS F6 Enter', 'きのと'),
+    @('F7: the staged keys as katakana', 0, 0, 'KeyG KeyK KeyS F7 Enter', 'キノト'),
     @('変換 in JIS Kana: back to Mode A, forced Korean', 0, 0, 'KeyG KeyK KeyS F6 Convert Space', '한 '),
     @('無変換 commits, ABC types English, 変換 back to 한글', 0, 0, 'KeyG KeyK KeyS NonConvert KeyG Convert KeyG KeyK Space', '한g하 '),
     @('Shift+F8 hanja, Enter picks', 0, 0, 'KeyG KeyK KeyR KeyR KeyY S-F8 Enter Space', '學校 '),
@@ -44,12 +46,12 @@ $cases = @(
     @('predictions: hello', 0, 1, 'KeyH KeyE KeyL KeyL KeyO Space', 'hello '),
     @('predictions: 한글 stays Korean', 0, 1, 'KeyG KeyK KeyS KeyR KeyM KeyF Space', '한글 '),
     @('predictions: Shift+Enter commits hello, no new line', 0, 1, 'KeyH KeyE KeyL KeyL KeyO S-Enter', 'hello'),
-    @('predictions: ` (Backquote, the HHKB key) types `', 0, 1, 'KeyH KeyE KeyL KeyL KeyO Backquote', 'hello`'),
+    @('predictions: ` (Backquote, the HHKB key) types `', 0, 1, 'KeyH KeyE KeyL KeyL KeyO Backquote Space', 'hello` '),
     @('predictions: Esc commits what is shown', 0, 1, 'KeyH KeyE KeyL KeyL KeyO Escape', 'hello'),
     @('predictions: Esc leaves a chosen row, Esc again commits', 0, 1, 'KeyH KeyE KeyL KeyL KeyO Tab Tab Escape Escape', 'hello'),
     @('predictions: ↓ ↓ ↑ and Tab Tab Shift+Tab move through the list', 0, 1, 'KeyH KeyE KeyL KeyL KeyO ArrowDown ArrowDown ArrowUp Space KeyH KeyE KeyL KeyL KeyO Tab Tab S-Tab Space', 'hello hello '),
     @('a retired mode (Mode B) is Mode A', 1, 0, 'KeyG KeyK KeyS Space', '한 '),
-    @('JIS Kana from the menu (Mode 11)', 11, 0, 'KeyG KeyK KeyS', 'きのと'),
+    @('JIS Kana from the menu (Mode 11)', 11, 0, 'KeyG KeyK KeyS Enter', 'きのと'),
     @('ABC in Mode A: JIS English (default)', 0, 0, 'Hangul KeyG S-Digit2 BracketLeft Hangul', 'g"@', 'unset'),
     @('ABC: JIS Dvorak', 0, 0, 'Hangul KeyS KeyD KeyF S-KeyJ Hangul', 'oeuH', 7),
     @('ABC: Windows layout passes keys', 0, 0, 'Hangul KeyG S-Digit2 Hangul', 'g@', 'windows'),

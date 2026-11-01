@@ -251,6 +251,10 @@ show the password in other forms. JIS Moonshot protects it in layers:
   measured yet (#9, P4).
 - Apps that end the composition at every key through the IMM layer still get loose jamo; TSF-native
   ones keep composing (#6, [windows-tsf-notes.md](../docs/troubleshooting/windows-tsf-notes.md)).
+- Classic Win32 controls (through the IMM layer: the Run dialog, older programs' text boxes) show
+  only the first character of what's being typed (きのと shows き, hello shows h) until it
+  commits; what commits is whole. TSF-native apps show all of it
+  ([windows-tsf-notes.md](../docs/troubleshooting/windows-tsf-notes.md)).
 - Store apps that run sandboxed (AppContainer: Store apps, the Start menu's search) read the
   settings only because JIS Moonshot grants ALL APPLICATION PACKAGES read access on
   `HKCU\Software\JIS Moonshot` (at its first write or consent check in an ordinary program):
