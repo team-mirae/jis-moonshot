@@ -156,7 +156,7 @@ letter variants of the letter it types.
 
 - `docs/spec.md` §3.6 (and `docs/moonshot.md` while it leads the spec): a row in the modes table
   and the mode's key table.
-- `docs/layout/jis-korean-layouts.html`: a section with the mode's board, built from its tables in
+- `docs/layout/jis-moonshot-layouts.html`: a section with the mode's board, built from its tables in
   the page's script (Mode A's keys are reused, the untouched keys use `stock(…)`). Re-render the
   PNGs (light and dark, 3×). The drawing still shows JIS Korean's layouts (Shift+Z as F10, Modes B
   and C).

@@ -262,7 +262,7 @@ used for the app and the mode badges.
 ## 9. Mode A without symbols (planned)
 
 Status: **planned, not built** (2026-11-02). Nothing in `/engine` does this yet; the drawing is in
-`docs/layout/jis-korean-layouts.html` (piece `moonshot`). When it's built, the core principle in
+`docs/layout/jis-moonshot-layouts.html` (piece `mode-a`). When it's built, the core principle in
 `CLAUDE.md` and spec §1, spec §3's key map and the baseline (`engine/tests/baseline.rs`) change in
 the same change: it breaks standard 2-set on Shift+Q W E R T O P.
 

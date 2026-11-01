@@ -2,7 +2,7 @@
 
     python3 -I docs/layout/social.py    # social-preview-{light,dark}.png next to this file
 
-The keys come from jis-korean-layouts.html (its styles and its key tables), so the preview can't
+The keys come from jis-moonshot-layouts.html (its styles and its key tables), so the preview can't
 drift from the drawing. Needs Google Chrome (CHROME overrides the path).
 """
 
@@ -13,8 +13,8 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PAGE = HERE / "jis-korean-layouts.html"
-LOGO = {"light": HERE.parent / "logo" / "taegeuk.svg", "dark": HERE.parent / "logo" / "taegeuk-dark.svg"}
+PAGE = HERE / "jis-moonshot-layouts.html"
+LOGO = {"light": HERE.parent / "logo" / "moonshot.svg", "dark": HERE.parent / "logo" / "moonshot-dark.svg"}
 CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 WIDTH, HEIGHT = 1280, 640
 
@@ -41,11 +41,11 @@ def build(theme: str) -> str:
 <div class="social">
   <div class="brand">
     {logo}
-    <div><h1>JIS Korean</h1><p>Korean 2-set (두벌식) for JIS keyboards</p></div>
+    <div><h1>JIS Moonshot</h1><p>Korean, English and kana from one JIS keyboard</p></div>
   </div>
   <div class="board"><div class="plate" id="board-a"></div></div>
 </div>
-<div class="hidden-boards"><div id="board-moonshot"></div><div id="board-b-hhkb"></div><div id="board-b-mac"></div><div id="board-c"></div></div>
+<div class="hidden-boards"><div id="board-kana"></div></div>
 {script}
 </body>
 </html>"""

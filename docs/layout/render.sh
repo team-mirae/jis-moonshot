@@ -1,17 +1,17 @@
 #!/bin/sh
-# Renders jis-korean-layouts.html to PNGs at 3x with headless Google Chrome, in light and dark.
+# Renders jis-moonshot-layouts.html to PNGs at 3x with headless Google Chrome, in light and dark.
 #
-#   ./render.sh                    the whole drawing: jis-korean-layouts-{light,dark}.png (the README's)
+#   ./render.sh                    the whole drawing: jis-moonshot-layouts-{light,dark}.png
 #   ./render.sh title mode-a ...   pieces: pieces/<piece>-{light,dark}.png
 #   ./render.sh all                the whole drawing and every piece
 #
-# Pieces: title, moonshot, mode-a, mode-b, mode-c, footer (the data-piece attributes in the page).
+# Pieces: title, mode-a, kana, footer (the data-piece attributes in the page).
 # CHROME overrides the browser path.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 chrome=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
-page="$here/jis-korean-layouts.html"
-pieces="title moonshot mode-a mode-b mode-c footer"
+page="$here/jis-moonshot-layouts.html"
+pieces="title mode-a kana footer"
 width=940
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -37,7 +37,7 @@ render() {
 for p in "$@"; do
   case " whole $pieces " in *" $p "*) ;; *) echo "unknown piece: $p (whole, all, $pieces)" >&2; exit 1 ;; esac
   if [ "$p" = whole ]; then
-    render "" "$here/jis-korean-layouts"
+    render "" "$here/jis-moonshot-layouts"
   else
     mkdir -p "$here/pieces"
     render "$p" "$here/pieces/$p"
