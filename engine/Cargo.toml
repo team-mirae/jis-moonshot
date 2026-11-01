@@ -53,3 +53,7 @@ required-features = ["predict"]
 [[example]]
 name = "moonshot_probe"
 required-features = ["predict"]
+
+[[example]]
+name = "first_key"
+required-features = ["predict"]
