@@ -243,6 +243,9 @@ h1 {
 }
 
 .key.sym .base { font-size: calc(var(--u) * 0.28); }
+.key .base.long { font-size: calc(var(--u) * 0.24); }
+/* JIS Moonshot: Shift that differs from JIS Korean (and from standard 2-set). */
+.key.changed { box-shadow: inset 0 calc(var(--u) * -0.06) 0 var(--cap-edge), inset 0 0 0 1.5px var(--legend-shift); }
 .key.stock .base { font-size: calc(var(--u) * 0.22); }
 .key.wide { width: calc(var(--u) * 1.5 - var(--gap)); height: calc(var(--u) - var(--gap)); aspect-ratio: auto; }
 
@@ -347,6 +350,7 @@ h1 {
 
 .swatch i.sym { background: var(--cap-sym); }
 .swatch i.fn { background: var(--cap-fn); }
+.swatch i.changed { box-shadow: inset 0 -2px 0 var(--cap-edge), inset 0 0 0 1.5px var(--legend-shift); }
 .swatch i.stock { background: transparent; box-shadow: none; outline: 1px solid var(--cap-open); outline-offset: -1px; }
 
 kbd {
@@ -372,8 +376,33 @@ footer {
 <main>
   <header data-piece="title">
     <h1>JIS Korean layouts</h1>
-    <p class="lede">Korean 2-set (두벌식) for JIS keyboards, in Mode B for US ANSI and in Mode C for UK ISO. Every standard 2-set key still types what it always did; the extra keys add double consonants, compound vowels, Korean punctuation and F6–F10 conversions.</p>
+    <p class="lede">Korean 2-set (두벌식) for JIS keyboards, in Mode B for US ANSI and in Mode C for UK ISO. Every standard 2-set key still types what it always did; the extra keys add double consonants, compound vowels, Korean punctuation and F6–F10 conversions. JIS Moonshot's planned Mode A comes first.</p>
   </header>
+
+  <section class="mode" aria-labelledby="mode-moonshot" data-piece="moonshot">
+    <div class="mode-head">
+      <span class="eyebrow">JIS Moonshot</span>
+      <h2 id="mode-moonshot">Mode A, symbols out</h2>
+      <span class="subtitle">Built for JIS</span>
+      <span class="chip open">Planned: not built yet</span>
+    </div>
+    <div class="board"><div class="plate" id="board-moonshot" role="img" aria-label="JIS Moonshot Mode A key map (planned)"></div></div>
+    <div class="swatches">
+      <span class="swatch"><i></i>2-set letter keys</span>
+      <span class="swatch"><i class="sym"></i>Number row and the 12 keys right of 0 (24 slots)</span>
+      <span class="swatch"><i class="changed"></i>Shift changed from JIS Korean</span>
+      <span class="swatch"><i class="fn"></i>Function keys</span>
+      <span>Lower legend: the key alone. Upper legend: with Shift (none: the same). Corner: the JIS key cap.</span>
+    </div>
+    <dl class="notes">
+      <div><dt>゛ real ㅇ</dt><dd>The ㅇ is typed as an initial, so the action starts its own syllable: 말 + 왜゛ → 말왜. Shift+vowel was always this (아゛).</dd></div>
+      <div><dt>゜ syllable break</dt><dd>Ends the syllable with no final: the next consonant starts a syllable and a vowel gets an implied ㅇ. 갈 + ゜ + ㅏ → 갈아, not 가라.</dd></div>
+      <div><dt>Bare vowels</dt><dd>Written without ㅇ (ㅙ ㅖ ㅢ): they join the consonant before them, ㄷ + ㅙ → 돼, and take the usual implied ㅇ with nothing before them.</dd></div>
+      <div><dt>Syllables and finals</dt><dd>다 도 나 니 무 부 메 로 type their two jamo (하 + 다 → 하다); ㅡㄹ and ㅂㅅ likewise (어 + ㅂㅅ → 없). 로゜ is 로 then a break.</dd></div>
+      <div><dt>Shift+Q W E R T · Shift+O P</dt><dd>ㅂ ㅈ ㄷ ㄱ ㅅ again (ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5), and ㅔ゜ ㅖ゜ (ㅒ ㅖ moved to : and ;). This breaks standard 2-set on those keys.</dd></div>
+      <div><dt>Symbols</dt><dd>None left in Mode A but , . · on Shift. Symbols come from 無変換 (English), ー from the kana reading (F6 / F7), and ⌥ , . / [ ] still type 、。・『』.</dd></div>
+    </dl>
+  </section>
 
   <section class="mode" aria-labelledby="mode-a" data-piece="mode-a">
     <div class="mode-head">
@@ -447,7 +476,7 @@ footer {
     </dl>
   </section>
 
-  <footer data-piece="footer">From docs/spec.md §3 (key map), §3.6 (modes) and §6 (function keys).</footer>
+  <footer data-piece="footer">From docs/spec.md §3 (key map), §3.6 (modes) and §6 (function keys); JIS Moonshot from docs/moonshot.md §9.</footer>
 </main>
 
 <script>
@@ -476,6 +505,34 @@ const A = {
       ["ㅋ", "반각", "Z"], ["ㅌ", null, "X"], ["ㅊ", null, "C"], ["ㅍ", null, "V"], ["ㅠ", null, "B"],
       ["ㅜ", null, "N"], ["ㅡ", null, "M"], [",", null, ",", "sym"], [".", null, ".", "sym"],
       ["·", null, "/", "sym"], ["\\", "_", "ろ", "sym"],
+    ] },
+  ],
+};
+
+// JIS Moonshot's planned Mode A (docs/moonshot.md §9). "changed": Shift differs from JIS Korean.
+const MOONSHOT = {
+  fn: [["F6", "ひらがな"], ["F7", "カタカナ"], ["F8", "漢字"], ["F9", "전각"], ["F10", "반각"]],
+  rows: [
+    { offset: 0, keys: [
+      ["ㅃ", "1", "1", "sym"], ["ㅉ", "2", "2", "sym"], ["ㄸ", "3", "3", "sym"], ["ㄲ", "4", "4", "sym"],
+      ["ㅆ", "5", "5", "sym"], ["ㅟ", "6", "6", "sym"], ["ㅝ", "7", "7", "sym"], ["ㅚ", "8", "8", "sym"],
+      ["ㅢ", "9", "9", "sym"], ["ㅘ", "0", "0", "sym"], ["ㅙ", "왜゛", "−", "sym"], ["다", "도", "^", "sym"],
+      ["나", "니", "¥", "sym"],
+    ] },
+    { offset: 0.5, keys: [
+      ["ㅂ", null, "Q", "changed"], ["ㅈ", null, "W", "changed"], ["ㄷ", null, "E", "changed"], ["ㄱ", null, "R", "changed"],
+      ["ㅅ", null, "T", "changed"], ["ㅛ", "요゛", "Y"], ["ㅕ", "여゛", "U"], ["ㅑ", "야゛", "I"],
+      ["ㅐ", "ㅔ゜", "O", "changed"], ["ㅔ", "ㅖ゜", "P", "changed"], ["ㅡㄹ", "을゛", "@", "sym"], ["゜", "゜", "[", "sym"],
+    ] },
+    { offset: 0.75, keys: [
+      ["ㅁ", null, "A"], ["ㄴ", null, "S"], ["ㅇ", null, "D"], ["ㄹ", null, "F"], ["ㅎ", null, "G"],
+      ["ㅗ", "오゛", "H"], ["ㅓ", "어゛", "J"], ["ㅏ", "아゛", "K"], ["ㅣ", "이゛", "L"],
+      ["ㅖ", "예゛", ";", "sym"], ["ㅒ", "얘゛", ":", "sym"], ["무", "부", "]", "sym"],
+    ] },
+    { offset: 1.25, keys: [
+      ["ㅋ", null, "Z"], ["ㅌ", null, "X"], ["ㅊ", null, "C"], ["ㅍ", null, "V"], ["ㅠ", "유゛", "B"],
+      ["ㅜ", "우゛", "N"], ["ㅡ", "으゛", "M"], ["ㅢ", ",", ",", "sym"], ["ㅂㅅ", ".", ".", "sym"],
+      ["메", "·", "/", "sym"], ["로", "로゜", "ろ", "sym"],
     ] },
   ],
 };
@@ -551,7 +608,7 @@ function draw(plate, layout) {
       const key = document.createElement("div");
       key.className = ["key", kind, (cap === "F" || cap === "J") && "home"].filter(Boolean).join(" ");
       if (shift && shift !== base) key.append(span("shifted", shift));
-      key.append(span("base", base));
+      key.append(span([...base].length > 1 ? "base long" : "base", base));
       if (!kind.startsWith("stock") && cap !== base && cap !== shift) key.append(span("latin", cap));
       key.title = cap + ": " + base + (shift && shift !== base ? ", Shift: " + shift : "");
       row.append(key);
@@ -560,12 +617,13 @@ function draw(plate, layout) {
   }
 }
 
+draw(document.getElementById("board-moonshot"), MOONSHOT);
 draw(document.getElementById("board-a"), A);
 draw(document.getElementById("board-b-hhkb"), B_HHKB);
 draw(document.getElementById("board-b-mac"), B_MAC);
 draw(document.getElementById("board-c"), C);
-// One piece of the drawing (render.sh sets data-piece on <html>): title, mode-a, mode-b, mode-c or
-// footer. The other pieces are hidden, so the page is that piece's height.
+// One piece of the drawing (render.sh sets data-piece on <html>): title, moonshot, mode-a, mode-b,
+// mode-c or footer. The other pieces are hidden, so the page is that piece's height.
 const piece = document.documentElement.dataset.piece;
 if (piece) {
   for (const el of document.querySelectorAll("main > [data-piece]")) el.hidden = el.dataset.piece !== piece;

@@ -18,6 +18,7 @@ ways. Where this file and `spec.md` disagree, this file wins until the spec is u
 | 7 | 英数 → English, カタカナ/F18 → Korean, かな left to macOS | 英数 / 無変換 → English, かな / 変換 → predictive (Mode A); again in Mode A → force Korean |
 | 8 | F6 commits Korean, F7 opens hanja; Shift+Z is F10 | **F6 → hiragana, F7 → katakana**, for the text being typed (`A_KANA` is the kana-only mode); **F8 → kanji**, **Shift+F8 → the hanja list**; F9/F10 as before. **Shift+Z is no longer F10**: it's ㅋ in Korean (standard 2-set again) and っ in kana |
 | 9 | Hanja show as predictions | **No hanja predictions**; the kana reading's **kanji conversions** join the predictions instead (§5.1) |
+| 10 | Symbols on the keys right of 0 (! ( — ' [ ~ : ] , . · \\), ㅃ ㅉ ㄸ ㄲ ㅆ ㅒ ㅖ on Shift | **Planned, not built (§9):** those 12 keys type syllables, compound vowels and finals instead (24 slots with Shift), and Shift on Q W E R T O P changes |
 
 Shift+Z was F10 in JIS Korean (F10 isn't reachable everywhere). In JIS Moonshot it types っ on the
 kana layout, so it's a key like any other: ㅋ (standard 2-set's Shift+Z), っ, or `Z`. The core
@@ -257,3 +258,65 @@ off. In those apps Mode A types forced Korean.
 The left half is the taegeuk, cut at the vertical midpoint; the right half is a solid half disc.
 A transparent gap as wide as the S separates them. Drawn by `docs/logo/make_logo.py` (`moonshot.svg`),
 used for the app and the mode badges.
+
+## 9. Mode A without symbols (planned)
+
+Status: **planned, not built** (2026-11-02). Nothing in `/engine` does this yet; the drawing is in
+`docs/layout/jis-korean-layouts.html` (piece `moonshot`). When it's built, the core principle in
+`CLAUDE.md` and spec §1, spec §3's key map and the baseline (`engine/tests/baseline.rs`) change in
+the same change: it breaks standard 2-set on Shift+Q W E R T O P.
+
+Mode A types three languages, so its symbol keys are better spent on Korean: symbols come from
+無変換 (English), ー from the kana reading (F6 / F7), and ⌥ `,` `.` `/` `[` `]` still type 、 。 ・ 『 』
+(§4). Every JIS Korean symbol leaves Mode A, with and without Shift, which frees the 12 keys right
+of 0 as 24 slots.
+
+### 9.1 Notation
+
+An action is a short run of 2-set jamo, typed as if those keys were pressed, with two marks
+borrowed from kana:
+
+| Mark | Meaning | Example |
+|---|---|---|
+| (none) | a bare vowel, written without ㅇ: it joins the consonant before it like a vowel key, and gets the usual implied ㅇ with nothing before it | ㄷ + ㅙ → 돼; 말 + ㅙ → 마뢔 |
+| ゛ | the ㅇ is real: typed as an initial, so the action starts its own syllable (what Shift+vowel already does, spec §4.2) | 말 + 왜゛ → 말왜 |
+| ゜ | ends the syllable with no final: the next consonant starts a syllable, and a vowel after it gets an implied ㅇ | 갈 + ゜ + ㅏ → 갈아 (not 가라) |
+
+### 9.2 The keys
+
+| Key | Alone | Shift | Was (JIS Korean) |
+|---|---|---|---|
+| `−` | ㅙ | 왜゛ | ! ? |
+| `^` | 다 | 도 | ( ) |
+| `¥` | 나 | 니 | — ^ |
+| `@` | ㅡㄹ | 을゛ | ' " |
+| `[` | ゜ | ゜ | [ 「 |
+| `;` | ㅖ | 예゛ | ~ - |
+| `:` | ㅒ | 얘゛ | : ; |
+| `]` | 무 | 부 | ] 」 |
+| `,` | ㅢ | , | , , |
+| `.` | ㅂㅅ | . | . . |
+| `/` | 메 | · | · · |
+| `ろ` | 로 | 로゜ | \ _ |
+
+Examples: 하 + `^` → 하다; 나 + Shift+`^` → 나도; ㄱ + `@` → 글, 마 + `@` → 마을; 책 + Shift+`@` → 책을;
+나 + `]` → 나무; 공 + Shift+`]` → 공부; 어 + `.` → 없; `/` ㅇ ㅣ ㄹ → 메일; 으 + `ろ` → 으로.
+
+The letter keys change on Shift only:
+
+- **Shift+Q W E R T** type ㅂ ㅈ ㄷ ㄱ ㅅ, as Shift+A types ㅁ. ㅃ ㅉ ㄸ ㄲ ㅆ stay on 1–5.
+- **Shift+O / Shift+P** type ㅔ゜ / ㅖ゜. ㅒ ㅖ moved to `:` and `;`. **[decide]** Shift+O as ㅔ゜
+  (as asked) or ㅐ゜ (its own vowel, like Shift+P).
+- Shift+vowel elsewhere is unchanged: 아゛ (a syllable on a real ㅇ).
+
+The number row, the other letter keys, F6–F10 and the switch keys stay as they are. The kana
+reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ there too).
+
+### 9.3 Open questions
+
+- **[decide]** Shift+O: ㅔ゜ or ㅐ゜ (above).
+- **[decide]** The kana reading counts the symbol keys as kana-only evidence (§5); once they type
+  Korean, that evidence needs another source.
+- **[decide]** What the English reading and F9 / F10 read for a slot key (its stock JIS character,
+  as now, or nothing).
+
