@@ -44,6 +44,8 @@ pub enum Kind {
     Katakana = 11,
     /// The kana reading converted to kanji (今日は for きょうは), docs/moonshot.md §5.1.
     Kanji = 12,
+    /// Korean with ㄶ where a ㄴ final met ㅋ, ㅌ or ㅊ (않고 for 안코 typed by sound).
+    Aspirated = 13,
 }
 
 impl Kind {
@@ -75,6 +77,9 @@ pub struct Readings {
     pub kept: Vec<String>,
     /// Korean with an implied ㄹ after a ㄴ final, one variant per place (전력 for 저녁).
     pub implied_l: Vec<String>,
+    /// Korean with ㄶ where a ㄴ final met ㅋ, ㅌ or ㅊ, one variant per place and one with all
+    /// (않고 for 안코).
+    pub aspirated: Vec<String>,
     /// The hanja form of the whole Korean reading, when it's a dictionary word of 2+ syllables.
     pub hanja: Option<String>,
     /// JIS Korean without the implied ㅇ.
@@ -315,6 +320,8 @@ pub enum Origin {
     /// One final kept before the vowel after it (산이 for 사니).
     Kept,
     ImpliedL,
+    /// ㄶ for ㄴ + ㅋ / ㅌ / ㅊ (않고 for 안코).
+    Aspirated,
     Hanja,
     /// An everyday hanja (§10.4: 2026年, 韓美).
     EverydayHanja,
@@ -1018,6 +1025,14 @@ impl Predictor {
                 let score = margin - ALTERNATIVE + self.lexicon_odds(readings, text) + w.bits(Weight::ImpliedL);
                 out.push(Prediction { text: text.clone(), kind: Kind::ImpliedL, score });
                 origins.push((Origin::ImpliedL, None));
+            }
+            // ㄶ for ㄴ + ㅋ / ㅌ / ㅊ (않고 for 안코), on the same slider: both spell what was heard.
+            // Ranked the same way, so a known word goes above the literal (않고 over 안코) and a
+            // literal word stays above it (만큼, not 많금).
+            for text in &readings.aspirated {
+                let score = margin - ALTERNATIVE + self.lexicon_odds(readings, text) + w.bits(Weight::ImpliedL);
+                out.push(Prediction { text: text.clone(), kind: Kind::Aspirated, score });
+                origins.push((Origin::Aspirated, None));
             }
         }
         // No hanja readings (docs/moonshot.md §5.1): they'd compete with the kanji conversions.
