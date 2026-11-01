@@ -5,13 +5,13 @@
 #   ./render.sh title mode-a ...   pieces: pieces/<piece>-{light,dark}.png
 #   ./render.sh all                the whole drawing and every piece
 #
-# Pieces: title, mode-a, kana, footer (the data-piece attributes in the page).
+# Pieces: title, mode-a, footer (the data-piece attributes in the page).
 # CHROME overrides the browser path.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 chrome=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
 page="$here/jis-moonshot-layouts.html"
-pieces="title mode-a kana footer"
+pieces="title mode-a footer"
 width=940
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

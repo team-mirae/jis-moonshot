@@ -45,7 +45,6 @@ def build(theme: str) -> str:
   </div>
   <div class="board"><div class="plate" id="board-a"></div></div>
 </div>
-<div class="hidden-boards"><div id="board-kana"></div></div>
 {script}
 </body>
 </html>"""
