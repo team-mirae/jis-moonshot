@@ -50,7 +50,7 @@ jobs:
         run: cargo test --release
       - name: Legacy build (predictions ranked by the rules alone, spec §10.13)
         run: cargo test --release --features legacy-predict
-      - name: Lite build (no predictions, no English modes: the engine still builds without them)
+      - name: "Lite build (no predictions, no English modes: the engine still builds without them)"
         run: cargo test --release --no-default-features
 
   windows:
