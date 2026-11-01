@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { Candidates, Counts, Engine, Mods, Output, Prediction, PredictionKind, RankerName, WeightName } from "./engine";
-import { WEIGHTS } from "./engine";
+import { JAPANESE_KINDS, WEIGHTS } from "./engine";
 import type { TrainingFile, TrainingSummary, WordLists } from "./training";
 import { check, learnExamples, wordLists } from "./training";
 import { ghost } from "./ghost";
@@ -550,12 +550,12 @@ export function App({ engine }: { engine: Engine }) {
             <dd>Hiragana / katakana: the staged keys read as kana until the next commit, then predictive again. With nothing staged, the next word is kana. In JIS Kana they switch its script for good.</dd>
           </div>
           <div>
-            <dt>Shift+F7 漢字</dt>
-            <dd>{hanjaReady ? "Hanja for the word you just typed. F7 or ↓ for the next, 1–9 to pick, Esc to go back. Hanja also show as predictions." : "Loading the hanja dictionary…"}</dd>
+            <dt>F8 漢字</dt>
+            <dd>Kanji: the kana reading's conversions on top until the next commit. With nothing staged, the next word converts. Kanji also show as predictions when a Japanese reading ranks in the top two.</dd>
           </div>
           <div>
-            <dt>F8</dt>
-            <dd>Reserved for future use: does nothing.</dd>
+            <dt>Shift+F8 한자</dt>
+            <dd>{hanjaReady ? "Hanja for the word you just typed. Shift+F8 again or ↓ for the next, 1–9 to pick, Esc to go back." : "Loading the hanja dictionary…"}</dd>
           </div>
           <div>
             <dt>F9 / F10</dt>
@@ -709,6 +709,7 @@ const KIND_LABELS: Record<PredictionKind, string> = {
   "implied-l": "ㄹ",
   kana: "かな",
   katakana: "カナ",
+  kanji: "漢字",
 };
 
 /** The predictive layer's ranked readings of the staged text, top one first. */
@@ -721,7 +722,8 @@ function PredictionList({ readings, label, onPick }: { readings: Prediction[]; l
           key={r.kind + r.text}
           role="option"
           aria-selected={i === 0}
-          className={"prediction" + (i === 0 ? " top" : "")}
+          className={"prediction" + (i === 0 ? " top" : "") + (JAPANESE_KINDS.includes(r.kind) ? " japanese" : "")}
+          lang={JAPANESE_KINDS.includes(r.kind) ? "ja" : undefined}
           onMouseDown={(e) => {
             e.preventDefault();
             onPick(i);

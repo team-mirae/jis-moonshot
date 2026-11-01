@@ -62,6 +62,9 @@ iPhone are out of scope.
 - Learned ranker: `python3 engine/tools/train_learned.py` regenerates its training data (typing the
   corpora through the engine) and retrains `learned.bin` in one command; rerun it after
   `ranker.bin` or `common-*.txt` change. Never train on the evaluation texts (it excludes them).
+- Kanji (docs/moonshot.md §5.1): `python3 engine/tools/kanji/build_kanji.py` fetches Mozc's
+  open-source dictionary at a pinned commit (cached, gitignored) and writes `engine/predict/kanji.bin`,
+  `LICENSE-mozc.txt` and `tests/data/kanji-evaluation.tsv`. `tests/kanji.rs` holds the accuracy floor.
 - Corpus tools (from the dropped Minecraft mod): `engine/tools/corpora/` (`fetch_corpora.py`,
   `build_ranker.py`, the Mirae word lists).
 - Windows: `tools/build.ps1` in `/windows` (x64 + x86, runs the shell tests),

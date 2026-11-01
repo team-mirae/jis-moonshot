@@ -74,19 +74,6 @@ fn keep_finals_offers_the_other_split() {
 }
 
 #[test]
-fn hanja_is_lean_and_last() {
-    let mut e = typed("KeyG KeyK KeyR KeyR KeyY");
-    e.set_dictionary(Arc::new(Dictionary::parse("학교\t學校\t\n학\t學\t배울 학\n")));
-    let p = e.predictions();
-    assert_eq!(p.last().map(|x| (x.text.as_str(), x.kind)), Some(("學校", Kind::Hanja)), "{p:?}");
-    assert_eq!(p.iter().filter(|x| x.kind == Kind::Hanja).count(), 1);
-    // No single-syllable hanja.
-    let mut e = typed("KeyG KeyK KeyR");
-    e.set_dictionary(Arc::new(Dictionary::parse("학\t學\t배울 학\n")));
-    assert!(e.predictions().iter().all(|x| x.kind != Kind::Hanja));
-}
-
-#[test]
 fn at_most_four_and_no_duplicates() {
     for keys in ["KeyH KeyE KeyL KeyL KeyO", "KeyB KeyB", "KeyA KeyK KeyF KeyL", "Digit1"] {
         let t = texts(keys);
@@ -214,41 +201,25 @@ fn korean_words_with_particles_stay_korean() {
     assert_eq!(top("KeyT KeyJ KeyQ KeyJ KeyP").0, "서버에");
 }
 
-// Hanja exceptions: news country names, dates, weekdays (not penalized)
+// No hanja readings (docs/moonshot.md §5.1): dictionary words, dates, countries, weekdays and
+// 曰 were predicted in JIS Korean; the hanja list (Shift+F8) still has them.
 
 #[test]
-fn dates_after_digits_get_their_hanja() {
-    let t = texts("S-Digit2 S-Digit0 S-Digit2 S-Digit6 KeyS KeyU KeyS");
-    assert!(t.contains(&"2026年".to_string()), "{t:?}");
-    let t = texts("S-Digit1 S-Digit9 KeyD KeyL KeyF");
-    assert!(t.contains(&"19日".to_string()), "{t:?}");
-}
-
-#[test]
-fn country_and_weekday_hanja_follow_the_korean_reading() {
-    // 미 → 美, right after the Korean reading itself (not penalized, but not ahead of it).
-    let p = typed("KeyA KeyL").predictions();
-    let korean = p.iter().position(|x| x.text == "미").unwrap();
-    assert_eq!((p[korean + 1].text.as_str(), p[korean + 1].kind), ("美", Kind::Hanja), "{p:?}");
-    let t = texts("KeyG KeyK KeyS KeyA KeyL");
-    assert!(t.contains(&"韓美".to_string()), "{t:?}");
-    let t = texts("KeyD KeyN KeyJ KeyF KeyG KeyH KeyK KeyT KeyN KeyA KeyH KeyR KeyR KeyM KeyA");
-    assert!(t.contains(&"月火水木金".to_string()), "{t:?}");
-}
-
-#[test]
-fn stem_and_wal_use_the_dictionary() {
-    let mut e = typed("KeyR KeyH KeyD KeyW KeyK KeyD KeyH KeyK KeyF");
-    e.set_dictionary(Arc::new(Dictionary::parse("공자\t孔子\t\n")));
-    assert!(e.predictions().iter().any(|p| p.text == "孔子曰"), "{:?}", e.predictions());
-}
-
-#[test]
-fn ordinary_single_syllables_get_no_hanja() {
-    // 학 is in the dictionary, but single syllables outside the exceptions never get hanja.
-    let mut e = typed("KeyG KeyK KeyR");
-    e.set_dictionary(Arc::new(Dictionary::parse("학\t學\t배울 학\n")));
-    assert!(e.predictions().iter().all(|p| p.kind != Kind::Hanja));
+fn hanja_are_not_predicted() {
+    let dictionary = Arc::new(Dictionary::parse("학교\t學校\t\n학\t學\t배울 학\n공자\t孔子\t\n"));
+    for keys in [
+        "KeyG KeyK KeyR KeyR KeyY",
+        "KeyG KeyK KeyR",
+        "S-Digit2 S-Digit0 S-Digit2 S-Digit6 KeyS KeyU KeyS",
+        "KeyA KeyL",
+        "KeyG KeyK KeyS KeyA KeyL",
+        "KeyR KeyH KeyD KeyW KeyK KeyD KeyH KeyK KeyF",
+    ] {
+        let mut e = typed(keys);
+        e.set_dictionary(dictionary.clone());
+        let p = e.predictions();
+        assert!(p.iter().all(|x| x.kind != Kind::Hanja), "{keys}: {p:?}");
+    }
 }
 
 #[test]

@@ -73,7 +73,7 @@ pub fn type_keys(template: &Engine, presses: &[impl AsRef<str>]) -> Option<Strin
 /// above [`MAX_PRESSES`] is cut to it.
 ///
 /// The search follows key presses whose text heads toward `text` (its Hangul jamo, its letters as
-/// typed or converted with F9/F10, or a hanja's reading before F7), and keeps a combination only
+/// typed or converted with F9/F10, or a hanja's reading before Shift+F8), and keeps a combination only
 /// when typing it really shows `text`.
 pub fn keys_for_output(template: &Engine, text: &str, min: i64, max: i64) -> Vec<Vec<String>> {
     if min < 1 || max < min || text.is_empty() {
@@ -182,9 +182,10 @@ fn search(
 
 /// The presses a search for `text` tries, plain before Shift: the keys whose character (in the
 /// mode's layout) or letter is part of `text`, Shift+Enter (commit, before a bare jamo), and only
-/// where `text` needs them Shift+F7 (hanja), F9 (full-width), F10 (letters), Space and Enter.
+/// where `text` needs them Shift+F8 (hanja), F9 (full-width), F10 (letters), Space and Enter.
 /// Backspace, Esc, the arrows and Tab are left out: they never shorten a way to type something.
-/// F6 and F7 switch to kana (docs/moonshot.md §4), which no Korean or English text needs.
+/// F6 and F7 switch to kana and F8 to kanji (docs/moonshot.md §4), which no Korean or English
+/// text needs.
 fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> {
     let (mode, symbols) = (template.mode(), template.dedicated_symbols());
     let wanted: std::collections::HashSet<char> = targets.iter().flatten().copied().collect();
@@ -203,7 +204,7 @@ fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> 
     let mut keys = vec![];
     presses.push(Press { key: Key::Enter, shift: true });
     if has(&is_hanja) {
-        presses.push(Press { key: Key::F7, shift: true });
+        presses.push(Press { key: Key::F8, shift: true });
     }
     if has(&|c| crate::half_width(c) != c) {
         keys.push(Key::F9);
@@ -241,7 +242,7 @@ impl Field {
     /// A key that types nothing in the current layout would pass through to the app, whose text
     /// we can't know: those aren't pressed.
     fn can_press(&self, p: Press) -> bool {
-        matches!(p.key, Key::F9 | Key::F10 | Key::Space | Key::Enter) || (p.key == Key::F7 && p.shift)
+        matches!(p.key, Key::F9 | Key::F10 | Key::Space | Key::Enter) || (p.key == Key::F8 && p.shift)
             || output_with(self.engine.mode(), self.engine.dedicated_symbols(), Layout::JisKorean, p.key, p.shift).is_some()
     }
 
@@ -310,7 +311,7 @@ impl Field {
 }
 
 /// The text a search aims for, as jamo streams: the text itself, and with its hanja replaced by
-/// their readings (typed before F7). At most 8.
+/// their readings (typed before Shift+F8). At most 8.
 fn targets(template: &Engine, text: &str) -> Vec<Vec<char>> {
     let mut variants = vec![String::new()];
     // Building the reverse index reads the whole dictionary: only for text with hanja.

@@ -333,10 +333,12 @@ fn flush_commits_everything() {
 
 #[test]
 fn function_keys_with_nothing_unconfirmed_go_to_the_app() {
-    // F6 and F7 are taken even then: they switch to kana typing (tests/moonshot.rs).
-    for key in [Key::F8, Key::F9, Key::F10] {
+    // F6, F7 and F8 are taken even then: kana or kanji for the next segment (tests/moonshot.rs,
+    // tests/kanji.rs). Shift+F8 (the hanja list) goes to the app.
+    for key in [Key::F9, Key::F10] {
         assert!(!Engine::new().key(key, Mods::NONE).consumed, "{key:?}");
     }
+    assert!(!Engine::new().key(Key::F8, Mods::SHIFTED).consumed);
     // Shift+Z is ㅋ, a key like any other: taken.
     assert!(Engine::new().key(Key::KeyZ, Mods::SHIFTED).consumed);
     // With something unconfirmed they act and are taken.
@@ -347,19 +349,20 @@ fn function_keys_with_nothing_unconfirmed_go_to_the_app() {
     assert_eq!((out.commit.as_str(), out.preedit.as_str()), ("", "r"));
 }
 
-// §6 F8 (reserved)
+// §6 F8: kanji conversions (docs/moonshot.md §4); Shift+F8 the hanja list
 
 #[test]
-fn f8_is_reserved_and_does_nothing() {
-    // With something unconfirmed it's taken and changes nothing; the keys after it type as ever.
+fn f8_changes_no_keys() {
+    // F8 asks for kanji predictions (none without a predictor): the keys around it type as ever.
     pre("KeyG KeyK F8 KeyS", "한");
     pre("F8 Digit1 S-Digit2", "ㅃ2");
+    // Shift+F8 without a hanja dictionary: nothing.
     pre("KeyG KeyK S-F8 Digit1", "하ㅃ");
-    // With nothing unconfirmed it goes to the app.
     let mut e = Engine::new();
-    assert!(!e.key(Key::F8, Mods::NONE).consumed);
+    assert!(e.key(Key::F8, Mods::NONE).consumed);
     e.key(Key::KeyG, Mods::NONE);
     assert!(e.key(Key::F8, Mods::NONE).consumed);
+    assert!(e.key(Key::F8, Mods::SHIFTED).consumed);
     assert!(!e.is_escaped());
 }
 

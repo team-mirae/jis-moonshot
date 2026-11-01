@@ -700,6 +700,23 @@ mod predict_ffi {
         })
     }
 
+    /// A new predictor: `base` with kana-kanji conversion (`predict/kanji.bin`, docs/moonshot.md
+    /// §5.1). `base` stays valid and unchanged. Null if `base` is null or the data is malformed.
+    ///
+    /// # Safety
+    /// As [`jk_predictor_with_words`].
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn jk_predictor_with_kanji(base: *const JkPredictor, data: *const u8, data_len: usize) -> *mut JkPredictor {
+        // SAFETY: per the contract above.
+        let Some(base) = (unsafe { base.as_ref() }) else { return std::ptr::null_mut() };
+        // SAFETY: per the contract above.
+        let d = unsafe { text(data, data_len) }.unwrap_or(&[]);
+        guard(std::ptr::null_mut(), || match base.0.with_kanji(d) {
+            Ok(p) => Box::into_raw(Box::new(JkPredictor(Arc::new(p)))),
+            Err(_) => std::ptr::null_mut(),
+        })
+    }
+
     /// Learns from one example of what the user meant (training contract, spec §10.12): `keys` as
     /// `KeyboardEvent.code` names separated by spaces, `S-` for Shift (null or empty: the cheapest
     /// keys for `text`). Returns where `text` was among the predictions (0 = top), -1 if it wasn't

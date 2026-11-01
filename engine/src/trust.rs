@@ -1,10 +1,9 @@
 //! Typing a text the trusting way (spec §10.10): the fewest presses, letting predictions do the
 //! rest. Each word is typed by its cheapest keys: Hangul by JIS Korean's optimized route, Latin
-//! letter by letter (no F10), hanja by their reading (no F7), symbols by their key (pasted when
-//! no JIS Korean legend has them). Space or Enter then commits the top prediction, as
-//! the shells do. A word fails when what's committed isn't the word. Hanja are the exception: they
-//! are never the top prediction (spec §10.3), so a word with hanja is picked with ↓ from the list,
-//! each ↓ a press; it fails only when it isn't listed.
+//! letter by letter (no F10), hanja from the hanja list (their reading, Shift+F8, the digit; JIS
+//! Moonshot predicts no hanja, docs/moonshot.md §5.1), symbols by their key (pasted when no JIS
+//! Korean legend has them). Space or Enter then commits the top prediction, as the shells do. A
+//! word fails when what's committed isn't the word.
 //!
 //! The measure that matters is [`Trusting::effort`]: presses plus what fixing the failures costs,
 //! against [`Trusting::deterministic`], the presses without predictions ([`plan::count`]).
@@ -42,11 +41,11 @@ pub struct Trusting {
     pub corrections: usize,
     /// The same text without predictions ([`plan::count`]).
     pub deterministic: usize,
-    /// Words with hanja picked from the list with ↓, and the ↓ presses (counted in `presses`; for
-    /// an attentive typist, ↓ to any wanted word).
+    /// Hanja picked from the hanja list (Shift+F8).
     pub hanja_picked: usize,
+    /// The ↓ presses an attentive typist makes to a wanted word (counted in `presses`).
     pub arrows: usize,
-    /// Words where a hanja reading was the top prediction (never wanted: hanja are picked).
+    /// Words where a hanja reading was the top prediction (none since hanja aren't predicted).
     pub hanja_on_top: Vec<String>,
 }
 
@@ -161,18 +160,24 @@ fn type_word(
             0 => keys_of(&run),
             1 => hangul_presses(&run, style),
             2 => each_jamo(&run).unwrap_or_default(),
-            // A hanja: by the reading that brings it into the list (年 after digits is 년),
-            // else its best-ranked one.
+            // A hanja: what's staged committed first (as the robot does), then its reading, the
+            // hanja list (Shift+F8) and the digit that picks it (→ for later pages).
             _ if is_hanja(c) => {
-                let readings = robot.hanja_readings(c);
-                let listed = |reading: &String| {
-                    let mut trial = engine.clone();
-                    for p in hangul_presses(reading, Style::Optimal) {
-                        trial.key(p.key, if p.shift { Mods::SHIFTED } else { Mods::NONE });
+                got.push_str(&commit_top(engine).0);
+                let reading = robot.hanja_reading(c).map(str::to_string).unwrap_or_default();
+                press(engine, &hangul_presses(&reading, Style::Optimal), &mut got, &mut keys, report);
+                let mut list = vec![Press { key: crate::Key::F8, shift: true }];
+                let mut trial = engine.clone();
+                let out = trial.key(crate::Key::F8, Mods::SHIFTED);
+                match out.candidates.and_then(|l| l.items.iter().position(|cand| cand.hanja.chars().eq([c]))) {
+                    Some(index) => {
+                        list.extend(std::iter::repeat_n(Press::new(crate::Key::ArrowRight), index / crate::PAGE_SIZE));
+                        list.push(Press::new(crate::Key::from_code(&format!("Digit{}", index % crate::PAGE_SIZE + 1))));
+                        report.hanja_picked += 1;
                     }
-                    trial.predictions().iter().any(|p| p.text.contains(c))
-                };
-                readings.iter().find(|r| listed(r)).or(readings.first()).map(|r| hangul_presses(r, Style::Optimal)).unwrap_or_default()
+                    None => list.push(Press::new(crate::Key::Escape)),
+                }
+                list
             }
             _ => match robot.symbol_presses(c) {
                 Some(p) => p,
@@ -198,11 +203,9 @@ fn type_word(
         report.hanja_on_top.push(word.to_string());
     }
     let before = got.clone();
-    // A word with hanja (or any word, for an attentive typist): picked from the list with ↓ when
-    // it's there.
+    // An attentive typist picks the word from the list with ↓ when it's there.
     let pick = match list.iter().position(|(t, _)| format!("{before}{t}") == word) {
-        Some(index) if attentive || word.chars().any(is_hanja) => {
-            report.hanja_picked += word.chars().any(is_hanja) as usize;
+        Some(index) if attentive => {
             report.arrows += index;
             report.presses += index;
             index

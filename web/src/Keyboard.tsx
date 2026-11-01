@@ -15,11 +15,11 @@ const ROWS: Row[] = [
   { offset: 1.25, codes: [..."ZXCVBNM"].map((l) => "Key" + l).concat("Comma", "Period", "Slash", "IntlRo") },
 ];
 
-// F6 / F7 show the staged keys as hiragana / katakana; Shift+F7 is the hanja list.
+// F6 / F7 show the staged keys as hiragana / katakana, F8 as kanji; Shift+F8 is the hanja list.
 const FUNCTION_KEYS: Record<string, { label: string; planned?: boolean }> = {
   F6: { label: "ひら" },
   F7: { label: "カナ" },
-  F8: { label: "—" },
+  F8: { label: "漢字" },
   F9: { label: "전각" },
   F10: { label: "반각" },
 };

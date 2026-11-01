@@ -65,8 +65,8 @@ export function EnginePage() {
         </li>
         <li>
           <strong>Scripts and function keys</strong>: F6 and F7 show the staged keys as hiragana and katakana until the
-          next commit (in JIS Kana, for good); the かな key (<code>jk_kana_key</code>) forces their Korean. Shift+F7 opens
-          hanja candidates for the longest dictionary word at the end of the segment, F8 is reserved, F9 and F10 convert
+          next commit (in JIS Kana, for good); the かな key (<code>jk_kana_key</code>) forces their Korean. Shift+F8 opens
+          hanja candidates for the longest dictionary word at the end of the segment, F8 puts the kana reading's kanji conversions on top, F9 and F10 convert
           the word to full- and half-width letters, cycling the case. Shift+Z is a key like any other: ㅋ, っ or Z.
         </li>
         <li>
@@ -105,7 +105,7 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
           ["script()", "How the staged keys are shown: Auto (the top prediction), Korean (forced), Hiragana or Katakana."],
           ["set_enter_commits(bool)", "Plain Enter commits without a new line, as Shift+Enter does."],
           ["set_option_space(bool)", "⌥Space: a full-width space (_ in the English modes). Off by default: on Windows Alt+Space is the window menu."],
-          ["set_dictionary(Arc<Dictionary>)", "The hanja dictionary for Shift+F7, shared between engines."],
+          ["set_dictionary(Arc<Dictionary>)", "The hanja dictionary for Shift+F8, shared between engines."],
           ["set_predictor(Option<Arc<Predictor>>)", "Turns predictions on (full build). predictions() ranks; commit_prediction(i) commits one."],
           ["key_after_prediction(i, key, mods) / flush_prediction(i)", "A key that commits while prediction i is shown (Space, Enter, a symbol): commits what's shown, then the key acts on it. flush_prediction commits it quietly, for focus loss."],
           ["preedit() / english()", "The unconfirmed text, and the same keys read on the plain keyboard."],
@@ -171,7 +171,7 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
         Keys apply as a shell applies them: with predictions on, the marked text shows the top prediction unless it's the
         Korean reading, and Space and Enter commit what's shown. The search tries only keys whose characters are part of
         the text, skips presses that change nothing, and follows routes heading toward the text: its jamo, its letters
-        before F9/F10, a hanja's reading before Shift+F7. Every combination is checked by typing it.
+        before F9/F10, a hanja's reading before Shift+F8. Every combination is checked by typing it.
       </p>
 
       <h2>Performance</h2>
@@ -181,7 +181,7 @@ engine.set_mode(Mode::AKana);              // JIS Kana: kana typing
         rows={[
           ["A key press (no predictor)", <>O(<i>n</i>), <i>n</i> = keys staged</>, "The segment is recomposed for the preedit; a segment is one word, usually under 20 keys."],
           ["A key press with predictions", <>O(<i>n</i> · <i>k</i>), <i>k</i> ≤ 8</>, "Each reading is composed (a handful), plus the English + particle splits over the last 8 keys; model and word-list lookups are hash lookups, O(1) each."],
-          ["Shift+F7 (hanja)", <>O(<i>w</i>), <i>w</i> = syllables at the end</>, "One hash lookup per suffix length, longest first."],
+          ["Shift+F8 (hanja)", <>O(<i>w</i>), <i>w</i> = syllables at the end</>, "One hash lookup per suffix length, longest first."],
           ["Loading the dictionary", "O(size)", "167,783 readings from a 4.3 MB TSV, parsed once and shared."],
           ["key_input", "O(1)", "One table lookup."],
           ["key_input_after, keys_for_output", "Bounded", "A search over key presses, capped at 50,000 engine steps and 16 presses: it always ends, and returns what it found."],

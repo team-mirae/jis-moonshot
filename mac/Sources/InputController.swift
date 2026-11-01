@@ -53,6 +53,9 @@ final class JKInputController: IMKInputController {
     #if PREDICT
     /// The ranked readings of what's staged (spec §10), shown in the suggestion list.
     private var predictions: [String] = []
+    /// Which of them are Japanese readings (kanji, kana): shown in Hiragino Sans, so kanji take
+    /// their Japanese (shinjitai) forms whatever the system language (docs/moonshot.md §5.1).
+    private var japanese: [Bool] = []
     /// The row chosen with ↓ / Tab, or nil while nothing is chosen (the top reading applies).
     private var chosen: Int?
     /// The reading shown as the marked text in place of the Korean one: the chosen row, or the top
@@ -620,10 +623,13 @@ final class JKInputController: IMKInputController {
         }
         #if PREDICT
         predictions = []
+        japanese = []
         let preedit = text(jk_preedit_ptr(engine), jk_preedit_len(engine))
         if !preedit.isEmpty && jk_candidate_count(engine) == 0 {
             let count = jk_predict(engine)
             predictions = (0..<count).map { text(jk_prediction_ptr(engine, $0), jk_prediction_len(engine, $0)) }
+            let japaneseKinds = [JK_PREDICTION_KANA, JK_PREDICTION_KATAKANA, JK_PREDICTION_KANJI].map { UInt32($0) }
+            japanese = (0..<count).map { japaneseKinds.contains(jk_prediction_kind(engine, $0)) }
             let topIsKorean = count == 0 || jk_prediction_kind(engine, 0) == UInt32(JK_PREDICTION_KOREAN)
             if let chosen, chosen >= count { self.chosen = nil }
             topShown = topIsKorean ? nil : predictions.first
@@ -648,10 +654,20 @@ final class JKInputController: IMKInputController {
         }
         #endif
         if !preedit.isEmpty {
-            let marked = NSAttributedString(string: preedit, attributes: [
+            var attributes: [NSAttributedString.Key: Any] = [
                 .underlineStyle: NSUnderlineStyle.single.rawValue,
                 .markedClauseSegment: 0,
-            ])
+            ]
+            #if PREDICT
+            // A Japanese reading on screen: Hiragino Sans and the language tagged Japanese, for the
+            // apps that draw marked text with its attributes (many use their own font).
+            let index = chosen ?? 0
+            if shown != nil, index < japanese.count, japanese[index] {
+                attributes[.font] = SuggestionWindow.japaneseFont(size: NSFont.systemFontSize)
+                attributes[NSAttributedString.Key(kCTLanguageAttributeName as String)] = "ja"
+            }
+            #endif
+            let marked = NSAttributedString(string: preedit, attributes: attributes)
             let caret = NSRange(location: preedit.utf16.count, length: 0)
             client.setMarkedText(marked, selectionRange: caret, replacementRange: notFound)
             hasMarkedText = true
@@ -674,12 +690,12 @@ final class JKInputController: IMKInputController {
         // done rather than inside it: inside, the app may not have the marked text yet (Chrome
         // hands it to the page's process after the key, and asks that process for the rectangle,
         // blocking), and the key would wait on it.
-        func show(_ items: [String], selected: Int?, horizontal: Bool = false) {
+        func show(_ items: [String], selected: Int?, horizontal: Bool = false, japanese: [Bool] = []) {
             DispatchQueue.main.async { [weak self] in
                 guard let self, generation == self.listGeneration else { return }
                 var caret = NSRect.zero
                 _ = client.attributes(forCharacterIndex: 0, lineHeightRectangle: &caret)
-                window.show(items, selected: selected, below: caret, horizontal: horizontal)
+                window.show(items, selected: selected, below: caret, horizontal: horizontal, japanese: japanese)
             }
         }
         let hanja = jk_candidate_count(engine)
@@ -698,7 +714,7 @@ final class JKInputController: IMKInputController {
         #if PREDICT
         if !empty && predictions.count > 1 {
             window.onPick = { [weak self] index in self?.commitPrediction(index, to: client) }
-            show(predictions, selected: chosen)
+            show(predictions, selected: chosen, japanese: japanese)
             return
         }
         #endif

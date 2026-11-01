@@ -19,6 +19,7 @@ IDR_COMMON_EN RCDATA "@JK_ENGINE_DIR@/predict/common-en.txt"
 IDR_COMMON_KO RCDATA "@JK_ENGINE_DIR@/predict/common-ko.txt"
 IDR_NOUNS RCDATA "@JK_ENGINE_DIR@/predict/english-nouns.txt"
 IDR_COMMON_JA RCDATA "@JK_ENGINE_DIR@/predict/common-ja.txt"
+IDR_KANJI RCDATA "@JK_ENGINE_DIR@/predict/kanji.bin"
 #ifdef JK_LEARNED
 IDR_LEARNED RCDATA "@JK_ENGINE_DIR@/predict/learned.bin"
 #endif

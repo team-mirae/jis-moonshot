@@ -56,6 +56,12 @@ let sharedPredictor: OpaquePointer? = {
         jk_predictor_free(current)
         predictor = withKana
     }
+    // Kana-kanji conversion (docs/moonshot.md §5.1): without it, no kanji.
+    if let current = predictor, let kanji = data("kanji", "bin"),
+       let withKanji = kanji.withUnsafeBytes({ k in jk_predictor_with_kanji(current, k.bindMemory(to: UInt8.self).baseAddress, k.count) }) {
+        jk_predictor_free(current)
+        predictor = withKanji
+    }
     return predictor
 }()
 #endif

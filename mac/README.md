@@ -84,7 +84,8 @@ that's strongly recommended.
 | かな (and カタカナ, F18) | To Mode A. In Mode A with something staged: force Korean. From JIS Kana: Mode A, the staged keys forced Korean. |
 | F6 / F7 | Hiragana / katakana: the staged keys read as kana until the next commit, then predictive again. With nothing staged, the next segment is kana. In JIS Kana (input menu) they switch its script for good. |
 | ⌥Space | A full-width space (U+3000) in JIS Moonshot and JIS Kana, committing what's typed first; `_` in the English modes. |
-| Shift+F7 | The hanja list (Mode A). |
+| F8 | Kanji: the kana reading's conversions on top until the next commit (nothing staged: the next segment). In JIS Kana, the conversions above the kana. |
+| Shift+F8 | The hanja list (Mode A). |
 | F9 / F10 | Full-width / half-width letters, as in JIS Korean. |
 | Shift+Z | ㅋ, っ or Z, like any other key. |
 

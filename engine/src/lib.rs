@@ -7,6 +7,8 @@ mod engine;
 pub mod ffi;
 mod hangul;
 mod hanja;
+#[cfg(feature = "predict")]
+pub mod kanji;
 #[cfg(feature = "english")]
 mod hold;
 pub mod kana;

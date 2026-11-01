@@ -59,7 +59,8 @@ for it (`A_ROMAJI`).
 | F6 | Hiragana: the typed keys read as kana, until you commit; then predictive again. |
 | ⌥Space (macOS) | A full-width space in JIS Moonshot and JIS Kana; `_` in English. |
 | F7 | Katakana, the same way. |
-| Shift+F7 | The hanja list (it was F7 in JIS Korean). Hanja still show as predictions. |
+| F8 | Kanji: the kana reading's conversions on top, until the commit. Kanji also show as predictions when a Japanese reading ranks in the top two. |
+| Shift+F8 | The hanja list (it was F7 in JIS Korean). Hanja are no longer predicted. |
 | F9 / F10 | Full-width / half-width letters, as in JIS Korean. |
 | Shift+Z | A key like any other: ㅋ in Korean, っ in kana, Z in English. In JIS Korean it was F10. |
 

@@ -125,7 +125,7 @@ LAYOUTS_TO    := $(HOME)/Library/Keyboard Layouts
 
 DICT    := $(ENGINE)/dict
 PREDICT_FILES := $(ENGINE)/predict/ranker.bin $(ENGINE)/predict/common-en.txt $(ENGINE)/predict/common-ko.txt \
-                 $(ENGINE)/predict/common-ja.txt \
+                 $(ENGINE)/predict/common-ja.txt $(ENGINE)/predict/kanji.bin $(ENGINE)/predict/LICENSE-mozc.txt \
                  $(ENGINE)/predict/english-nouns.txt $(ENGINE)/predict/LICENSE-wordnet.txt \
                  $(ENGINE)/predict/LICENSE-corpora.txt
 ifneq ($(LEGACY_PREDICT),1)

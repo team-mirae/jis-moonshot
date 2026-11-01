@@ -18,18 +18,25 @@ int Scale(int value, UINT dpi) { return MulDiv(value, static_cast<int>(dpi), 96)
 CandidateWindow::~CandidateWindow() {
     if (hwnd_) DestroyWindow(hwnd_);
     if (font_) DeleteObject(font_);
+    if (japanese_font_) DeleteObject(japanese_font_);
 }
 
 void CandidateWindow::UpdateFont() {
     const UINT dpi = hwnd_ ? GetDpiForWindow(hwnd_) : 96;
     if (font_ && dpi == font_dpi_) return;
     if (font_) DeleteObject(font_);
+    if (japanese_font_) DeleteObject(japanese_font_);
     NONCLIENTMETRICSW metrics = {sizeof(metrics)};
     SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0, dpi);
     LOGFONTW lf = metrics.lfMessageFont;
     lf.lfHeight = -MulDiv(11, static_cast<int>(dpi), 72);  // 11 pt
     wcscpy_s(lf.lfFaceName, L"Malgun Gothic");            // Korean UI font, on every Windows 10+
     font_ = CreateFontIndirectW(&lf);
+    // Japanese rows: Yu Gothic UI, Windows' Japanese UI font (Hiragino Sans, the macOS shell's,
+    // isn't on Windows). Malgun Gothic would draw kanji in their Korean forms.
+    lf.lfCharSet = SHIFTJIS_CHARSET;
+    wcscpy_s(lf.lfFaceName, L"Yu Gothic UI");
+    japanese_font_ = CreateFontIndirectW(&lf);
     font_dpi_ = dpi;
 }
 
@@ -72,9 +79,11 @@ void CandidateWindow::Show(std::vector<Row> rows, int selected, std::wstring foo
     text_width_ = 0;
     int width = 0;
     for (const Row& r : rows_) {
+        SelectObject(dc, FontFor(r));
         GetTextExtentPoint32W(dc, r.text.c_str(), static_cast<int>(r.text.size()), &size);
         text_width_ = std::max(text_width_, static_cast<int>(size.cx));
     }
+    SelectObject(dc, font_);
     for (const Row& r : rows_) {
         int w = text_width_;
         if (!r.comment.empty()) {
@@ -129,7 +138,9 @@ void CandidateWindow::Paint(HDC dc) {
         DrawTextW(dc, r.label.c_str(), -1, &label, flags);
         SetTextColor(dc, GetSysColor(focused ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT));
         RECT text = {label.right, y, client.right - padding_, y + row_height_};
+        SelectObject(dc, FontFor(r));
         DrawTextW(dc, r.text.c_str(), -1, &text, flags);
+        SelectObject(dc, font_);
         if (!r.comment.empty()) {
             SetTextColor(dc, GetSysColor(focused ? COLOR_HIGHLIGHTTEXT : COLOR_GRAYTEXT));
             RECT comment = {label.right + text_width_ + MulDiv(12, font_dpi_, 96), y,

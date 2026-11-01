@@ -24,3 +24,6 @@ __pycache__/
 # Local backups of the README while it is being redesigned
 /README.bak.md
 /.vscode/settings.json
+
+# Mozc dictionary sources fetched by engine/tools/kanji/build_kanji.py
+/engine/tools/kanji/mozc/

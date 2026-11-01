@@ -77,6 +77,7 @@ Source: "{#Root}\engine\dict\LICENSE-libhangul-hanja.txt"; DestDir: "{app}"; Fla
 Source: "{#Root}\engine\dict\LICENSE-unicode.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\engine\predict\LICENSE-corpora.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\engine\predict\LICENSE-wordnet.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Root}\engine\predict\LICENSE-mozc.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\windows\icons\moonshot.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; Run by Setup and the uninstaller as the user, to change their language list.
 Source: "keyboards.ps1"; DestDir: "{app}"; Flags: ignoreversion

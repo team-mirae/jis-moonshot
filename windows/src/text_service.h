@@ -213,6 +213,8 @@ private:
     unsigned training_seen_ = 0;  // training::Generation last applied
 #ifdef JK_PREDICT
     std::vector<std::wstring> predictions_;
+    // Which of them are Japanese readings (kanji, kana): drawn in a Japanese font.
+    std::vector<bool> japanese_;
     std::optional<size_t> chosen_;     // the row chosen with ↓ / Tab
     std::optional<std::wstring> shown_;  // shown in place of the Korean reading
 #endif

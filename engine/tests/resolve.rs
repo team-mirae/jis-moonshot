@@ -83,14 +83,14 @@ fn every_combination_types_the_text() {
 }
 
 #[test]
-fn hanja_through_shift_f7() {
+fn hanja_through_shift_f8() {
     let mut e = Engine::new();
     let tsv = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap();
     e.set_dictionary(std::sync::Arc::new(Dictionary::parse(&tsv)));
-    // 학교 (G K R R Y), then Shift+F7 (the hanja list moved from F7, docs/moonshot.md §4): its top
-    // hanja.
+    // 학교 (G K R R Y), then Shift+F8 (the hanja list moved from F7, then Shift+F7,
+    // docs/moonshot.md §4): its top hanja.
     let found = keys_for_output(&e, "學校", 6, 6);
-    assert!(has(&found, "KeyG KeyK KeyR KeyR KeyY S-F7"), "{found:?}");
+    assert!(has(&found, "KeyG KeyK KeyR KeyR KeyY S-F8"), "{found:?}");
 }
 
 #[test]

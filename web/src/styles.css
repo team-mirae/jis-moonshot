@@ -411,6 +411,12 @@ footer a {
   cursor: pointer;
 }
 
+/* Japanese readings: a Japanese font (and lang="ja"), so kanji take their Japanese (shinjitai)
+ * forms whatever the system language (docs/moonshot.md §5.1). */
+.prediction.japanese {
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+}
+
 .prediction.top {
   border-color: var(--camel);
   background: var(--highlight);

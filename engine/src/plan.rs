@@ -5,7 +5,7 @@
 //! the text so far. Keys come from the engine's own layout tables, not a copy. It plays the layout
 //! the way a fluent typist would: dedicated keys, the implied ㅇ, Shift+vowel and the double press
 //! where they save keystrokes, F10 or an input-source switch for
-//! Latin words, and Shift+F7 for hanja. Where several plans work it takes the cheapest (Shift counts as
+//! Latin words, and Shift+F8 for hanja. Where several plans work it takes the cheapest (Shift counts as
 //! a press).
 //!
 //! [`count`] wraps it for hosts (the web playground) together with the conventional estimate.
@@ -37,7 +37,7 @@ pub struct Counts {
 }
 
 /// Counts the key presses for `text` on JIS Korean and on conventional 2-set. With a dictionary,
-/// hanja are typed with Shift+F7; without one they're left out.
+/// hanja are typed with Shift+F8; without one they're left out.
 pub fn count(text: &str, dictionary: Option<Arc<Dictionary>>) -> Counts {
     let mut robot = Robot::new(dictionary);
     let typed = robot.type_text(text);
@@ -296,7 +296,7 @@ impl fmt::Display for Report {
         writeln!(f, "dedicated keys    {}", self.dedicated_keys)?;
         writeln!(f, "implied ㅇ        {}", self.implied_ieung)?;
         writeln!(f, "double presses    {}", self.double_presses)?;
-        writeln!(f, "hanja via F7      {}", self.hanja)?;
+        writeln!(f, "hanja via ⇧F8     {}", self.hanja)?;
         writeln!(f, "Shift+vowel       {}", self.shift_vowels)?;
         writeln!(f, "Latin via F10     {}", self.latin_words)?;
         writeln!(f, "Latin via switch  {}", self.latin_switches)?;
@@ -515,7 +515,7 @@ pub struct Robot {
     pub style: Style,
     /// The state of [`Style::Mixed`]'s choices.
     draws: u64,
-    /// hanja → reading, for F7.
+    /// hanja → reading, for Shift+F8.
     readings: HashMap<char, String>,
     screen: Screen,
     expected: String,
@@ -563,7 +563,7 @@ impl Robot {
         }
     }
 
-    /// The reading the robot types a hanja by (for F7), if it can.
+    /// The reading the robot types a hanja by (for Shift+F8), if it can.
     pub fn hanja_reading(&self, c: char) -> Option<&str> {
         self.readings.get(&c).map(String::as_str)
     }
@@ -714,7 +714,7 @@ impl Robot {
         self.report.pasted += 1;
     }
 
-    /// Commits first if the unconfirmed text ends in Hangul that Shift+F7 or F10 would pick up.
+    /// Commits first if the unconfirmed text ends in Hangul that Shift+F8 or F10 would pick up.
     /// Shift+Enter commits (JIS Moonshot's F6 types hiragana, docs/moonshot.md §4).
     fn break_word(&mut self) {
         if self.screen.ends_in_hangul() {
@@ -847,8 +847,8 @@ impl Robot {
         let syllable = reading.chars().next().ok_or(())?;
         let plans = self.syllable_plans(syllable, false);
         self.try_plans(plans, &shown).ok_or(())?;
-        // The hanja list is on Shift+F7 (docs/moonshot.md §4).
-        let out = self.press_all(&[Press { key: Key::F7, shift: true }]);
+        // The hanja list is on Shift+F8 (docs/moonshot.md §4).
+        let out = self.press_all(&[Press { key: Key::F8, shift: true }]);
         let candidates = out.candidates.ok_or(())?;
         let index = candidates.items.iter().position(|cand| cand.hanja.chars().eq([c])).ok_or(())?;
         let pages = vec![Press::new(Key::ArrowRight); index / PAGE_SIZE];

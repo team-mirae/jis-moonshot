@@ -17,6 +17,9 @@ public:
         std::wstring label;  // "1"…"9" for hanja on the page, empty for predictions
         std::wstring text;
         std::wstring comment;
+        // A Japanese reading (kanji, kana): drawn in a Japanese font, so kanji take their Japanese
+        // (shinjitai) forms whatever the system language (docs/moonshot.md §5.1).
+        bool japanese = false;
     };
 
     CandidateWindow() = default;
@@ -40,7 +43,9 @@ private:
 
     HWND hwnd_ = nullptr;
     HFONT font_ = nullptr;
+    HFONT japanese_font_ = nullptr;
     UINT font_dpi_ = 0;
+    HFONT FontFor(const Row& row) const { return row.japanese && japanese_font_ ? japanese_font_ : font_; }
     std::vector<Row> rows_;
     int selected_ = -1;
     std::wstring footer_;

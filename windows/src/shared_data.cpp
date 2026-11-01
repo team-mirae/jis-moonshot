@@ -131,6 +131,16 @@ const JkPredictor* SharedPredictor() {
                 log::Write(L"Japanese lexicon unavailable: no kana reading");
             }
         }
+        // Kana-kanji conversion (docs/moonshot.md §5.1): without it, no kanji.
+        const Bytes kanji = Resource(IDR_KANJI);
+        if (g_predictor && kanji.data) {
+            if (JkPredictor* converts = jk_predictor_with_kanji(g_predictor, kanji.data, kanji.size)) {
+                jk_predictor_free(g_predictor);
+                g_predictor = converts;
+            } else {
+                log::Write(L"kanji data unavailable: no kanji");
+            }
+        }
         if (!g_predictor) log::Write(L"predictor unavailable");
         log::Write(L"predictor loaded in %llu ms", GetTickCount64() - start);
     });

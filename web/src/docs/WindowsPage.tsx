@@ -71,7 +71,8 @@ tools/install.ps1 -Log        # turn the diagnostic log on and follow it
           ],
           ["한/영", "Toggles ABC and 한글, as the Microsoft IME does, committing first. JIS keyboards have no 한/영 key; 無変換 and 変換 do its job."],
           ["F6 / F7", "Hiragana / katakana until the next commit; in JIS Kana they switch its script for good."],
-          ["Shift+F7", "The hanja list, numbered 1–9 per page."],
+          ["F8", "Kanji: the kana reading's conversions on top until the next commit (nothing staged: the next segment). In JIS Kana, the conversions above the kana."],
+          ["Shift+F8", "The hanja list, numbered 1–9 per page."],
           ["F9 / F10", "The word's keys as full- / half-width letters. Shift+Z types ㅋ (っ in kana), not F10."],
           [
             "English Layout",

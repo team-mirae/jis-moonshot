@@ -42,13 +42,15 @@ pub enum Kind {
     Kana = 10,
     /// The kana reading in katakana, when that is the known word (コーヒー).
     Katakana = 11,
+    /// The kana reading converted to kanji (今日は for きょうは), docs/moonshot.md §5.1.
+    Kanji = 12,
 }
 
 impl Kind {
     fn language(self) -> Language {
         match self {
             Kind::English | Kind::EnglishCapitalized | Kind::EnglishUpper => Language::English,
-            Kind::Kana | Kind::Katakana => Language::Japanese,
+            Kind::Kana | Kind::Katakana | Kind::Kanji => Language::Japanese,
             _ => Language::Korean,
         }
     }
@@ -131,6 +133,9 @@ pub struct Context {
     pub weights: Weights,
     /// How the implied-ㅇ alternatives are ranked.
     pub ranker: Ranker,
+    /// F8 (docs/moonshot.md §4): kanji conversions of the kana reading on top, whatever ranks
+    /// first.
+    pub force_kanji: bool,
 }
 
 /// How the predictor ranks the implied-ㅇ alternatives: the bare vowels (ㅠㅠ against 유유) and the
@@ -330,6 +335,13 @@ pub struct Candidate {
 pub const MAX_PREDICTIONS: usize = 4;
 /// At most this many predictions with the kana reading.
 pub const MAX_WITH_KANA: usize = MAX_PREDICTIONS + 1;
+/// Kanji conversions join the predictions only when a Japanese reading is among the top this many
+/// (docs/moonshot.md §5.1), or after F8.
+pub const KANJI_TOP_N: usize = 2;
+/// At most this many kanji conversions, in slots of their own.
+pub const MAX_KANJI: usize = 3;
+/// At most this many predictions with the kana reading and the kanji conversions.
+pub const MAX_WITH_KANJI: usize = MAX_WITH_KANA + MAX_KANJI;
 
 const SIZE: usize = 27;
 const START: usize = 26;
@@ -352,8 +364,6 @@ const COMMON: u32 = 20;
 const BARE_JAMO: f64 = 1.5;
 /// Alternatives rank below the reading they're an alternative to.
 const ALTERNATIVE: f64 = 1.0;
-/// Hanja sit at the bottom: there if wanted, never in the way.
-const HANJA: f64 = 8.0;
 /// A known particle after an English start (report에): strong evidence of a mixed word.
 const PARTICLE: f64 = 3.0;
 /// How much more English the start must read than the whole keys for a split to count (bits per
@@ -465,17 +475,6 @@ const CAPITAL_LEAN: f64 = 2.0;
 /// pieces were each read the likeliest way.
 const PIECEWISE: f64 = 1.0;
 
-/// OECD members whose hanja abbreviation is in everyday use in Korean news.
-const COUNTRIES: &[(char, &str)] = &[
-    ('미', "美"), ('일', "日"), ('한', "韓"), ('영', "英"), ('불', "佛"), ('독', "獨"),
-    ('이', "伊以"), ('가', "加"), ('호', "濠"), ('토', "土"),
-];
-/// Dates and weekdays: 年 月 日 曰 and 月火水木金土日.
-const DATES: &[(char, &str)] = &[
-    ('년', "年"), ('연', "年"), ('월', "月"), ('일', "日"), ('왈', "曰"),
-    ('화', "火"), ('수', "水"), ('목', "木"), ('금', "金"), ('토', "土"),
-];
-
 /// The trained model and word lists.
 #[derive(Clone)]
 pub struct Predictor {
@@ -501,6 +500,8 @@ pub struct Predictor {
     /// The learned ranker's weights (spec §10.13); none: the rules rank (legacy).
     #[cfg(not(feature = "legacy-predict"))]
     learned: Option<std::sync::Arc<crate::learned::Model>>,
+    /// Kana-kanji conversion (`predict/kanji.bin`, docs/moonshot.md §5.1); none: no kanji.
+    kanji: Option<std::sync::Arc<crate::kanji::Kanji>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -546,6 +547,7 @@ impl Predictor {
             avoided_japanese: HashMap::new(),
             #[cfg(not(feature = "legacy-predict"))]
             learned: None,
+            kanji: None,
         })
     }
 
@@ -564,6 +566,76 @@ impl Predictor {
             let _ = model;
             Ok(self.clone())
         }
+    }
+
+    /// This predictor with kana-kanji conversion (`predict/kanji.bin`, docs/moonshot.md §5.1).
+    pub fn with_kanji(&self, data: &[u8]) -> Result<Predictor, BadModel> {
+        let mut next = self.clone();
+        next.kanji = Some(std::sync::Arc::new(crate::kanji::Kanji::parse(data)?));
+        Ok(next)
+    }
+
+    /// Whether kana-kanji conversion is loaded.
+    pub fn has_kanji(&self) -> bool {
+        self.kanji.is_some()
+    }
+
+    /// Up to [`MAX_KANJI`] kanji conversions of `kana` (hiragana or katakana), cheapest first,
+    /// without the kana itself. Empty without [`Predictor::with_kanji`].
+    pub fn kanji_of(&self, kana: &str) -> Vec<String> {
+        let Some(kanji) = &self.kanji else { return Vec::new() };
+        let hiragana = crate::kana::hiragana(kana);
+        let katakana = crate::kana::katakana(&hiragana);
+        // One more than shown: the all-kana path is often among them.
+        kanji
+            .convert(&hiragana, MAX_KANJI + 2)
+            .into_iter()
+            .map(|(text, _)| text)
+            .filter(|t| *t != hiragana && *t != katakana && *t != kana)
+            .take(MAX_KANJI)
+            .collect()
+    }
+
+    /// Adds the kanji conversions (docs/moonshot.md §5.1): right after the Japanese reading when
+    /// one is among the top [`KANJI_TOP_N`]; on top, followed by the kana reading, after F8.
+    fn with_kanji_conversions(&self, mut out: Vec<Prediction>, readings: &Readings, context: Context) -> Vec<Prediction> {
+        let japanese = |p: &Prediction| matches!(p.kind, Kind::Kana | Kind::Katakana);
+        if context.force_kanji {
+            if readings.kana.is_empty() {
+                return out;
+            }
+            // The kana reading, the predictor's (with its っ and katakana) or the keys' own.
+            let kana = match out.iter().position(japanese) {
+                Some(i) => out.remove(i),
+                None => Prediction { text: readings.kana.clone(), kind: Kind::Kana, score: f64::NEG_INFINITY },
+            };
+            let top = out.first().map_or(0.0, |p| p.score).max(kana.score);
+            let mut head: Vec<Prediction> = self
+                .kanji_of(&kana.text)
+                .into_iter()
+                .enumerate()
+                .map(|(i, text)| Prediction { text, kind: Kind::Kanji, score: top + (MAX_KANJI + 1 - i) as f64 })
+                .collect();
+            head.push(Prediction { score: top + 0.5, ..kana });
+            out.retain(|p| !head.iter().any(|h| h.text == p.text));
+            head.extend(out);
+            head.truncate(MAX_WITH_KANJI);
+            return head;
+        }
+        let Some(at) = out.iter().take(KANJI_TOP_N).position(japanese) else { return out };
+        let kana = out[at].clone();
+        let conversions: Vec<Prediction> = self
+            .kanji_of(&kana.text)
+            .into_iter()
+            .filter(|t| !out.iter().any(|p| p.text == *t))
+            .enumerate()
+            .map(|(i, text)| Prediction { text, kind: Kind::Kanji, score: kana.score - 0.01 * (i + 1) as f64 })
+            .collect();
+        for (i, p) in conversions.into_iter().enumerate() {
+            out.insert(at + 1 + i, p);
+        }
+        out.truncate(MAX_WITH_KANJI);
+        out
     }
 
     /// This predictor with Japanese words for the kana reading (`predict/common-ja.txt`, or a
@@ -840,10 +912,12 @@ impl Predictor {
             && context.ranker == Ranker::Rules
         {
             let ranked = crate::learned::rank(self, model, readings, context, dictionary);
-            return self.with_kana(ranked, readings, context);
+            let ranked = self.with_kana(ranked, readings, context);
+            return self.with_kanji_conversions(ranked, readings, context);
         }
         let ranked = self.predict_by_rules(readings, context, dictionary);
-        self.with_kana(ranked, readings, context)
+        let ranked = self.with_kana(ranked, readings, context);
+        self.with_kanji_conversions(ranked, readings, context)
     }
 
     /// [`Predictor::predict`] by the rules only (the legacy ranker), whatever model is loaded.
@@ -937,15 +1011,8 @@ impl Predictor {
                 origins.push((Origin::ImpliedL, None));
             }
         }
-        if let Some(hanja) = &readings.hanja {
-            out.push(Prediction { text: hanja.clone(), kind: Kind::Hanja, score: margin - HANJA + w.bits(Weight::Hanja) });
-            origins.push((Origin::Hanja, None));
-        }
-        // Everyday hanja aren't penalized: they tie with the Korean reading and follow it.
-        for text in hanja_exceptions(&readings.korean, dictionary) {
-            out.push(Prediction { text, kind: Kind::Hanja, score: margin + w.bits(Weight::Hanja) });
-            origins.push((Origin::EverydayHanja, None));
-        }
+        // No hanja readings (docs/moonshot.md §5.1): they'd compete with the kanji conversions.
+        // The hanja list is on Shift+F8; `readings.hanja` still counts as evidence of a word.
         if let Some(bare) = bare {
             out.push(bare);
             origins.push((Origin::Bare, None));
@@ -1495,43 +1562,6 @@ fn log_probability(table: &[u8], order: usize, keys: &str) -> f64 {
         }
     }
     total
-}
-
-/// The everyday hanja for a Korean reading: digits + 年/月/日 (2026年), a run of country, date or
-/// weekday syllables (韓美, 月火水木金), or a dictionary stem + 曰 (孔子曰).
-pub fn hanja_exceptions(korean: &str, dictionary: Option<&Dictionary>) -> Vec<String> {
-    let hanja = |c: char| -> Vec<char> {
-        let mut options: Vec<char> = COUNTRIES.iter().chain(DATES).filter(|(k, _)| *k == c).flat_map(|(_, h)| h.chars()).collect();
-        options.dedup();
-        options
-    };
-    let mut out = Vec::new();
-    let digits: String = korean.chars().take_while(char::is_ascii_digit).collect();
-    let rest: Vec<char> = korean[digits.len()..].chars().collect();
-    if !digits.is_empty() {
-        // A date, alone or with its particle (1日, 1日까지, 2026年부터).
-        if let [unit @ ('년' | '월' | '일'), ref tail @ ..] = rest[..] {
-            let tail: String = tail.iter().collect();
-            if tail.is_empty() || PARTICLES.contains(&tail.as_str()) {
-                out.push(format!("{digits}{}{tail}", hanja(unit)[0]));
-            }
-        }
-        return out;
-    }
-    let options: Vec<Vec<char>> = rest.iter().map(|&c| hanja(c)).collect();
-    if !rest.is_empty() && rest.len() <= 7 && options.iter().all(|o| !o.is_empty()) {
-        out.push(options.iter().map(|o| o[0]).collect());
-        if let [single] = &options[..] {
-            out.extend(single.iter().skip(1).map(|h| h.to_string()));
-        }
-    }
-    if rest.len() >= 2 && rest.last() == Some(&'왈') {
-        let stem: String = rest[..rest.len() - 1].iter().collect();
-        if let Some(c) = dictionary.and_then(|d| d.lookup(&stem).first()) {
-            out.push(format!("{}曰", c.hanja));
-        }
-    }
-    out
 }
 
 /// The prior against bare jamo, relative to the Korean reading's own: one step per jamo inside a

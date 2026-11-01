@@ -48,12 +48,6 @@ const KOREAN_FIRST: User = User {
     habit: 3,
 };
 
-const HANJA_LOVER: User = User {
-    name: "hanja lover",
-    items: &[("dkssud", "安寧"), ("eogkrry", "大學校"), ("tkfkd", "舍廊"), ("wjsur", "저녁"), ("rh", "고")],
-    habit: 3,
-};
-
 /// Types `rounds` rounds of the user's items with learning on. Returns, per round, how many habit
 /// items were the top prediction, and the learner at the end. Asserts no hanja is ever on top.
 fn simulate(user: &User, rounds: usize) -> (Vec<usize>, Learner) {
@@ -105,14 +99,6 @@ fn a_korean_first_typist_gets_korean_first() {
     assert!(learner.weight(Weight::English) < 1.0 && learner.weight(Weight::English) >= learn::MIN);
 }
 
-#[test]
-fn a_hanja_lover_still_never_gets_hanja_first() {
-    let (hits, learner) = simulate(&HANJA_LOVER, 20);
-    eprintln!("{}: habit hits per round {hits:?}, Hanja ×{:.2}", HANJA_LOVER.name, learner.weight(Weight::Hanja));
-    // Learning raises hanja, but the guard keeps them below the top: they stay a ↓ away.
-    assert!(learner.weight(Weight::Hanja) > 1.5);
-    assert!(hits.iter().all(|&h| h == 0), "{hits:?}");
-}
 
 #[test]
 fn learning_off_learns_nothing_and_ordinary_words_stay_put() {

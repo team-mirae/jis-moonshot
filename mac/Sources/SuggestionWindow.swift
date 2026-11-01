@@ -56,10 +56,11 @@ final class SuggestionWindow {
 
     /// Shows `items` under the caret rectangle `caret` (screen coordinates); `selected` is the
     /// highlighted item, or nil while nothing is chosen yet. `horizontal`: one row of single letters.
-    func show(_ items: [String], selected: Int?, below caret: NSRect, horizontal: Bool = false) {
+    /// `japanese`: which items are Japanese readings, drawn in Hiragino Sans (missing: none).
+    func show(_ items: [String], selected: Int?, below caret: NSRect, horizontal: Bool = false, japanese: [Bool] = []) {
         guard !items.isEmpty else { return hide() }
         list.horizontal = horizontal
-        list.update(items: items, selected: selected)
+        list.update(items: items, selected: selected, japanese: japanese)
         let size = list.preferredSize
         var origin = NSPoint(x: caret.minX - SuggestionListView.textInset, y: caret.minY - 6 - size.height)
         if let screen = NSScreen.screens.first(where: { $0.frame.contains(caret.origin) }) ?? NSScreen.main {
@@ -76,6 +77,13 @@ final class SuggestionWindow {
     func hide() {
         panel.orderOut(nil)
     }
+
+    /// Hiragino Sans, macOS's Japanese UI font: kanji in it take their Japanese (shinjitai)
+    /// forms, where the system font follows the system language (Korean or Chinese forms of the
+    /// same code points). The system font if it's ever missing.
+    static func japaneseFont(size: CGFloat) -> NSFont {
+        NSFont(name: "HiraginoSans-W3", size: size) ?? NSFont(name: "Hiragino Sans", size: size) ?? .systemFont(ofSize: size)
+    }
 }
 
 /// The rows, drawn directly so they match the system list exactly.
@@ -85,6 +93,7 @@ private final class SuggestionListView: NSView {
     private static let rowHeight: CGFloat = 27
     private static let visibleRows = 5
     private static let font = NSFont.systemFont(ofSize: 15)
+    private static let japaneseFont = SuggestionWindow.japaneseFont(size: 15)
 
     var onPick: ((Int) -> Void)?
     /// One row of cells, each a letter over the digit that picks it (1–9, 0 for the tenth, none
@@ -95,6 +104,7 @@ private final class SuggestionListView: NSView {
     private static let letterFont = NSFont.systemFont(ofSize: 19)
     private static let digitFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
     private var items: [String] = []
+    private var japanese: [Bool] = []
     private var selected: Int?
     private var firstVisible = 0
 
@@ -106,15 +116,20 @@ private final class SuggestionListView: NSView {
             let cell = max(Self.cellWidth, ceil(widest) + 12)
             return NSSize(width: CGFloat(items.count) * cell + 10, height: Self.cellHeight + 10)
         }
-        let widest = items.map { ($0 as NSString).size(withAttributes: [.font: Self.font]).width }.max() ?? 0
+        let widest = items.indices.map { (items[$0] as NSString).size(withAttributes: [.font: font(for: $0)]).width }.max() ?? 0
         let scroll: CGFloat = items.count > Self.visibleRows ? 14 : 0
         let width = max(180, ceil(widest) + Self.textInset * 2 + 8 + scroll)
         let rows = min(items.count, Self.visibleRows)
         return NSSize(width: width, height: CGFloat(rows) * Self.rowHeight + 10)
     }
 
-    func update(items: [String], selected: Int?) {
+    private func font(for index: Int) -> NSFont {
+        index < japanese.count && japanese[index] ? Self.japaneseFont : Self.font
+    }
+
+    func update(items: [String], selected: Int?, japanese: [Bool] = []) {
         self.items = items
+        self.japanese = japanese
         self.selected = selected
         // Keep the selected row in view.
         if let selected {
@@ -173,7 +188,7 @@ private final class SuggestionListView: NSView {
             }
             let text = items[index] as NSString
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: Self.font,
+                .font: font(for: index),
                 .foregroundColor: isSelected ? NSColor.white : NSColor.labelColor,
             ]
             let height = text.size(withAttributes: attributes).height

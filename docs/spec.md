@@ -512,24 +512,25 @@ Forms pairs ¢ £ ¬ ¯ ¦ ¥ ₩ and ｡ ｢ ｣ ､ ･ (。「」、・ full-
 |---|---|---|---|
 | F6 | ひらがな | **Hiragana:** to JIS Kana (`A_KANA`), the staged keys read as kana and shown in hiragana; nothing is committed. Right after F9/F10 it undoes the conversion first; an open hanja list closes. With nothing staged it still switches (consumed). Shift+F6 with something staged does nothing (reserved). | moonshot.md §4 |
 | F7 | カタカナ | **Katakana:** the same, shown in katakana. | moonshot.md §4 |
-| Shift+F7 | 한자 | Hanja conversion of the word at the end of the unconfirmed text, with a candidate list (§7). Mode A only. (F7 in JIS Korean.) | done |
-| F8 | — | **Reserved** (§6.1): does nothing. | retired 2026-10-27 |
+| F8 | 漢字 | **Kanji:** the staged keys' kana reading converted, the conversions on top of the predictions until the next commit (§6.1). With nothing staged it's still taken (the next segment). | moonshot.md §4, §5.1 |
+| Shift+F8 | 한자 | Hanja conversion of the word at the end of the unconfirmed text, with a candidate list (§7). Mode A only. (F7 in JIS Korean, then Shift+F7, which is now reserved.) | moonshot.md §4 |
 | F9 | 전각영숫자 | Convert the current word to full-width alphanumerics, from the raw characters (§5.2). | done in prototype |
 | F10 | 반각영숫자 | Same, half-width. (In JIS Korean Shift+Z did the same; in JIS Moonshot it's ㅋ, §3.4.) | done |
 
-**With nothing unconfirmed, F8–F10 go to the app** (and Shift+F6, Shift+F7): they act only on
-unconfirmed text. F6 and F7 are the exception: they switch to JIS Kana even with nothing staged, so
-kana typing is reachable without typing something first (moonshot.md §4, **[decide]**). In an
+**With nothing unconfirmed, F9, F10 and Shift+F6–F8 go to the app**: they act only on
+unconfirmed text. F6, F7 and F8 are the exception: they apply to the next segment even with nothing
+staged, so kana and kanji are reachable without typing something first (moonshot.md §4,
+**[decide]**). In an
 English mode every F-key goes to the app.
 
-### 6.1 F8 (reserved)
+### 6.1 F8 (kanji)
 
 F8 used to escape to standard 2-set over the stock keys, for the symbols JIS Korean has no key for.
 It was retired on 2026-10-27, before release: it wasn't standard 2-set (the implied ㅇ, the double
 press and F6 still applied), and symbols off the legends are typed in an English mode (§3.6.2) or
-the platform's English input source. F8 is **reserved for future use**: with something unconfirmed
-it's taken and does nothing (Shift+F8 too); with nothing unconfirmed it goes to the app. The engine
-keeps each mode's stock keyboard for the English and standard 2-set readings (§10.2).
+the platform's English input source. The engine keeps each mode's stock keyboard for the English
+and standard 2-set readings (§10.2). Since 2026-11-01 F8 is **kanji** and Shift+F8 the hanja list:
+moonshot.md §4 and §5.1 define them.
 
 ### 6.2 F9 / F10 cycling *(from prototype)*
 
@@ -546,7 +547,7 @@ Example: ㅎ ㅏ ㄴ (keys G K S) → 한. F10 → `gks`. F10 → `GKS`. F10 →
 
 ---
 
-## 7. Hanja (Shift+F7)
+## 7. Hanja (Shift+F8)
 
 Basic support: dictionary lookup with a candidate list. No learning, no reconversion of committed
 text.
@@ -569,21 +570,21 @@ license files sit next to the dictionary and ship with it.
 
 | State | Key | Effect |
 |---|---|---|
-| no list | Shift+F7 | In Mode A, open a list for the **longest dictionary word at the end of the unconfirmed text**: 나는학교 → 학교. Only whole syllables count. No match, or no dictionary: nothing happens. (F7 in JIS Korean; F7 is now katakana, §6.) |
-| list open | Shift+F7, ↓ | Next candidate (wraps) |
+| no list | Shift+F8 | In Mode A, open a list for the **longest dictionary word at the end of the unconfirmed text**: 나는학교 → 학교. Only whole syllables count. No match, or no dictionary: nothing happens. (F7 in JIS Korean; F7 is now katakana, §6, and Shift+F7 reserved.) |
+| list open | Shift+F8, ↓ | Next candidate (wraps) |
 | | ↑ | Previous candidate (wraps) |
 | | → / ← | Next / previous page of 9 |
 | | 1–9 (number row, no Shift) | Pick that candidate on the current page |
 | | Enter | Pick the selected candidate. No new line. |
 | | Esc, Backspace | Close the list; the Hangul stays unconfirmed and editable |
 | | F6, F7 | Close the list, then hiragana / katakana as usual (§6) |
-| | anything else | Pick the selected candidate, then handle the key as usual (가 Shift+F7 Space → 可 committed + space) |
+| | anything else | Pick the selected candidate, then handle the key as usual (가 Shift+F8 Space → 可 committed + space) |
 | | focus loss | Commit the selected candidate |
 
 While the list is open, the preedit shows the **selected candidate in place** of the reading. A
 pick stays unconfirmed like any other text. Earlier syllables keep their jamo, so Backspace still
 works on them by jamo. When the reading doesn't start on a keystroke boundary (말이 typed with
-the double press, then Shift+F7 on 이), the text before it becomes plain characters first.
+the double press, then Shift+F8 on 이), the text before it becomes plain characters first.
 
 Shells show the page that holds the selected candidate, numbered 1–9, with comments. The web
 playground draws it under the caret; the macOS shell for now shows only the inline preview.
@@ -702,9 +703,10 @@ set the engine still behaves exactly like it.
 | Korean, finals kept | each vowel after a final starts its own syllable on ㅇ | `akfl` → 말이 (JIS Korean: 마리) |
 | Bare vowels | JIS Korean without the implied ㅇ (§10.3) | `bb` → ㅠㅠ, `nn` → ㅜㅜ |
 | English + particle | an English start with a Korean particle or ending (§10.3); after an acronym, a Korean word; or a Korean start with an acronym | Anthropic에서, report에, RLHF에, server를; LG에너지솔루션은; 한전KPS |
-| Hanja | the top dictionary form of the **whole** Korean reading, 2+ syllables only; plus the everyday exceptions (§10.4) | 학교 → 學校, 2026년 → 2026年 |
+| Hanja | **Not in JIS Moonshot** (moonshot.md §5.1: kanji conversions instead; hanja from Shift+F8). Was: the top dictionary form of the **whole** Korean reading, 2+ syllables only; plus the everyday exceptions (§10.4) | 학교 → 學校, 2026년 → 2026年 |
 | Kana | the JIS kana of every staged key, composed (゛ ゜, moonshot.md §3.1), in hiragana. Shift on the number row, E and Z gives small kana, Shift+0 を; a つ before a kana of the か, さ, た or ぱ rows may also be read as っ | `G K S` → きのと |
 | Katakana | the kana reading in katakana, offered instead of hiragana when that is the known word | コーヒー |
+| Kanji | the kana reading converted to kanji, up to three, when a Japanese reading is in the top 2 (moonshot.md §5.1) | わたしは → 私は |
 
 Duplicates are removed (most readings coincide for most words), and **at most 4** are offered, plus
 the kana reading in one extra slot. The kana reading always uses the JIS kana layout, and it's scored
@@ -803,7 +805,8 @@ Scores are in bits per key, positive leaning Korean:
 
 ### 10.4 Everyday hanja (not penalized)
 
-These tie with the Korean reading and follow it right after:
+*Removed in JIS Moonshot with the other hanja readings (moonshot.md §5.1); kept here as JIS Korean
+defined them.* These tie with the Korean reading and follow it right after:
 
 - **Country names in the news, for OECD members** (38 as of 2026-10): 美 미, 日 일, 韓 한, 英 영,
   佛 불, 獨 독, 伊 이 (Italy), 以 이 (Israel), 加 가, 濠 호, 土 토. Alone or in runs (韓美). The
@@ -979,7 +982,7 @@ one line of counts and show the setting.
   (`jk_clear_prediction_weight`).
 - **Hard guards that learning can't cross:**
   - A hanja reading is never the top prediction, whatever any weight says; the first other reading
-    moves up.
+    moves up. (JIS Moonshot predicts no hanja at all, moonshot.md §5.1.)
   - The Shift rule and the chat-run rule are not weights and don't learn.
 - **Stored:** no text, no keys, no times, no app names, only the counts (`jk_learner_export`, one
   line). Nothing leaves the device.

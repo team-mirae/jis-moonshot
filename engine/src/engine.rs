@@ -6,7 +6,7 @@ use crate::hangul::{self, Composer, Options};
 #[cfg(feature = "predict")]
 use crate::learn::{self, Event, Learner};
 #[cfg(feature = "predict")]
-use crate::predict::{Context, Head, Language, Piece, Prediction, Predictor, Ranker, Readings, Split, Weight, Weights};
+use crate::predict::{Context, Head, Kind, Language, Piece, Prediction, Predictor, Ranker, Readings, Split, Weight, Weights};
 use crate::hanja::{Candidate, Dictionary};
 use crate::key::{Key, Mods};
 use crate::layout::{self, Layout, Mode, Out};
@@ -121,6 +121,9 @@ pub struct Engine {
     script: Script,
     /// The script `A_KANA` types in: hiragana or katakana, remembered across switches.
     kana_script: Script,
+    /// F8 (docs/moonshot.md §4): kanji conversions on top for this segment (or the next, pressed
+    /// with nothing staged), until the next commit.
+    kanji: bool,
     /// Setting: Dedicated symbol keys (spec §3.6), for modes with optional symbol keys.
     symbols: bool,
     enter_commits: bool,
@@ -180,6 +183,7 @@ impl Engine {
             mode: Mode::A,
             script: Script::Auto,
             kana_script: Script::Hiragana,
+            kanji: false,
             symbols: true,
             enter_commits: false,
             option_space: false,
@@ -258,6 +262,7 @@ impl Engine {
         }
         self.restore_typed();
         self.mode = Mode::A;
+        self.kanji = false;
         self.script = if self.segment.is_empty() { Script::Auto } else { Script::Korean };
         self.unchanged(true)
     }
@@ -270,8 +275,27 @@ impl Engine {
         if self.mode.is_kana() {
             self.kana_script = script;
         }
+        self.kanji = false;
         self.script = script;
         self.unchanged(true)
+    }
+
+    /// F8 (docs/moonshot.md §4): kanji conversions of the staged keys' kana reading on top, until
+    /// the next commit (with nothing staged, for the next segment). In Mode A the script goes back
+    /// to Auto (after F6 / F7 too); `A_KANA` keeps its script, which the kana reading below the
+    /// conversions is shown in.
+    fn to_kanji(&mut self) -> Output {
+        self.restore_typed();
+        self.kanji = true;
+        if self.mode.is_korean() {
+            self.script = Script::Auto;
+        }
+        self.unchanged(true)
+    }
+
+    /// Whether F8 asked for kanji conversions for the staged keys.
+    pub fn kanji_forced(&self) -> bool {
+        self.kanji
     }
 
     /// Undoes an F9/F10 conversion and closes the hanja list without a pick, so the staged keys
@@ -329,6 +353,7 @@ impl Engine {
         self.segment.clear();
         self.conversion = None;
         self.hanja = None;
+        self.kanji = false;
     }
 
     /// The unconfirmed keystrokes read as English: each key as it types on the stock keyboard,
@@ -355,7 +380,12 @@ impl Engine {
     fn shown(&self, segment: &[Token]) -> String {
         match self.script {
             Script::Hiragana => kana_of(segment),
-            Script::Katakana => crate::kana::katakana(&kana_of(segment)),
+            // Only the typed keys in katakana: text already chosen (a kanji prediction's 私は, a
+            // pick) stays as it is.
+            Script::Katakana => segment
+                .chunk_by(|a, b| matches!(a, Token::Text(_)) == matches!(b, Token::Text(_)))
+                .map(|run| if matches!(run[0], Token::Text(_)) { kana_of(run) } else { crate::kana::katakana(&kana_of(run)) })
+                .collect(),
             Script::Auto | Script::Korean => compose(segment),
         }
     }
@@ -409,6 +439,11 @@ impl Engine {
         if matches!(key, Key::F6 | Key::F7) && !mods.shift {
             return self.to_kana(if key == Key::F6 { Script::Hiragana } else { Script::Katakana });
         }
+        // F8: kanji conversions on top, until the next commit (docs/moonshot.md §4). Taken with
+        // nothing staged too: the next segment converts.
+        if key == Key::F8 && !mods.shift {
+            return self.to_kanji();
+        }
         // With nothing unconfirmed, the other function keys are the app's: spec §6.
         if matches!(key, Key::F6 | Key::F7 | Key::F8 | Key::F9 | Key::F10) && self.segment.is_empty() {
             self.conversion = None;
@@ -418,17 +453,16 @@ impl Engine {
             self.conversion = None;
         }
         match key {
-            // Shift+F6: nothing (reserved).
-            Key::F6 => self.unchanged(true),
-            // Shift+F7: the hanja list, in Mode A (it moved from F7, docs/moonshot.md §4).
-            Key::F7 => {
+            // Shift+F6, Shift+F7: nothing (reserved).
+            Key::F6 | Key::F7 => self.unchanged(true),
+            // Shift+F8: the hanja list, in Mode A (it moved from F7, then Shift+F7,
+            // docs/moonshot.md §4).
+            Key::F8 => {
                 if self.mode.is_korean() {
                     self.open_hanja();
                 }
                 self.unchanged(true)
             }
-            // Reserved (spec §6): does nothing.
-            Key::F8 => self.unchanged(true),
             Key::F9 => {
                 self.convert(Width::Full);
                 self.unchanged(true)
@@ -493,7 +527,7 @@ impl Engine {
         let page_start = list.selected / PAGE_SIZE * PAGE_SIZE;
         if !mods.is_shortcut() {
             match key {
-                Key::F7 | Key::ArrowDown if mods.shift || key == Key::ArrowDown => list.selected = (list.selected + 1) % count,
+                Key::F8 | Key::ArrowDown if mods.shift || key == Key::ArrowDown => list.selected = (list.selected + 1) % count,
                 Key::ArrowUp => list.selected = (list.selected + count - 1) % count,
                 Key::ArrowRight => list.selected = (page_start + PAGE_SIZE).min(count - 1),
                 Key::ArrowLeft => list.selected = page_start.saturating_sub(PAGE_SIZE),
@@ -501,8 +535,9 @@ impl Engine {
                     self.accept_hanja();
                 }
                 Key::Escape | Key::Backspace => self.close_hanja(),
-                // F6 / F7: the list closes, then kana as usual (docs/moonshot.md §4).
-                Key::F6 | Key::F7 => {
+                // F6 / F7 / F8: the list closes, then kana or kanji as usual (docs/moonshot.md §4).
+                // Shift+F6 / Shift+F7 too: they're reserved, and close it like any other key.
+                Key::F6 | Key::F7 | Key::F8 => {
                     self.close_hanja();
                     return None;
                 }
@@ -853,13 +888,26 @@ impl Engine {
             Some(p) if !self.segment.is_empty() && self.script == Script::Auto && self.mode.is_korean() => {
                 p.predict(&self.readings(), self.prediction_context(), self.dictionary.as_deref())
             }
+            // JIS Kana after F8: the conversions, then the kana as typed (docs/moonshot.md §4).
+            Some(p) if !self.segment.is_empty() && self.kanji && self.mode.is_kana() => {
+                let kanji = p.kanji_of(&kana_of(&self.segment));
+                if kanji.is_empty() {
+                    return Vec::new();
+                }
+                let kind = if self.script == Script::Katakana { Kind::Katakana } else { Kind::Kana };
+                let n = kanji.len();
+                let mut out: Vec<Prediction> =
+                    kanji.into_iter().enumerate().map(|(i, text)| Prediction { text, kind: Kind::Kanji, score: (n - i) as f64 }).collect();
+                out.push(Prediction { text: self.preedit(), kind, score: 0.0 });
+                out
+            }
             _ => Vec::new(),
         }
     }
 
     #[cfg(feature = "predict")]
     fn prediction_context(&self) -> Context {
-        Context { previous: self.previous, command: false, weights: self.effective_weights(), ranker: self.ranker }
+        Context { previous: self.previous, command: false, weights: self.effective_weights(), ranker: self.ranker, force_kanji: self.kanji }
     }
 
     /// The staged text's distinct readings with the learned ranker's features (spec §10.13), in a
@@ -953,7 +1001,9 @@ impl Engine {
         self.hanja = None;
         let segment = std::mem::take(&mut self.segment);
         let text = self.shown(&segment);
-        // Mode A's next segment starts in Auto again; JIS Kana stays in its script.
+        // F8 lasts until the commit. Mode A's next segment starts in Auto again; JIS Kana stays in
+        // its script.
+        self.kanji = false;
         if self.mode.is_korean() {
             self.script = Script::Auto;
         }

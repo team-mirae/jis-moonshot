@@ -48,6 +48,7 @@ interface Exports {
   jk_predictor_with_learned(base: number, m: number, ml: number): number;
   jk_predictor_with_japanese(base: number, w: number, wl: number): number;
   jk_predictor_with_avoided_japanese(base: number, w: number, wl: number): number;
+  jk_predictor_with_kanji(base: number, d: number, dl: number): number;
   jk_learn_example(h: number, t: number, tl: number, keys: number, kl: number): number;
   jk_predict(h: number): number;
   jk_prediction_ptr(h: number, i: number): number;
@@ -80,12 +81,16 @@ export interface Prediction {
 
 export type PredictionKind =
   | "korean" | "english" | "capitalized" | "upper" | "two-set" | "keep-finals" | "hanja" | "bare" | "mixed" | "implied-l"
-  | "kana" | "katakana";
-/** In C ABI id order (JK_PREDICTION_*): kana (10) and katakana (11) are the kana reading. */
+  | "kana" | "katakana" | "kanji";
+/** In C ABI id order (JK_PREDICTION_*): kana (10) and katakana (11) are the kana reading, kanji
+ * (12) its conversions. */
 const KINDS: PredictionKind[] = [
   "korean", "english", "capitalized", "upper", "two-set", "keep-finals", "hanja", "bare", "mixed", "implied-l",
-  "kana", "katakana",
+  "kana", "katakana", "kanji",
 ];
+
+/** The Japanese readings: shown in a Japanese font, so kanji take their Japanese forms. */
+export const JAPANESE_KINDS: PredictionKind[] = ["kana", "katakana", "kanji"];
 
 /** Scenarios the user can tune (spec §10.5), in C ABI id order. */
 export const WEIGHTS = ["korean", "english", "implied", "mixed", "two-set", "keep-finals", "hanja", "implied-l", "kana"] as const;
@@ -126,7 +131,7 @@ export interface Output {
   commit: string;
   preedit: string;
   consumed: boolean;
-  /** The hanja list, while one is open (Shift+F7). */
+  /** The hanja list, while one is open (Shift+F8). */
   candidates: Candidates | null;
 }
 
@@ -183,7 +188,7 @@ export class Engine {
   private dictionaryLoad?: Promise<void>;
   private predictorLoad?: Promise<void>;
 
-  /** Loads the hanja dictionary (dict/hanja.tsv) so Shift+F7 works. Once per engine: a remounted
+  /** Loads the hanja dictionary (dict/hanja.tsv) so Shift+F8 works. Once per engine: a remounted
    * playground gets the same promise. A failed load can be tried again. */
   loadDictionary(url: string): Promise<void> {
     this.dictionaryLoad ??= this.fetchDictionary(url).catch((error) => {
@@ -265,6 +270,18 @@ export class Engine {
       if (withKana) {
         x.jk_predictor_free(this.predictor);
         this.predictor = withKana;
+      }
+    }
+    // Kana-kanji conversion (docs/moonshot.md §5.1): without it, no kanji.
+    const kanji = await fetch(base + "kanji.bin").then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+    if (kanji) {
+      const bytes = new Uint8Array(kanji);
+      const k = put(bytes);
+      const withKanji = x.jk_predictor_with_kanji(this.predictor, k, bytes.length);
+      x.jk_dealloc(k, bytes.length);
+      if (withKanji) {
+        x.jk_predictor_free(this.predictor);
+        this.predictor = withKanji;
       }
     }
     this.basePredictor = this.predictor;

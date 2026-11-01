@@ -14,3 +14,4 @@
 #define IDR_NOUNS 305
 #define IDR_LEARNED 306
 #define IDR_COMMON_JA 307  // the kana reading's lexicon (docs/moonshot.md §5)
+#define IDR_KANJI 308      // kana-kanji conversion (docs/moonshot.md §5.1)

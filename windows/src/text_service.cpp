@@ -703,11 +703,15 @@ void TextService::Apply(ITfContext* context) {
     const std::wstring commit = Utf16(jk_commit_ptr(engine_), jk_commit_len(engine_));
 #ifdef JK_PREDICT
     predictions_.clear();
+    japanese_.clear();
     const bool staged = jk_preedit_len(engine_) > 0;
     if (staged && predicting_ && jk_candidate_count(engine_) == 0) {
         const size_t count = jk_predict(engine_);
         for (size_t i = 0; i < count; ++i) {
             predictions_.push_back(Utf16(jk_prediction_ptr(engine_, i), jk_prediction_len(engine_, i)));
+            const uint32_t kind = jk_prediction_kind(engine_, i);
+            japanese_.push_back(kind == JK_PREDICTION_KANA || kind == JK_PREDICTION_KATAKANA ||
+                                kind == JK_PREDICTION_KANJI);
         }
         const bool top_is_korean = count == 0 || jk_prediction_kind(engine_, 0) == JK_PREDICTION_KOREAN;
         if (chosen_ && *chosen_ >= count) chosen_.reset();
@@ -771,7 +775,9 @@ void TextService::ShowList() {
 #ifdef JK_PREDICT
     if (Composing() && predictions_.size() > 1) {
         std::vector<CandidateWindow::Row> rows;
-        for (const std::wstring& p : predictions_) rows.push_back({{}, p, {}});
+        for (size_t i = 0; i < predictions_.size(); ++i) {
+            rows.push_back({{}, predictions_[i], {}, i < japanese_.size() && japanese_[i]});
+        }
         list_.Show(std::move(rows), chosen_ ? static_cast<int>(*chosen_) : -1, {}, anchor_,
                    [this](size_t row) {
                        if (ITfContext* pending = Target(nullptr)) CommitPrediction(row, pending);

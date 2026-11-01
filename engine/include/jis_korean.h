@@ -238,6 +238,7 @@ enum {
     JK_PREDICTION_IMPLIED_L = 9, /* an implied ㄹ after a ㄴ final: 전력 for 저녁 */
     JK_PREDICTION_KANA = 10,     /* the keys on the JIS kana layout, hiragana */
     JK_PREDICTION_KATAKANA = 11, /* the kana reading in katakana (a known katakana word) */
+    JK_PREDICTION_KANJI = 12,    /* the kana reading converted to kanji (docs/moonshot.md §5.1) */
 };
 /* With the kana reading, up to this many predictions. */
 #define JK_MAX_PREDICTIONS 5
@@ -306,6 +307,9 @@ JkPredictor *jk_predictor_with_avoided(const JkPredictor *base, const uint8_t *k
 JkPredictor *jk_predictor_with_japanese(const JkPredictor *base, const uint8_t *words, size_t words_len);
 /* Japanese words the user never means (avoid.japanese): lines of `word` or `word<TAB>strong`. */
 JkPredictor *jk_predictor_with_avoided_japanese(const JkPredictor *base, const uint8_t *words, size_t words_len);
+/* Kana-kanji conversion (predict/kanji.bin, docs/moonshot.md §5.1). Null if `base` is null or the
+ * data is malformed (the base stays as it is). */
+JkPredictor *jk_predictor_with_kanji(const JkPredictor *base, const uint8_t *data, size_t data_len);
 /* Learns from an example: keys as KeyboardEvent.code names, "S-" for Shift (null/empty: the cheapest
  * keys for the text). Returns its place among the predictions (0 = top), -1 not listed, -2 bad input. */
 int32_t jk_learn_example(JkEngine *engine, const uint8_t *text, size_t text_len, const uint8_t *keys,
