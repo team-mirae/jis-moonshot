@@ -119,7 +119,8 @@ for family in families.map(\.name) {
                 }
             } else if index < 2 || index == 6, family == "JIS", code == kVK_ANSI_Grave {
                 // On a JIS board this key is 半角/全角, a language key: a mode that doesn't map it
-                // (Mode A, spec §3.6) commits and types nothing, not ABC's ` (#12).
+                // types nothing, not ABC's ` (#12). Every JIS Moonshot mode maps it now (the HHKB's
+                // ` key types ` and ~, spec §3.6), so this only guards a mode without a legend.
                 out = ""
             }
             if !out.isEmpty {

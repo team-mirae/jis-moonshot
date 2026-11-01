@@ -25,7 +25,7 @@ syllable on ㅇ. Shift+Z is no longer F10: it's ㅋ (standard 2-set) again, and 
 
 JIS Moonshot moved what standard 2-set puts on Shift (docs/moonshot.md §9, the owner's call,
 2026-11-02): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only and ㅒ ㅖ on `:` and `;`; Shift+Q W E R T type the plain
-consonant and Shift+O / P type ㅔ゜ / ㅖ゜. The baseline holds every other key to standard 2-set.
+consonant, and Shift on every vowel key, O and P included, starts a syllable on ㅇ. The baseline holds every other key to standard 2-set.
 
 ## Layout
 

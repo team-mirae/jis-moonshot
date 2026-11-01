@@ -9,7 +9,8 @@ pub enum Out {
     Jamo(char),
     /// A character that goes into the text as-is.
     Char(char),
-    /// A short run of jamo with ゛ / ゜ marks (docs/moonshot.md §9.1), as if its keys were pressed.
+    /// A short run of jamo, real-ㅇ syllables and ゜ breaks (docs/moonshot.md §9.1), as if its keys
+    /// were pressed.
     Keys(&'static Action),
 }
 
@@ -18,7 +19,8 @@ pub enum Out {
 pub enum Step {
     /// A jamo, as its 2-set key types it (a bare vowel joins the consonant before it).
     Jamo(char),
-    /// ゛: a vowel on a real ㅇ, starting its own syllable (what Shift+vowel does, spec §4.2).
+    /// A vowel on a real ㅇ, starting its own syllable (what Shift+vowel does, spec §4.2); its
+    /// legend is the syllable (왜, 을), where a bare vowel's is the jamo (ㅙ).
     Ieung(char),
     /// ゜: the syllable ends with no final; the next consonant starts one, a vowel gets an implied ㅇ.
     Break,
@@ -40,7 +42,7 @@ impl Out {
         }
     }
 
-    /// The key's legend in full (다, 왜゛, ㅡㄹ).
+    /// The key's legend in full (다, 왜, ㅡㄹ).
     pub fn legend(self) -> String {
         match self {
             Out::Jamo(c) | Out::Char(c) => c.to_string(),
@@ -305,18 +307,13 @@ fn two_set(key: Key) -> Option<(char, char)> {
     Some(pair)
 }
 
-/// JIS Moonshot's letter keys (docs/moonshot.md §9.2): standard 2-set, except Shift. Shift+Q W E
-/// R T type the plain consonant (ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5), Shift+O P type ㅔ゜ ㅖ゜ (ㅒ ㅖ are on
-/// : and ;). The standard 2-set reading (`Layout::Escaped`) keeps KS X 5002.
+/// JIS Moonshot's letter keys (docs/moonshot.md §9.2): standard 2-set, with Shift typing the same
+/// jamo on every key. Shift+Q W E R T are the plain consonant (ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5), and Shift on
+/// every vowel key, O and P included, starts a syllable on ㅇ (spec §4.2; ㅒ ㅖ are on : and ;). The
+/// standard 2-set reading (`Layout::Escaped`) keeps KS X 5002.
 fn moonshot_letter(key: Key) -> Option<(Out, Out)> {
-    use Key::*;
     let (base, _) = two_set(key)?;
-    let shifted = match key {
-        KeyO => Out::Keys(&Action { legend: "ㅔ゜", steps: &[Step::Jamo('ㅔ'), Step::Break] }),
-        KeyP => Out::Keys(&Action { legend: "ㅖ゜", steps: &[Step::Jamo('ㅖ'), Step::Break] }),
-        _ => Out::Jamo(base),
-    };
-    Some((Out::Jamo(base), shifted))
+    Some((Out::Jamo(base), Out::Jamo(base)))
 }
 
 /// Mode A's non-letter keys: the number row (spec §3.1) and JIS Moonshot's 12 keys right of 0
@@ -336,21 +333,23 @@ fn jis_korean(key: Key) -> Option<(Out, Out)> {
         Digit8 => (J('ㅚ'), C('8')),
         Digit9 => (J('ㅢ'), C('9')),
         Digit0 => (J('ㅘ'), C('0')),
-        Minus => (J('ㅙ'), K(&Action { legend: "왜゛", steps: &[I('ㅙ')] })),
+        Minus => (J('ㅙ'), K(&Action { legend: "왜", steps: &[I('ㅙ')] })),
         Equal => (K(&Action { legend: "다", steps: &[S('ㄷ'), S('ㅏ')] }), K(&Action { legend: "도", steps: &[S('ㄷ'), S('ㅗ')] })),
         IntlYen => (K(&Action { legend: "나", steps: &[S('ㄴ'), S('ㅏ')] }), K(&Action { legend: "니", steps: &[S('ㄴ'), S('ㅣ')] })),
         BracketLeft => (
             K(&Action { legend: "ㅡㄹ", steps: &[S('ㅡ'), S('ㄹ')] }),
-            K(&Action { legend: "을゛", steps: &[I('ㅡ'), S('ㄹ')] }),
+            K(&Action { legend: "을", steps: &[I('ㅡ'), S('ㄹ')] }),
         ),
         BracketRight => (K(&Action { legend: "゜", steps: &[B] }), K(&Action { legend: "゜", steps: &[B] })),
-        Semicolon => (J('ㅖ'), K(&Action { legend: "예゛", steps: &[I('ㅖ')] })),
-        Quote => (J('ㅒ'), K(&Action { legend: "얘゛", steps: &[I('ㅒ')] })),
+        Semicolon => (J('ㅖ'), K(&Action { legend: "예", steps: &[I('ㅖ')] })),
+        Quote => (J('ㅒ'), K(&Action { legend: "얘", steps: &[I('ㅒ')] })),
         Backslash => (K(&Action { legend: "무", steps: &[S('ㅁ'), S('ㅜ')] }), K(&Action { legend: "부", steps: &[S('ㅂ'), S('ㅜ')] })),
         Comma => (J('ㅢ'), C(',')),
         Period => (K(&Action { legend: "ㅂㅅ", steps: &[S('ㅂ'), S('ㅅ')] }), C('.')),
         Slash => (K(&Action { legend: "메", steps: &[S('ㅁ'), S('ㅔ')] }), C('\u{00B7}')),
         IntlRo => (K(&Action { legend: "로", steps: &[S('ㄹ'), S('ㅗ')] }), K(&Action { legend: "로゜", steps: &[S('ㄹ'), S('ㅗ'), B] })),
+        // The key left of 1 (the HHKB's ` key; 半角/全角 on a full JIS board): ` and ~, as stock.
+        Backquote => (C('`'), C('~')),
         _ => return None,
     };
     Some(pair)
@@ -448,6 +447,8 @@ fn stock_jis(key: Key) -> Option<(char, char)> {
         Period => ('.', '>'),
         Slash => ('/', '?'),
         IntlRo => ('\\', '_'),
+        // Not on a full JIS board (半角/全角 is there), but the HHKB sends it: ` and ~.
+        Backquote => ('`', '~'),
         _ => return None,
     };
     Some(pair)

@@ -519,7 +519,7 @@ impl Engine {
                     let raw = raw.or(key.digit()).or_else(|| {
                         layout::output_with(self.mode, self.symbols, Layout::Escaped, key, mods.shift).map(Out::char)
                     });
-                    // Shift on a vowel key whose Shift types nothing else (all but O P): the vowel
+                    // Shift on a vowel key (all of them, O and P too, docs/moonshot.md §9): the vowel
                     // starts its own syllable on ㅇ (spec §4.2).
                     // Not right after a consonant typed with Shift: that Shift may still be held, and
                     // the consonant moves to start the vowel's syllable as any final does (가 ⇧ㄱ ⇧ㅏ →

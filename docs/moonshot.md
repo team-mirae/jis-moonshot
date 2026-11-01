@@ -273,26 +273,26 @@ of 0 as 24 slots.
 
 ### 9.1 Notation
 
-An action is a short run of 2-set jamo, typed as if those keys were pressed, with two marks
-borrowed from kana:
+An action is a short run of 2-set jamo, typed as if those keys were pressed. How a legend is
+written says how it types:
 
 | Mark | Meaning | Example |
 |---|---|---|
 | (none) | a bare vowel, written without ㅇ: it joins the consonant before it like a vowel key, and gets the usual implied ㅇ with nothing before it | ㄷ + ㅙ → 돼; 말 + ㅙ → 마뢔 |
-| ゛ | the ㅇ is real: typed as an initial, so the action starts its own syllable (what Shift+vowel already does, spec §4.2) | 말 + 왜゛ → 말왜 |
+| (written with ㅇ) | the ㅇ is real: typed as an initial, so the action starts its own syllable (what Shift+vowel already does, spec §4.2) | 말 + 왜 (Shift+`−`) → 말왜 |
 | ゜ | ends the syllable with no final: the next consonant starts a syllable, and a vowel after it gets an implied ㅇ | 갈 + ゜ + ㅏ → 갈아 (not 가라) |
 
 ### 9.2 The keys
 
 | Key | Alone | Shift | Was (JIS Korean) |
 |---|---|---|---|
-| `−` | ㅙ | 왜゛ | ! ? |
+| `−` | ㅙ | 왜 | ! ? |
 | `^` | 다 | 도 | ( ) |
 | `¥` | 나 | 니 | — ^ |
-| `@` | ㅡㄹ | 을゛ | ' " |
+| `@` | ㅡㄹ | 을 | ' " |
 | `[` | ゜ | ゜ | [ 「 |
-| `;` | ㅖ | 예゛ | ~ - |
-| `:` | ㅒ | 얘゛ | : ; |
+| `;` | ㅖ | 예 | ~ - |
+| `:` | ㅒ | 얘 | : ; |
 | `]` | 무 | 부 | ] 」 |
 | `,` | ㅢ | , | , , |
 | `.` | ㅂㅅ | . | . . |
@@ -305,9 +305,9 @@ Examples: 하 + `^` → 하다; 나 + Shift+`^` → 나도; ㄱ + `@` → 글, �
 The letter keys change on Shift only:
 
 - **Shift+Q W E R T** type ㅂ ㅈ ㄷ ㄱ ㅅ, as Shift+A types ㅁ. ㅃ ㅉ ㄸ ㄲ ㅆ stay on 1–5.
-- **Shift+O / Shift+P** type ㅔ゜ / ㅖ゜. ㅒ ㅖ moved to `:` and `;`. **[decide]** Shift+O as ㅔ゜
-  (as asked) or ㅐ゜ (its own vowel, like Shift+P).
-- Shift+vowel elsewhere is unchanged: 아゛ (a syllable on a real ㅇ).
+- **Shift+O / Shift+P** are Shift+vowel like every other vowel key: 애, 에, a syllable on a real ㅇ
+  (간 ⇧ㅔ → 간에; ㄱ ⇧ㅐ → 개). ㅒ ㅖ moved to `:` and `;`.
+- Legends write a Shift+vowel as its syllable (아, 우, 애): no marks.
 
 The number row, the other letter keys, F6–F10 and the switch keys stay as they are. The kana
 reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ there too).
@@ -319,7 +319,7 @@ reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ ther
   as the kana reading counts keys. F9 / F10 read each key once (`i` ⇧P `h o n e` F10 → iPhone).
 - **Shift still held.** Shift on a consonant changes nothing, so a Shift+vowel right after one is
   Shift held over: the vowel takes the consonant (가 ⇧ㄱ ⇧ㅏ → 가가; after the ㄲ key, 4 ⇧ㅏ, Shift
-  is new and starts 아゛).
+  is new and starts 아).
 - **The English reading** reads a slot key as its stock JIS character (`-` for ㅙ), as before.
   The standard 2-set reading (spec §10.2) types that character too.
 - **Korean-only keys** (spec §10.3): a slot key that typed Korean inside the word means the keys
@@ -331,12 +331,11 @@ reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ ther
 - **Capitals.** Shift on Q W E R T no longer types Korean, so it reads as a capital: ⇧T ⇧M is TM,
   not 쓰 (only O and P are Korean Shifts now, `KOREAN_SHIFTS`).
 - **Legends.** `examples/legends.rs` (the macOS Keyboard Viewer) prints actions in full (다,
-  ㅡㄹ, 왜゛). `jk_legend` / `jk_legend_in` return one code point, the legend's first (다, ㅡ, 왜),
+  ㅡㄹ, 왜). `jk_legend` / `jk_legend_in` return one code point, the legend's first (다, ㅡ, 왜),
   so the web playground's board shows that until it gets a string legend.
 
 ### 9.4 Open questions
 
-- **[decide]** Shift+O: ㅔ゜ (as asked and built) or ㅐ゜ (its own vowel, like Shift+P's ㅖ゜).
 - **[decide]** A string legend in the C ABI (`jk_legend_text_in`) for the web board and Windows.
 - The learned ranker (`learned.bin`) wasn't retrained on the new keys; the corpus tests pass with
   it and with the rules alone. Retrain when the corpora are at hand (`engine/tools/train_learned.py`).

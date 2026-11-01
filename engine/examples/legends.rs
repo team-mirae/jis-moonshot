@@ -1,5 +1,5 @@
 //! Prints each key's legends in one mode, unshifted and with Shift, by C ABI key id (an action's in
-//! full: 다, ㅡㄹ, 왜゛, docs/moonshot.md §9), for
+//! full: 다, ㅡㄹ, 왜, docs/moonshot.md §9), for
 //! shells that draw or bundle the layout (macOS builds its Keyboard Viewer layouts from this; spec
 //! §3, §3.6).
 //! Usage: cargo run --example legends [mode id]   (default 0, Mode A; lines of

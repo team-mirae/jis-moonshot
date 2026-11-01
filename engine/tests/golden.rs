@@ -131,7 +131,7 @@ fn phone_numbers_type_with_shift_held() {
 
 #[test]
 fn the_keys_right_of_0_type_their_actions() {
-    // docs/moonshot.md §9.2: each action as if its 2-set keys were pressed, with ゛ and ゜.
+    // docs/moonshot.md §9.2: each action as if its 2-set keys were pressed, real ㅇ and ゜ included.
     pre("Minus S-Minus", "왜왜");
     pre("KeyE Minus", "돼");
     pre("KeyA KeyK KeyF Minus", "마뢔");
@@ -166,9 +166,10 @@ fn the_keys_right_of_0_type_their_actions() {
 
 #[test]
 fn f10_reads_every_key_of_an_action_once() {
-    // An action's parts belong to its key: Shift+P (ㅖ゜) converts to one P, ^ (다) to one ^.
+    // An action's parts belong to its key: ろ (로) converts to one \\, ^ (다) to one ^.
     pre("KeyI S-KeyP KeyH KeyO KeyN KeyE F10", "iPhone");
     pre("KeyR Equal F10", "r^");
+    pre("KeyR IntlRo F10", "r\\");
 }
 
 #[test]
@@ -509,11 +510,12 @@ fn backspace_removes_the_shift_vowel_in_one_press() {
 }
 
 #[test]
-fn shift_on_o_and_p_types_e_and_ye_then_a_break() {
-    // docs/moonshot.md §9.2: ㅔ゜ and ㅖ゜; ㅒ ㅖ are on : and ;.
-    pre("KeyR S-KeyO", "게");
-    pre("KeyR S-KeyO KeyS KeyK", "게나");
-    pre("KeyR KeyK KeyS S-KeyP", "가녜");
+fn shift_on_o_and_p_starts_a_syllable_on_ieung() {
+    // Shift+O / Shift+P are Shift+vowel like the rest (spec §4.2); ㅒ ㅖ are on : and ;.
+    pre("KeyR S-KeyO", "개");
+    pre("KeyR S-KeyO KeyS KeyK", "개나");
+    pre("KeyR KeyK KeyS S-KeyP", "간에");
+    pre("KeyA KeyK KeyF S-KeyO", "말애");
     pre("KeyR KeyK KeyS Quote", "가냬");
 }
 
@@ -560,11 +562,11 @@ fn plain_z_still_types_kieuk() {
 #[test]
 fn the_engine_says_which_keys_commit_what_stands() {
     let e = Engine::new();
-    for key in [Key::Space, Key::Enter, Key::Escape, Key::ArrowDown, Key::ArrowLeft, Key::Other, Key::Backquote] {
+    for key in [Key::Space, Key::Enter, Key::Escape, Key::ArrowDown, Key::ArrowLeft, Key::Other, Key::IntlBackslash] {
         assert!(e.commits(key, Mods::NONE), "{key:?}");
     }
     assert!(e.commits(Key::KeyG, Mods { ctrl: true, ..Mods::NONE }));
-    for key in [Key::KeyG, Key::Digit1, Key::Minus, Key::Backspace, Key::F6, Key::F10, Key::Modifier] {
+    for key in [Key::KeyG, Key::Digit1, Key::Minus, Key::Backquote, Key::Backspace, Key::F6, Key::F10, Key::Modifier] {
         assert!(!e.commits(key, Mods::NONE), "{key:?}");
     }
     // Shift+Z is ㅋ, not a commit.

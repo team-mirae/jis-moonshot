@@ -352,9 +352,10 @@ pub const MAX_WITH_KANJI: usize = MAX_WITH_KANA + MAX_KANJI;
 const SIZE: usize = 27;
 const START: usize = 26;
 const END: usize = 26;
-/// Shift on these can be Korean (tense consonants, ㅒ ㅖ); Shift on others mid-word too (Shift+vowel).
-pub(crate) const KOREAN_SHIFTS: &str = "OP";
-pub(crate) const IEUNG_SHIFTS: &str = "YUIHJKLBNM";
+/// Shift on these can be Korean other than Shift+vowel: none in JIS Moonshot (docs/moonshot.md §9;
+/// JIS Korean had Q W E R T O P). Shift on the vowel keys starts a syllable on ㅇ, mid-word too.
+pub(crate) const KOREAN_SHIFTS: &str = "";
+pub(crate) const IEUNG_SHIFTS: &str = "YUIOPHJKLBNM";
 /// Canonical 2-set keys for the dedicated number-row jamo (0 is ㅘ, 1–5 ㅃ ㅉ ㄸ ㄲ ㅆ, 6–9 ㅟ ㅝ ㅚ ㅢ).
 const DIGIT_KEYS: [&str; 10] = ["hk", "q", "w", "e", "r", "t", "nl", "nj", "hl", "ml"];
 
@@ -1062,9 +1063,14 @@ impl Predictor {
                     // One capital (maybe with digits) next to a Latin piece is a letter, not the jamo
                     // its key types: M&A, O&M, CT-P13, K-IFRS. A lowercase one stays Korean ((USD)에).
                     let keys = &piece.readings.english;
+                    // Not a Shift+vowel particle ((Software-as-a-Service)에 as ⇧P): Korean.
+                    let particle = keys.chars().count() == 1
+                        && keys.starts_with(|c: char| IEUNG_SHIFTS.contains(c))
+                        && PARTICLES.contains(&tops[i].as_str());
                     let letter = keys.starts_with(|c: char| c.is_ascii_uppercase())
                         && keys.chars().all(|c| c.is_ascii_alphanumeric())
-                        && keys.chars().filter(char::is_ascii_alphabetic).count() == 1;
+                        && keys.chars().filter(char::is_ascii_alphabetic).count() == 1
+                        && !particle;
                     let beside_latin = (i > 0 && latin(&tops[i - 1])) || tops.get(i + 1).is_some_and(|t| latin(t));
                     let top = if letter && beside_latin { keys } else { &tops[i] };
                     top.clone() + &piece.separator
@@ -1500,6 +1506,9 @@ impl Predictor {
         }
         match context.previous {
             Some(Language::Korean) => margin += STICKY,
+            // A particle right after an English word is the English + particle pattern (report에),
+            // typed apart: Service then 에 as ⇧P.
+            Some(Language::English) if PARTICLES.contains(&korean.as_str()) => margin += PARTICLE,
             Some(Language::English) => margin -= STICKY,
             Some(Language::Japanese) | None => {}
         }

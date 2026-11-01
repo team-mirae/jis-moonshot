@@ -28,7 +28,7 @@ adds a shortcut; it never takes anything away.
 
 JIS Moonshot moves the jamo standard 2-set puts on Shift (moonshot.md §9, 2026-11-02, the owner's
 call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only, and ㅒ ㅖ on `:` and `;`. Shift+Q W E R T type ㅂ ㅈ ㄷ ㄱ
-ㅅ, as Shift on every other consonant does, and Shift+O / Shift+P type ㅔ゜ / ㅖ゜. Everything else
+ㅅ, as Shift on every other consonant does, and Shift on every vowel key, O and P included, starts a syllable on ㅇ (§4.2). Everything else
 on the letter keys is standard 2-set, and `engine/tests/baseline.rs` holds it to that.
 
 Two deliberate exceptions (§4.2):
@@ -94,10 +94,10 @@ except Hangul jamo, which go into the composition automaton (§4).
 | 8 | ㅚ | 8 | most frequent of ㅟ ㅝ ㅚ; middle finger |
 | 9 | ㅢ | 9 | placed for ergonomics |
 | 0 | ㅘ | 0 | JIS kana わ is on this key |
-| − ^ ¥ | ㅙ 다 나 | 왜゛ 도 니 | moonshot.md §9.2 |
+| − ^ ¥ | ㅙ 다 나 | 왜 도 니 | moonshot.md §9.2 |
 
 Digits are on Shift, so numbers type with Shift held. The 12 keys right of 0 type the actions of
-moonshot.md §9.2 (short runs of jamo with ゛ and ゜, §9.1); JIS Korean's symbols on them are gone.
+moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ゜ breaks, §9.1); JIS Korean's symbols on them are gone.
 
 ### 3.2 Q row
 
@@ -105,8 +105,8 @@ moonshot.md §9.2 (short runs of jamo with ゛ and ゜, §9.1); JIS Korean's sym
 |---|---|---|---|
 | Q W E R T | ㅂ ㅈ ㄷ ㄱ ㅅ | same | Shift ignored, as on every consonant (the doubles are on 1–5, §1) |
 | Y U I | ㅛ ㅕ ㅑ | ㅛ ㅕ ㅑ | standard 2-set (Shift: §4.2) |
-| O P | ㅐ ㅔ | ㅔ゜ ㅖ゜ | moonshot.md §9.2 (ㅒ ㅖ are on : and ;) |
-| @ [ | ㅡㄹ ゜ | 을゛ ゜ | moonshot.md §9.2 |
+| O P | ㅐ ㅔ | ㅐ ㅔ | Shift: §4.2 (ㅒ ㅖ are on : and ;, moonshot.md §9.2) |
+| @ [ | ㅡㄹ ゜ | 을 ゜ | moonshot.md §9.2 |
 
 ### 3.3 A row
 
@@ -114,7 +114,7 @@ moonshot.md §9.2 (short runs of jamo with ゛ and ゜, §9.1); JIS Korean's sym
 |---|---|---|---|
 | A S D F G | ㅁ ㄴ ㅇ ㄹ ㅎ | same | standard 2-set |
 | H J K L | ㅗ ㅓ ㅏ ㅣ | same | standard 2-set |
-| ; : ] | ㅖ ㅒ 무 | 예゛ 얘゛ 부 | moonshot.md §9.2 |
+| ; : ] | ㅖ ㅒ 무 | 예 얘 부 | moonshot.md §9.2 |
 
 ### 3.4 Z row
 
@@ -146,8 +146,9 @@ type, and which stock keyboard sits under it. Mode A is the default.
 JIS Moonshot is **JIS only** (moonshot.md §2). JIS Korean's **Mode B** (US ANSI) and **Mode C** (UK
 ISO), and their English modes `B_QWERTY` and `CJ_QWERTY`, are retired: their ids are never reused,
 `jk_set_mode` refuses them, and a saved setting naming one falls back to Mode A. The kana reading
-needs the JIS kana legends, which no other keyboard has. `IntlBackslash` and `Backquote` aren't in
-Mode A: they commit and pass through (§3.5).
+needs the JIS kana legends, which no other keyboard has. `Backquote` (the HHKB's `` ` `` key; 半角/全角
+on a full JIS board) types `` ` `` and `~` as on stock US keyboards, in every mode. `IntlBackslash`
+isn't in Mode A: it commits and passes through (§3.5).
 
 The stock keyboard (JIS) drives everything that reads keys as plain characters: the **English
 readings** (`Engine::english`) and the **standard 2-set reading** (§10.2).
@@ -431,8 +432,8 @@ The ㅇ from a double press was asked for, so F6 commits it as it is (말이 F6 
 plain implied ㅇ. Backspace removes the
 repeat and gives the first reading back (말이 → 마리).
 
-**Shift+vowel starts a syllable on ㅇ.** Shift on a vowel key whose Shift types nothing else (Y U I
-H J K L B N M; not O and P, which type ㅔ゜ ㅖ゜) finishes the syllable before it as it is, final
+**Shift+vowel starts a syllable on ㅇ.** Shift on a vowel key (all of them in JIS Moonshot: Y U I O
+P H J K L B N M; JIS Korean left out O and P, which typed ㅒ ㅖ) finishes the syllable before it as it is, final
 included, and starts a new syllable with ㅇ and that vowel. It's the single-keystroke alternative
 to the double press, and it also keeps two vowels apart that would otherwise combine.
 
@@ -446,7 +447,7 @@ to the double press, and it also keeps two vowels apart that would otherwise com
 | ⇧ㄱ ⇧ㅏ | 가: an initial waiting for its vowel takes it as usual, so Shift held over from a consonant is harmless |
 | ㄱ ㅏ ⇧ㄱ ⇧ㅏ ㅇ ㅣ | 가가이: right after a consonant typed with Shift (which changes nothing in JIS Moonshot, §1), Shift on a vowel may just be held over, so the vowel takes the consonant as it takes any final. Also `ㅂ ㅣ ⇧ㅅ ⇧ㅏ` → 비사 |
 | ㅇ ㅣ 5 ⇧ㅓ, ㅇ ㅣ 5 ㅓ | 있어, 이써: after the dedicated ㅆ key (5), a Shift is new |
-| ㄱ ⇧ㅐ, 간 ⇧ㅔ | 게, 가녜: O and P type ㅔ゜ ㅖ゜ (moonshot.md §9.2) |
+| ㄱ ⇧ㅐ, 간 ⇧ㅔ | 개, 간에: O and P are vowel keys like the rest (ㅒ ㅖ are on : and ;) |
 
 The ㅇ was asked for, so F6 commits it as it is (unlike an implied ㅇ). Backspace removes the
 whole Shift+vowel in one press. The English reading keeps the shifted letter (⇧L → `L`).

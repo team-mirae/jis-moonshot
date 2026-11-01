@@ -119,9 +119,12 @@ fn every_mode_leaves_the_control_keys_alone() {
 }
 
 #[test]
-fn backquote_and_the_iso_key_pass_through_in_mode_a() {
+fn backquote_types_its_stock_characters_and_the_iso_key_passes_through_in_mode_a() {
     let mut a = Engine::new();
-    assert!(!a.key(Key::Backquote, Mods::NONE).consumed);
+    // The HHKB's ` key types ` and ~, as stock.
+    a.key(Key::Backquote, Mods::NONE);
+    a.key(Key::Backquote, Mods::SHIFTED);
+    assert_eq!(a.preedit(), "`~");
     assert!(!a.key(Key::IntlBackslash, Mods::NONE).consumed);
 }
 

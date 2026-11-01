@@ -190,7 +190,7 @@ fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> 
     let (mode, symbols) = (template.mode(), template.dedicated_symbols());
     let wanted: std::collections::HashSet<char> = targets.iter().flatten().copied().collect();
     let part_of_text = |c: char| stream(&c.to_string()).iter().all(|c| wanted.contains(c));
-    // An action (docs/moonshot.md §9) is useful when the text has all its jamo (and the ㅇ of ゛).
+    // An action (docs/moonshot.md §9) is useful when the text has all its jamo (and a real ㅇ's).
     // A lone ゜ adds nothing to the text, so it never is.
     let output_useful = |out: Out| match out {
         Out::Keys(action) => {

@@ -227,8 +227,6 @@ h1 {
 
 .key.sym .base { font-size: calc(var(--u) * 0.28); }
 .key .base.long { font-size: calc(var(--u) * 0.24); }
-/* JIS Moonshot: Shift that differs from JIS Korean (and from standard 2-set). */
-.key.changed { box-shadow: inset 0 calc(var(--u) * -0.06) 0 var(--cap-edge), inset 0 0 0 1.5px var(--legend-shift); }
 
 
 .key.fn .base {
@@ -350,7 +348,6 @@ h1 {
 
 .swatch i.sym { background: var(--cap-sym); }
 .swatch i.fn { background: var(--cap-fn); }
-.swatch i.changed { box-shadow: inset 0 -2px 0 var(--cap-edge), inset 0 0 0 1.5px var(--legend-shift); }
 
 kbd {
   font-family: var(--font);
@@ -392,15 +389,14 @@ footer {
     <div class="swatches">
       <span class="swatch"><i></i>2-set letter keys</span>
       <span class="swatch"><i class="sym"></i>Number row and the 12 keys right of 0 (24 Korean slots)</span>
-      <span class="swatch"><i class="changed"></i>Korean Shift differs from standard 2-set</span>
       <span class="swatch"><i class="fn"></i>Function keys</span>
     </div>
     <dl class="notes">
-      <div><dt>゛ real ㅇ</dt><dd>The ㅇ is typed as an initial, so the action starts its own syllable: 말 + 왜゛ → 말왜. Shift+vowel is this too (아゛).</dd></div>
+      <div><dt>Syllables with ㅇ</dt><dd>A legend with ㅇ (왜, 을, and Shift+vowel: 아, 애) is a real ㅇ, so it starts its own syllable: 말 + 왜 → 말왜. Bare jamo (ㅙ) join the consonant before them.</dd></div>
       <div><dt>゜ syllable break</dt><dd>Ends the syllable with no final: the next consonant starts a syllable and a vowel gets an implied ㅇ. 갈 + ゜ + ㅏ → 갈아, not 가라.</dd></div>
       <div><dt>Bare vowels</dt><dd>Written without ㅇ (ㅙ ㅖ ㅢ): they join the consonant before them, ㄷ + ㅙ → 돼, and take the usual implied ㅇ with nothing before them.</dd></div>
       <div><dt>Syllables and finals</dt><dd>다 도 나 니 무 부 메 로 type their two jamo (하 + 다 → 하다); ㅡㄹ and ㅂㅅ likewise (어 + ㅂㅅ → 없). 로゜ is 로 then a break.</dd></div>
-      <div><dt>Shift on the letter keys</dt><dd>Shift+Q W E R T type ㅂ ㅈ ㄷ ㄱ ㅅ (ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5); Shift+O P type ㅔ゜ ㅖ゜ (ㅒ ㅖ are on : and ;).</dd></div>
+      <div><dt>Shift on the letter keys</dt><dd>Shift+Q W E R T type ㅂ ㅈ ㄷ ㄱ ㅅ (ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5); Shift on every vowel key, O and P too, starts a syllable on ㅇ (ㅒ ㅖ are on : and ;).</dd></div>
       <div><dt>Symbols</dt><dd>Korean keeps only , . · on Shift. Symbols come from 無変換 (English), ー from the kana reading, and ⌥ , . / [ ] type 、。・『』.</dd></div>
       <div><dt>F6 ひらがな · F7 カタカナ</dt><dd>The staged keys read as kana until the next commit. F8 puts the kana reading's kanji on top; Shift+F8 opens the hanja list.</dd></div>
       <div><dt>F9 전각 · F10 반각</dt><dd>The word's keys as full- or half-width letters; pressing again cycles as typed → UPPER → Capitalized.</dd></div>
@@ -414,7 +410,7 @@ footer {
 <script>
 // Each key: [ko, shift ko, en, shift en, ja, shift ja, kind]. A shift reading that is null or the
 // same as the key alone isn't drawn. en: the JIS key cap (letters type lowercase alone). kind: ""
-// letter, "sym", and "changed" where Korean Shift differs from standard 2-set.
+// letter or "sym".
 const FN = [["F6", "ひらがな"], ["F7", "カタカナ"], ["F8", "漢字"], ["F9", "전각"], ["F10", "반각"]];
 const ROWS = [
   { offset: 0, keys: [
@@ -423,28 +419,28 @@ const ROWS = [
     ["ㅆ", "5", "5", "%", "え", "ぇ", "sym"], ["ㅟ", "6", "6", "&", "お", "ぉ", "sym"],
     ["ㅝ", "7", "7", "'", "や", "ゃ", "sym"], ["ㅚ", "8", "8", "(", "ゆ", "ゅ", "sym"],
     ["ㅢ", "9", "9", ")", "よ", "ょ", "sym"], ["ㅘ", "0", "0", null, "わ", "を", "sym"],
-    ["ㅙ", "왜゛", "−", "=", "ほ", null, "sym"], ["다", "도", "^", "~", "へ", null, "sym"],
+    ["ㅙ", "왜", "−", "=", "ほ", null, "sym"], ["다", "도", "^", "~", "へ", null, "sym"],
     ["나", "니", "¥", "|", "ー", null, "sym"],
   ] },
   { offset: 0.5, keys: [
-    ["ㅂ", null, "Q", null, "た", null, "changed"], ["ㅈ", null, "W", null, "て", null, "changed"],
-    ["ㄷ", null, "E", null, "い", "ぃ", "changed"], ["ㄱ", null, "R", null, "す", null, "changed"],
-    ["ㅅ", null, "T", null, "か", null, "changed"], ["ㅛ", "요゛", "Y", null, "ん", null],
-    ["ㅕ", "여゛", "U", null, "な", null], ["ㅑ", "야゛", "I", null, "に", null],
-    ["ㅐ", "ㅔ゜", "O", null, "ら", null, "changed"], ["ㅔ", "ㅖ゜", "P", null, "せ", null, "changed"],
-    ["ㅡㄹ", "을゛", "@", "`", "゛", null, "sym"], ["゜", "゜", "[", "{", "゜", "「", "sym"],
+    ["ㅂ", null, "Q", null, "た", null], ["ㅈ", null, "W", null, "て", null],
+    ["ㄷ", null, "E", null, "い", "ぃ"], ["ㄱ", null, "R", null, "す", null],
+    ["ㅅ", null, "T", null, "か", null], ["ㅛ", "요", "Y", null, "ん", null],
+    ["ㅕ", "여", "U", null, "な", null], ["ㅑ", "야", "I", null, "に", null],
+    ["ㅐ", "애", "O", null, "ら", null], ["ㅔ", "에", "P", null, "せ", null],
+    ["ㅡㄹ", "을", "@", "`", "゛", null, "sym"], ["゜", "゜", "[", "{", "゜", "「", "sym"],
   ] },
   { offset: 0.75, keys: [
     ["ㅁ", null, "A", null, "ち", null], ["ㄴ", null, "S", null, "と", null], ["ㅇ", null, "D", null, "し", null],
-    ["ㄹ", null, "F", null, "は", null], ["ㅎ", null, "G", null, "き", null], ["ㅗ", "오゛", "H", null, "く", null],
-    ["ㅓ", "어゛", "J", null, "ま", null], ["ㅏ", "아゛", "K", null, "の", null], ["ㅣ", "이゛", "L", null, "り", null],
-    ["ㅖ", "예゛", ";", "+", "れ", null, "sym"], ["ㅒ", "얘゛", ":", "*", "け", null, "sym"],
+    ["ㄹ", null, "F", null, "は", null], ["ㅎ", null, "G", null, "き", null], ["ㅗ", "오", "H", null, "く", null],
+    ["ㅓ", "어", "J", null, "ま", null], ["ㅏ", "아", "K", null, "の", null], ["ㅣ", "이", "L", null, "り", null],
+    ["ㅖ", "예", ";", "+", "れ", null, "sym"], ["ㅒ", "얘", ":", "*", "け", null, "sym"],
     ["무", "부", "]", "}", "む", "」", "sym"],
   ] },
   { offset: 1.25, keys: [
     ["ㅋ", null, "Z", null, "つ", "っ"], ["ㅌ", null, "X", null, "さ", null], ["ㅊ", null, "C", null, "そ", null],
-    ["ㅍ", null, "V", null, "ひ", null], ["ㅠ", "유゛", "B", null, "こ", null], ["ㅜ", "우゛", "N", null, "み", null],
-    ["ㅡ", "으゛", "M", null, "も", null], ["ㅢ", ",", ",", "<", "ね", "、", "sym"],
+    ["ㅍ", null, "V", null, "ひ", null], ["ㅠ", "유", "B", null, "こ", null], ["ㅜ", "우", "N", null, "み", null],
+    ["ㅡ", "으", "M", null, "も", null], ["ㅢ", ",", ",", "<", "ね", "、", "sym"],
     ["ㅂㅅ", ".", ".", ">", "る", "。", "sym"], ["메", "·", "/", "?", "め", "・", "sym"],
     ["로", "로゜", "\\", "_", "ろ", null, "sym"],
   ] },

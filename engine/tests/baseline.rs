@@ -271,10 +271,10 @@ fn the_core_principle_examples() {
     // ㅃ is on 1, and Shift+Q types ㅂ like Shift on any other consonant (docs/moonshot.md §9).
     assert_eq!(typed(Mode::A, &presses(&[("Digit1", false), ("KeyK", false)])), "빠");
     assert_eq!(typed(Mode::A, &presses(&[("KeyQ", true), ("KeyK", false)])), "바");
-    // ㅒ ㅖ are on : and ;, and Shift+O / Shift+P type ㅔ゜ / ㅖ゜.
+    // ㅒ ㅖ are on : and ;, and Shift+O / Shift+P start a syllable on ㅇ like Shift on any vowel.
     assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("Quote", false)])), "걔");
     assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("Semicolon", false)])), "계");
-    assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("KeyO", true), ("KeyS", false), ("KeyK", false)])), "게나");
+    assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("KeyO", true), ("KeyS", false), ("KeyK", false)])), "개나");
     // ㅗ then ㅏ is still ㅘ, even though 0 also types ㅘ.
     assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("KeyH", false), ("KeyK", false)])), "과");
     assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("Digit0", false)])), "과");
