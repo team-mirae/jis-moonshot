@@ -205,6 +205,36 @@ fn option_space_types_a_full_width_space() {
     assert!(!e.key(Key::Space, Mods { alt: true, meta: true, ..Mods::NONE }).consumed);
 }
 
+#[test]
+fn option_symbols_type_full_width() {
+    let alt = Mods { alt: true, ..Mods::NONE };
+    let shift_alt = Mods { alt: true, shift: true, ..Mods::NONE };
+    let mut e = Engine::new();
+    // Off by default: a shortcut, committed and passed on.
+    press(&mut e, "KeyG KeyK KeyS");
+    assert_eq!((e.key(Key::Digit1, shift_alt).commit.as_str(), e.preedit().as_str()), ("한", ""));
+    e.set_option_space(true);
+    // ⇧⌥1 → ！ after what's staged; ⌥ , . / [ ] → 、。・「」 (JIS [ and ] are the BracketRight and
+    // Backslash codes; BracketLeft is @); ⌥1 → １.
+    press(&mut e, "KeyG KeyK KeyS");
+    let out = e.key(Key::Digit1, shift_alt);
+    assert_eq!((out.commit.as_str(), out.consumed), ("한！", true));
+    let typed: String = [Key::Comma, Key::Period, Key::Slash, Key::BracketRight, Key::Backslash, Key::BracketLeft, Key::Digit1]
+        .into_iter()
+        .map(|k| e.key(k, alt).commit)
+        .collect();
+    assert_eq!(typed, "、。・「」＠１");
+    assert_eq!(e.key(Key::Slash, shift_alt).commit, "？");
+    // In JIS Kana too, after the kana.
+    e.set_mode(Mode::AKana);
+    press(&mut e, "KeyT");
+    assert_eq!(e.key(Key::Period, alt).commit, "か。");
+    // Letters stay shortcuts (passed on), and ⌘ with it too.
+    e.set_mode(Mode::A);
+    assert!(!e.key(Key::KeyA, alt).consumed);
+    assert!(!e.key(Key::Digit1, Mods { alt: true, meta: true, ..Mods::NONE }).consumed);
+}
+
 #[cfg(feature = "english")]
 #[test]
 fn option_space_types_an_underscore_in_english() {

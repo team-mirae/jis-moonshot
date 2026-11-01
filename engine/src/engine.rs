@@ -431,6 +431,18 @@ impl Engine {
         if key == Key::Space && self.option_space && mods.alt && !mods.ctrl && !mods.meta {
             return self.commit("\u{3000}".into(), true);
         }
+        // ⌥ + a symbol or digit key (the same setting): commit, then the key's JIS legend in
+        // full-width, as a Japanese IME types it (⇧⌥1 → ！, ⌥, → 、). Letters stay shortcuts.
+        if self.option_space
+            && mods.alt
+            && !mods.ctrl
+            && !mods.meta
+            && key.letter().is_none()
+            && let Some(Out::Char(c)) = layout::output(Layout::Escaped, key, mods.shift)
+            && zenkaku(c) != c
+        {
+            return self.commit(zenkaku(c).to_string(), true);
+        }
         if mods.is_shortcut() {
             return self.commit(String::new(), false);
         }
@@ -1282,6 +1294,19 @@ pub fn full_width(c: char) -> char {
         '!'..='~' => char::from_u32(c as u32 + 0xFEE0).unwrap_or(c),
         ' ' => '\u{3000}',
         _ => WIDTH_PAIRS.iter().find(|&&(half, _)| half == c).map_or(c, |&(_, full)| full),
+    }
+}
+
+/// What ⌥ + a key types (docs/moonshot.md §4): Japanese punctuation for , . / [ ] (、。・「」, as a
+/// Japanese IME types them), else the full-width form.
+fn zenkaku(c: char) -> char {
+    match c {
+        ',' => '、',
+        '.' => '。',
+        '/' => '・',
+        '[' => '「',
+        ']' => '」',
+        _ => full_width(c),
     }
 }
 

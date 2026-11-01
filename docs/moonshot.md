@@ -131,6 +131,10 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   `A_KANA`, and types `_` in the English modes. It's an engine setting (`jk_set_option_space`), off
   by default: on Windows Alt+Space is the window menu. In a terminal, ⌥ in an English mode still
   goes to the app untouched.
+- **⌥ + a symbol or digit key** (macOS, the same setting, 2026-11-01) commits what shows and types
+  the key's JIS legend in full-width in Mode A and `A_KANA`: ⇧⌥1 → ！, ⌥1 → １, ⇧⌥/ → ？. The
+  punctuation a Japanese IME converts is typed its way: ⌥ `,` `.` `/` `[` `]` → 、 。 ・ 「 」. ⌥ +
+  a letter is still a shortcut for the app.
 - **Space** commits and types a space; with kana showing it types a full-width space (U+3000), as
   Japanese IMEs do in hiragana mode. **Enter** with kana showing commits without a new line
   (Japanese IMEs confirm with Enter). **[decide]**
