@@ -3,19 +3,16 @@ import Cocoa
 #if PREDICT
 /// Apps where predictions start off (spec §10.11): typing there is commands, paths, passwords or a
 /// game's chat, where a reading other than the keys typed does harm, or the app has its own
-/// integration. Detected when JIS Korean is used in them: nothing is added to the user's settings
+/// integration. Detected when JIS Moonshot is used in them: nothing is added to the user's settings
 /// until they turn predictions on there themselves (which then wins).
 enum DefaultOffApps {
     enum Reason {
-        /// Commands, paths, passwords, remote sessions.
+        /// Commands, paths, passwords, remote sessions, a game's chat.
         case sensitive(String)
-        /// Minecraft Java Edition: the JIS Korean mod types in-game.
-        case dedicatedMod
 
         var notice: String {
             switch self {
             case .sensitive(let kind): "sensitive app (\(kind))"
-            case .dedicatedMod: "dedicated mod recommended"
             }
         }
     }
@@ -55,7 +52,8 @@ enum DefaultOffApps {
             "com.mojang.minecraftlauncher", "com.mojang.launcher", "net.minecraft.launcher", "com.moonsworth.client",
             "org.prismlauncher.prismlauncher", "net.java.openjdk.java", "com.oracle.java", "org.openjdk.java",
         ] {
-            map[id] = .dedicatedMod
+            // Minecraft Java Edition: a game's chat and commands. (JIS Moonshot has no mod.)
+            map[id] = .sensitive("game")
         }
         return map
     }()
@@ -92,7 +90,7 @@ enum DefaultOffApps {
         guard !noticed.contains(bundleID) else { return }
         noticed.insert(bundleID)
         UserDefaults.standard.set(Array(noticed).sorted(), forKey: noticedKey)
-        StatusNotice.show("JIS Korean: predictions are off in \(DisabledApps.displayName(bundleID)): \(reason.notice). Turn them on from the input menu.")
+        StatusNotice.show("JIS Moonshot: predictions are off in \(DisabledApps.displayName(bundleID)): \(reason.notice). Turn them on from the input menu.")
     }
 }
 

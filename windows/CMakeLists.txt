@@ -1,9 +1,10 @@
-# The JIS Korean TSF text input processor (jiskorean.dll) and its tests. tools/build.ps1 builds
-# the engine with cargo first and passes it in as JK_ENGINE_LIB.
+# The JIS Moonshot TSF text input processor (jismoonshot.dll) and its tests. tools/build.ps1 builds
+# the engine with cargo first and passes it in as JK_ENGINE_LIB (the engine keeps JIS Korean's
+# names: jis_korean.lib, jis_korean.h).
 cmake_minimum_required(VERSION 3.28)
-project(jiskorean LANGUAGES CXX RC)
+project(jismoonshot LANGUAGES CXX RC)
 
-option(JK_PREDICT "Build with the predictive layer (spec §10); the engine must match" ON)
+# Predictions are always built (docs/moonshot.md §6: no lite build); the engine must have them.
 option(JK_LEARNED "Embed the learned ranker's model (spec §10.13); off for the legacy engine" ON)
 set(JK_ENGINE_LIB "" CACHE FILEPATH "jis_korean.lib, built by cargo for this architecture")
 if(NOT EXISTS "${JK_ENGINE_LIB}")
@@ -25,15 +26,13 @@ string(REGEX MATCH "\"([0-9]+)\\.([0-9]+)\\.([0-9]+)[^\"]*\"" _ "${version_line}
 set(JK_VERSION "${CMAKE_MATCH_0}")
 string(REPLACE "\"" "" JK_VERSION "${JK_VERSION}")
 set(JK_VERSION_NUMBERS "${CMAKE_MATCH_1},${CMAKE_MATCH_2},${CMAKE_MATCH_3},0")
-configure_file(src/jiskorean.rc.in "${CMAKE_CURRENT_BINARY_DIR}/jiskorean.rc" @ONLY)
+configure_file(src/jismoonshot.rc.in "${CMAKE_CURRENT_BINARY_DIR}/jismoonshot.rc" @ONLY)
 
 add_compile_options(/W4 /utf-8 /permissive- /EHsc)
 add_compile_definitions(UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
-if(JK_PREDICT)
-    add_compile_definitions(JK_PREDICT)
-    if(JK_LEARNED)
-        add_compile_definitions(JK_LEARNED)
-    endif()
+add_compile_definitions(JK_PREDICT)
+if(JK_LEARNED)
+    add_compile_definitions(JK_LEARNED)
 endif()
 
 # The engine and what Rust's standard library links against on Windows.
@@ -46,7 +45,7 @@ add_library(jk_keymap STATIC src/key_map.cpp)
 target_include_directories(jk_keymap PUBLIC src)
 target_link_libraries(jk_keymap PUBLIC jk_engine)
 
-add_library(jiskorean SHARED
+add_library(jismoonshot SHARED
     src/candidate_window.cpp
     src/display_attribute.cpp
     src/dllmain.cpp
@@ -60,16 +59,16 @@ add_library(jiskorean SHARED
     src/text_service.cpp
     src/training.cpp
     src/training_lines.cpp
-    src/jiskorean.def
-    "${CMAKE_CURRENT_BINARY_DIR}/jiskorean.rc")
-target_include_directories(jiskorean PRIVATE src)
-target_link_libraries(jiskorean PRIVATE jk_keymap jk_engine ole32 oleaut32 user32 gdi32 shell32)
+    src/jismoonshot.def
+    "${CMAKE_CURRENT_BINARY_DIR}/jismoonshot.rc")
+target_include_directories(jismoonshot PRIVATE src)
+target_link_libraries(jismoonshot PRIVATE jk_keymap jk_engine ole32 oleaut32 user32 gdi32 shell32)
 
 enable_testing()
-add_executable(jiskorean_tests tests/main.cpp src/json.cpp src/log.cpp src/settings.cpp src/training_lines.cpp)
-target_link_libraries(jiskorean_tests PRIVATE jk_keymap jk_engine)
-target_compile_definitions(jiskorean_tests PRIVATE JK_DOCS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../docs")
-add_test(NAME jiskorean_tests COMMAND jiskorean_tests)
+add_executable(jismoonshot_tests tests/main.cpp src/json.cpp src/log.cpp src/settings.cpp src/training_lines.cpp)
+target_link_libraries(jismoonshot_tests PRIVATE jk_keymap jk_engine)
+target_compile_definitions(jismoonshot_tests PRIVATE JK_DOCS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../docs")
+add_test(NAME jismoonshot_tests COMMAND jismoonshot_tests)
 
 # A window with a classic Edit and a RichEdit, for typing through the installed TIP by hand or
 # by tools/type-test.ps1.

@@ -1,6 +1,8 @@
-# Training contract: tuning JIS Korean's predictions from your own data
+# Training contract: tuning JIS Moonshot's predictions from your own data
 
-A **training file** tunes JIS Korean's predictions (spec §10) to one person. It's a single JSON file:
+A **training file** tunes JIS Moonshot's predictions (spec §10, docs/moonshot.md §5) to one person:
+its Korean, English and Japanese kana readings. JIS Moonshot also reads JIS Korean's training files
+(`"format": "jis-korean-training"`). It's a single JSON file:
 `docs/training-contract.schema.json` is its JSON Schema, and `docs/training-example.json` is a
 worked example.
 
@@ -29,13 +31,14 @@ first.
 
 ```json
 {
-  "format": "jis-korean-training",
+  "format": "jis-moonshot-training",
   "version": 1,
   "source": { "tool": "type-like-me", "created": "2026-10-19", "description": "style corpus, turns 001–003" },
   "weights": { "english": 0.8, "implied-l": 0 },
   "vocabulary": {
     "korean": [{ "word": "데이터센터", "count": 50, "confidence": "confirmed" }],
-    "english": [{ "word": "paradox" }]
+    "english": [{ "word": "paradox" }],
+    "japanese": [{ "word": "ありがとう" }, { "word": "サーバー", "count": 40 }]
   },
   "avoid": [{ "word": "god", "language": "english" }],
   "examples": [{ "text": "기준입니다" }, { "text": "산이", "keys": "KeyT KeyK KeyS KeyL", "count": 2 }],
@@ -46,7 +49,8 @@ first.
 }
 ```
 
-**Required:** `format` (exactly `"jis-korean-training"`) and `version` (`1`). Everything else is
+**Required:** `format` (`"jis-moonshot-training"`, or JIS Korean's `"jis-korean-training"`) and
+`version` (`1`). Everything else is
 optional, and readers ignore fields they don't know, so later versions can add fields. Limits: 2 MB,
 5,000 vocabulary entries per language, 2,000 examples.
 
@@ -71,6 +75,7 @@ weight set here counts as **set by hand**, so it wins over anything learned from
 | `keep-finals` | a final kept before a vowel (말이 for 마리's keys) | more kept-final readings |
 | `hanja` | hanja (always below the top) | hanja listed sooner |
 | `implied-l` | an implied ㄹ after ㄴ (전력 for 저녁's keys) | more 전력-style readings |
+| `kana` | the keys read on the JIS kana layout (`byiaf` → こんにちは) | kana wins close calls; 0 turns the kana reading off (F6 / F7 still type kana) |
 
 **0 turns a scenario off** entirely. That works for every key except `korean` and `english`, which
 are clamped to 0.1. Leave a key out to keep its current value, or its learned one.
@@ -84,6 +89,9 @@ keeps its final (spec §10.3).
 - `korean`: Hangul words with no spaces, as you write them (데이터센터, 상향조정, 토큰량). Compounds
   you always write joined belong here.
 - `english`: Latin words (kubernetes, paradox). Case doesn't matter.
+- `japanese`: kana words as JIS Moonshot types them, without kanji: hiragana for native words
+  (ありがとう, がっこう), katakana for loanwords (サーバー). A known word, or a phrase made of known words
+  and particles, ranks the kana reading up (docs/moonshot.md §5).
 - Each entry is `{ "word", "count"?, "confidence"? }`.
   - **count:** how common the word is for you. It's on the same scale as the built-in lists, which
     count uses in about 3 million sentences: 8 is just in, 100 is common, 1000+ is very common.
@@ -98,7 +106,7 @@ keys `g o d` read as **god** above 행, and god을 above 행을. Adding 행 to `
 bare word; one `avoid` entry for god fixes it with every particle.
 
 - Each entry is `{ "word", "language", "strength"? }`.
-  - **language:** `korean` (Hangul, no spaces) or `english` (Latin letters).
+  - **language:** `korean` (Hangul, no spaces), `english` (Latin letters) or `japanese` (kana).
   - **strength:** `soft` (the default) pushes the word down by 4 bits, as if it were 16 times less
     likely. `strong` also keeps it off the top whatever the scores, the way hanja are kept off it.
 - It covers the word alone and followed by a particle (god, god을, god에서; 마리, 마리가).
@@ -117,8 +125,9 @@ the importer reports where each example landed.
 - `text`: the word as meant, e.g. 산이, 기준입니다, GPU랙.
 - `keys` (optional): what was pressed, as `KeyboardEvent.code` names separated by spaces, with `S-`
   before a key typed with Shift. 산이 typed lazily is `KeyT KeyK KeyS KeyL`; 있습니다 with Shift on
-  ㅣ is `S-KeyL S-KeyT KeyT KeyM KeyQ KeyS KeyL KeyE KeyK`. Without `keys`, the cheapest JIS Korean
-  keys for `text` are used. Use `keys` when you type a word some other way, for example lazily
+  ㅣ is `S-KeyL S-KeyT KeyT KeyM KeyQ KeyS KeyL KeyE KeyK`. Without `keys`, the cheapest JIS Moonshot
+  keys for `text` are used. **Kana examples need `keys`**, on the JIS kana layout: きって is
+  `KeyG S-KeyZ KeyW`. F6 and F7 switch to kana typing, so they don't belong in `keys`. Use `keys` when you type a word some other way, for example lazily
   without the double press, or `9` for 의.
 - `count` (optional, 1–20): how many times to learn it.
 
@@ -145,16 +154,16 @@ sits where it does.
     until you clear them.
   - Examples feed the learner, which is forgotten after 24 hours like all learned choices there.
   - A summary shows what was applied.
-- **macOS:** put the file at `~/Library/Application Support/JIS Korean/training.json`. You can drag
+- **macOS:** put the file at `~/Library/Application Support/JIS Moonshot/training.json`. You can drag
   it there in Finder; the input menu's "Open Training Folder" opens that folder.
-  - It's read the next time you switch to JIS Korean, and again whenever its content changes
+  - It's read the next time you switch to JIS Moonshot, and again whenever its content changes
     (saving it unchanged, or touching it, applies nothing again).
   - Weights go to the `Weight.<Scenario>` preferences, the vocabulary and avoided words are kept on
     your Mac, and
     examples feed the learner even with "Learn from My Choices" off.
-- **Windows:** put the file at `%APPDATA%\JIS Korean\training.json`; the menu's Learned Weights →
+- **Windows:** put the file at `%APPDATA%\JIS Moonshot\training.json`; the menu's Learned Weights →
   "Open Training Folder" opens that folder.
-  - It's read the next time JIS Korean activates after the file's modified time changed.
+  - It's read the next time JIS Moonshot activates after the file's modified time changed.
   - Weights go to the `Weight.<Scenario>` settings, the vocabulary and avoided words are kept on
     this PC, and examples feed the learner, turning on "Learn from My Choices".
 - **Undo:**
@@ -201,6 +210,7 @@ conversation. Follow these rules.
 | 4 | "How much English do you mix into Korean (report를, GPU랙)?" | a lot → `mixed: 1.5`, `english: 1.2`; little → `english: 0.8` |
 | 5 | "Do you skip the double press, so 말이 comes out as 마리 and you fix it?" | often → `keep-finals: 1.5`; never → leave out |
 | 6 | "Do you use the number-row keys for digits, as on plain 2-set?" | yes → `two-set: 1.5`; no → leave out |
+| 7 | "How often will you type Japanese kana, compared with Korean?" | often → `kana: 1.5`; rarely → `kana: 0.5`; never → `kana: 0` |
 
 **Signals in a typo log, when you have one:**
 - **"Prediction picked the wrong language or script"** (wrong English) means the data supports

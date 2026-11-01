@@ -5,7 +5,7 @@
 //! the text so far. Keys come from the engine's own layout tables, not a copy. It plays the layout
 //! the way a fluent typist would: dedicated keys, the implied ㅇ, Shift+vowel and the double press
 //! where they save keystrokes, F10 or an input-source switch for
-//! Latin words, and F7 for hanja. Where several plans work it takes the cheapest (Shift counts as
+//! Latin words, and Shift+F7 for hanja. Where several plans work it takes the cheapest (Shift counts as
 //! a press).
 //!
 //! [`count`] wraps it for hosts (the web playground) together with the conventional estimate.
@@ -37,7 +37,7 @@ pub struct Counts {
 }
 
 /// Counts the key presses for `text` on JIS Korean and on conventional 2-set. With a dictionary,
-/// hanja are typed with F7; without one they're left out.
+/// hanja are typed with Shift+F7; without one they're left out.
 pub fn count(text: &str, dictionary: Option<Arc<Dictionary>>) -> Counts {
     let mut robot = Robot::new(dictionary);
     let typed = robot.type_text(text);
@@ -63,6 +63,9 @@ pub struct Press {
     pub key: Key,
     pub shift: bool,
 }
+
+/// Commits the unconfirmed text and types nothing: Shift+Enter (spec §5.1).
+const COMMIT: Press = Press { key: Key::Enter, shift: true };
 
 impl Press {
     pub fn new(key: Key) -> Press {
@@ -711,19 +714,20 @@ impl Robot {
         self.report.pasted += 1;
     }
 
-    /// Commits first if the unconfirmed text ends in Hangul that F7 or F10 would pick up.
+    /// Commits first if the unconfirmed text ends in Hangul that Shift+F7 or F10 would pick up.
+    /// Shift+Enter commits (JIS Moonshot's F6 types hiragana, docs/moonshot.md §4).
     fn break_word(&mut self) {
         if self.screen.ends_in_hangul() {
-            self.press_all(&[Press::new(Key::F6)]);
+            self.press_all(&[COMMIT]);
         }
     }
 
     fn type_char(&mut self, c: char, next: Option<char>) -> Result<(), ()> {
         let want = format!("{}{c}", self.expected);
         if is_syllable(c) {
-            // F6 before Latin, hanja or a bare jamo would drop an implied ㅇ, so don't use one then.
-            let f6_next = next.is_some_and(|n| n.is_ascii_alphabetic() || is_hanja(n) || is_compat_jamo(n));
-            let plans = self.syllable_plans(c, !f6_next);
+            // The commit before Latin, hanja or a bare jamo (Shift+Enter) keeps an implied ㅇ.
+            let _ = next;
+            let plans = self.syllable_plans(c, true);
             let plan = self.try_plans(plans, &want).ok_or(())?;
             self.report.dedicated_keys += plan.dedicated;
             self.report.implied_ieung += plan.implied as usize;
@@ -736,15 +740,19 @@ impl Robot {
         } else if is_compat_jamo(c) {
             self.break_word();
             let ways = self.keymap.jamo_ways(self.layout(), c);
-            // A bare jamo: type it, then F6 commits it as it stands.
+            // A bare jamo: type it, then Shift+Enter commits it as it stands. A bare vowel has no
+            // key route since F6 stopped dropping the implied ㅇ (it comes from the predictions,
+            // docs/moonshot.md §4): pasted.
             let plans = ways
                 .into_iter()
                 .map(|mut presses| {
-                    presses.push(Press::new(Key::F6));
+                    presses.push(COMMIT);
                     Plan { presses, ..Plan::default() }
                 })
                 .collect();
-            self.try_plans(plans, &want).ok_or(())?;
+            if self.try_plans(plans, &want).is_none() {
+                self.paste(c);
+            }
         } else if c == ' ' {
             self.press_all(&[Press::new(Key::Space)]);
         } else if c == '\n' {
@@ -839,7 +847,8 @@ impl Robot {
         let syllable = reading.chars().next().ok_or(())?;
         let plans = self.syllable_plans(syllable, false);
         self.try_plans(plans, &shown).ok_or(())?;
-        let out = self.press_all(&[Press::new(Key::F7)]);
+        // The hanja list is on Shift+F7 (docs/moonshot.md §4).
+        let out = self.press_all(&[Press { key: Key::F7, shift: true }]);
         let candidates = out.candidates.ok_or(())?;
         let index = candidates.items.iter().position(|cand| cand.hanja.chars().eq([c])).ok_or(())?;
         let pages = vec![Press::new(Key::ArrowRight); index / PAGE_SIZE];

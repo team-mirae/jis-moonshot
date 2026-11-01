@@ -158,6 +158,16 @@ footer a {
   color: var(--muted);
 }
 
+/* The rolling-release warning under the playground's lede. */
+.notice {
+  margin: 10px 0 0;
+  max-width: 62ch;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  font-size: 0.85rem;
+}
+
 /* Editor */
 
 .editor {
@@ -1189,13 +1199,6 @@ main.floating-keyboard .caret {
   }
 }
 
-/* Modes B and C: the US ANSI and UK ISO boards are about 15 keys wide (a MacBook's rows, with \
-   1.5 keys wide on ANSI). */
-.board.ansi,
-.board.iso {
-  --u: min(52px, calc((100vw - 32px) / 15.6));
-}
-
 /* Backspace, Space and Enter under the board, for touch screens. */
 .edit-row {
   justify-content: center;
@@ -1216,10 +1219,4 @@ main.floating-keyboard .caret {
   left: 50%;
   bottom: 50%;
   transform: translate(-50%, 50%);
-}
-
-.key.wide {
-  width: calc(var(--u) * 1.5 - var(--gap));
-  height: calc(var(--u) - var(--gap));
-  aspect-ratio: auto;
 }

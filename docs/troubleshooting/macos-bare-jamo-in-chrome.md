@@ -1,5 +1,9 @@
 # macOS: typing commits bare jamo instead of syllables (Chrome and other apps)
 
+> **JIS Moonshot.** Recorded with JIS Korean, before the fork. Names are given as JIS Moonshot's
+> (`JISMoonshot`, `me.sjun.inputmethod.JISMoonshot`, `~/Library/Logs/JISMoonshot.log`); the log
+> lines quoted read the same with the old names. The mechanism is unchanged in JIS Moonshot.
+
 Investigated 2026-10-23 on macOS 27.0 (Darwin 27.0.0). Two causes: a per-app layout desync, fixed
 in `d8d9577`, and the switch keys selecting the mode around the app's session instead of through
 it, which kept the bug alive after that ("Second cause" below). The behavior it
@@ -8,7 +12,7 @@ fix, and how to tell the fixable case from the two that aren't.
 
 ## Symptom
 
-With JIS Korean selected and a Korean mode current, some fields type the jamo apart instead of
+With JIS Moonshot selected and a Korean mode current, some fields type the jamo apart instead of
 composing them: `바다사자` comes out as `ㅂㅏㄷㅏㅅㅏㅈㅏ`. It is per field, not per app, and it
 stuck: one Chrome tab (or the omnibox) would compose normally while another, or the same field
 later, committed bare jamo and stayed that way. It was most visible in Chrome but not unique to it.
@@ -24,9 +28,9 @@ the key reached the app without going through the engine.
 
 The engine reads **key codes**, not characters. When it does not consume a key (an English mode
 passing a letter on, a shortcut, or any key for a field that never asked the input method), macOS
-types that key through the **active keyboard layout**. JIS Korean's Korean-mode layouts
-(`JISKorean.keylayout` and the ANSI/ISO variants) carry the mode's **jamo legends** on their plain
-and Shift layers, because that is what Keyboard Viewer shows while a Korean mode is active. So an
+types that key through the **active keyboard layout**. JIS Moonshot's Korean-mode layout
+(`JISMoonshot.keylayout`; JIS Korean also had ANSI and ISO variants) carries the mode's **jamo
+legends** on its plain and Shift layers, because that is what Keyboard Viewer shows while a Korean mode is active. So an
 unconsumed key, in a Korean mode, is typed by the layout as a bare jamo. Apple's own Korean input
 method has the same exposure through its `2SetHangul` layout.
 
@@ -72,7 +76,7 @@ process**. The code already knew this could go wrong ("selecting it from inside 
 can cut the open session off (Terminal then gets the keys itself)") and only moved the call after
 the key. IMK has a call for exactly this, `-[IMKTextInput selectInputMode:]` (Swift
 `selectMode(_:)`, `IMKInputSession.h`: "allows an input method to change its mode directly"),
-which switches through the app's session rather than around it. JIS Korean never used it.
+which switches through the app's session rather than around it. JIS Moonshot never used it.
 
 The same log shows a race: after カタカナ, a late "macOS selected A_QWERTY" notice (of the 英数
 switch before it) arrived before the async select ran, and since `pending` was only set inside that
@@ -80,8 +84,8 @@ async block, the mode bounced A → A_QWERTY → A.
 
 Fix (the commit after `a311669`):
 
-- With one of JIS Korean's modes selected and the field's session at hand (英数, カタカナ, F18 in a
-  JIS Korean field), the mode is selected through the session: `client.selectMode(sourceID)`.
+- With one of JIS Moonshot's modes selected and the field's session at hand (英数, カタカナ, F18 in a
+  JIS Moonshot field), the mode is selected through the session: `client.selectMode(sourceID)`.
   `TISSelectInputSource` is kept only for coming from another input source (ABC, Japanese), where
   there is no session of ours, and for the public API.
 - `InputModes.expect(mode)` records the pending selection synchronously, when the field switches,
@@ -97,7 +101,7 @@ then `key in com.google.Chrome: consumed true, engine mode 0, …` for every key
   mode or not. `KeyboardViewerLayout` now tracks the named layout **per app** and forgets it on
   deactivate (macOS has dropped the override by then). This is the core fix: the layout can no
   longer be left on Korean for a field whose engine is English.
-- A selection JIS Korean **asks** macOS for counts as made until macOS reports it (2 s cap), so a
+- A selection JIS Moonshot **asks** macOS for counts as made until macOS reports it (2 s cap), so a
   field that activates in that window reads the target mode, not the source being left.
 - `current` initializes from the **selected source at launch**, not Mode A.
 - The selected-source notification is observed with **`.deliverImmediately`**, so suspension can't
@@ -125,12 +129,12 @@ Korean mode, and neither is our bug:
 Turn the diagnostic log on (it logs no text — only key codes' consumed state, modes and layouts):
 
 ```sh
-defaults write me.sjun.inputmethod.JISKorean DiagnosticLog -bool true   # off: -bool false
+defaults write me.sjun.inputmethod.JISMoonshot DiagnosticLog -bool true   # off: -bool false
 ```
 
-Type a few keys in the failing field and read `~/Library/Logs/JISKorean.log`:
+Type a few keys in the failing field and read `~/Library/Logs/JISMoonshot.log`:
 
-- A line **`key in <app>: consumed true, engine mode 0, layout JISKorean, current A`** for each key
+- A line **`key in <app>: consumed true, engine mode 0, layout JISMoonshot, current A`** for each key
   means the engine is receiving and consuming them: the fix is working and that field composes. If a
   field still shows bare jamo while these lines appear with `consumed false` and an English
   `engine mode`/`layout`, that is the old bug — capture the surrounding `activated`/`layout resync`

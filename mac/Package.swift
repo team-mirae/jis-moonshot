@@ -10,11 +10,11 @@ import PackageDescription
 let mac = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
 
 let package = Package(
-    name: "JISKorean",
+    name: "JISMoonshot",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "JISKorean",
+            name: "JISMoonshot",
             path: "Sources",
             swiftSettings: [
                 .define("PREDICT"),

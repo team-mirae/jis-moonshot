@@ -1,10 +1,10 @@
 import Foundation
 import InputMethodKit
 
-/// The layouts macOS uses for JIS Korean's keys (spec §8.1), one per mode: Keyboard Viewer shows
+/// The layouts macOS uses for JIS Moonshot's keys (spec §8.1), one per mode: Keyboard Viewer shows
 /// their legends, and apps get their characters for keys the engine passes on (the Cmd, Ctrl
-/// and Option layers are ABC's, so shortcuts are unchanged). Mode A's is JISKorean.keylayout,
-/// Mode B's JISKoreanANSI.keylayout and Mode C's JISKoreanISO.keylayout, in the input method's
+/// and Option layers are ABC's, so shortcuts are unchanged). Mode A's is JISMoonshot.keylayout,
+/// Mode B's JISMoonshotANSI.keylayout and Mode C's JISMoonshotISO.keylayout, in the input method's
 /// Resources; each activation names the mode's layout to the client, which finds it in this bundle
 /// (as Apple's Korean input method does with 2SetHangul).
 ///

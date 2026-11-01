@@ -1,5 +1,10 @@
 # JIS Korean: layout and behavior spec
 
+> **JIS Moonshot.** This is JIS Korean's spec, kept for JIS Moonshot. What the fork changed (kana
+> typing and the kana reading, JIS only, F6/F7, the switch keys, predictions always on, Shift+Z) is
+> in [moonshot.md](moonshot.md), which **wins where the two differ**. The sections below that were
+> plainly wrong for the fork are updated; the rest may still describe JIS Korean.
+
 Status: **draft**. Source: the note "2-set on JIS layout spec (draft)" and its interactive
 prototype (https://claude.ai/artifact/5TpYiuCYgZk8grLq6Sp4Sa). Where the note is silent, this
 spec writes down what the prototype does. Those sections are marked *(from prototype)*. Decisions
@@ -9,7 +14,7 @@ this spec had to make that neither source settles are marked **[decide]** and al
 JIS Korean is a Korean 2-set (두벌식, KS X 5002) input method for a JIS physical keyboard. It
 extends 2-set over the full area that JIS kana typing uses (1 to ¥, down to ろ) and over F6–F10.
 That is **Mode A**, the original layout, and everything below describes it unless it says
-otherwise. **Mode B** carries the parts that fit onto US ANSI keyboards (§3.6).
+otherwise. (JIS Korean's Modes B and C, for US ANSI and UK ISO, are retired in JIS Moonshot, §3.6.)
 
 ---
 
@@ -22,13 +27,16 @@ adds a shortcut; it never takes anything away.
 - ㅗ then ㅏ is still ㅘ, even though 0 also types ㅘ.
 - Double finals (ㄹ+ㄱ → ㄺ etc.) compose as usual.
 
-Three deliberate exceptions (§4.2 and §6):
+Two deliberate exceptions (§4.2):
 
-- **Implied ㅇ:** a vowel with no initial types a full syllable (ㅏ → 아) instead of a bare jamo. F6
-  right after commits the bare jamo instead.
+- **Implied ㅇ:** a vowel with no initial types a full syllable (ㅏ → 아) instead of a bare jamo. The
+  bare vowels are offered as a prediction (§10.2). (In JIS Korean F6 right after committed the bare
+  jamo; in JIS Moonshot F6 is hiragana, moonshot.md §4.)
 - **Shift+vowel** (vowel keys whose Shift types nothing else: all but O and P) after a syllable
   starts a new syllable on ㅇ instead of acting like the plain vowel (마ㄹ+⇧ㅣ → 말이, not 마리).
-- **Shift+Z is F10** (§6), not ㅋ: plain Z still types ㅋ.
+
+JIS Korean had a third, Shift+Z as F10. JIS Moonshot drops it: Shift+Z is ㅋ, as on standard 2-set
+(and っ in kana, moonshot.md §1).
 
 Any change that breaks this principle is a spec change, not an implementation detail.
 
@@ -112,7 +120,7 @@ Digits are on Shift, so numbers type with Shift held.
 
 | Key | Unshifted | Shift | Notes |
 |---|---|---|---|
-| Z | ㅋ | **F10** (half-width letters, §6) | Shift+Z isn't ㅋ: F10 isn't reachable everywhere (Windows browsers take it for their menu) |
+| Z | ㅋ | ㅋ | standard 2-set. JIS Korean made Shift+Z F10; JIS Moonshot doesn't (it's っ on the kana layout, moonshot.md §1) |
 | X C V | ㅌ ㅊ ㅍ | same | standard 2-set |
 | B N M | ㅠ ㅜ ㅡ | same | standard 2-set |
 | , | , | , | Shift ignored |
@@ -128,61 +136,26 @@ normal behavior, except as §5 and §6 define. Any keystroke with Ctrl, Alt/Opti
 
 ### 3.6 Modes
 
-A **mode** is one keyboard's key map. Every Korean mode keeps standard 2-set on the 26 letter keys
-(§1), Shift+Z as F10, F6–F10, the automaton (§4) and everything after §4. A mode only says what
-the other keys type, and which stock keyboard sits under it. Mode A is the default.
+A **mode** is one keyboard's key map. The Korean mode keeps standard 2-set on the 26 letter keys
+(§1), F6–F10, the automaton (§4) and everything after §4. A mode only says what the other keys
+type, and which stock keyboard sits under it. Mode A is the default.
 
 | Mode | Name | Keyboard | Stock keyboard |
 |---|---|---|---|
-| A | JIS Korean Original Layout | JIS | JIS |
-| B | JIS Korean for US ANSI | US ANSI (HHKB US, MacBook US) | US ANSI |
-| C | JIS Korean for UK ISO | ISO (UK) | UK ISO (PC legends) |
+| A | JIS Moonshot | JIS | JIS |
+| `A_KANA` | JIS Kana | JIS | JIS (the kana legends, moonshot.md §3) |
 
-**Mode C** is for ISO keyboards, whose extra key between left Shift and Z (`IntlBackslash`) neither
-A nor B has. It follows Mode B, on UK stock symbols (other ISO countries can come later as their own
-modes or forks; their users are expected to keep their own layout as a second input source):
+JIS Moonshot is **JIS only** (moonshot.md §2). JIS Korean's **Mode B** (US ANSI) and **Mode C** (UK
+ISO), and their English modes `B_QWERTY` and `CJ_QWERTY`, are retired: their ids are never reused,
+`jk_set_mode` refuses them, and a saved setting naming one falls back to Mode A. The kana reading
+needs the JIS kana legends, which no other keyboard has. `IntlBackslash` and `Backquote` aren't in
+Mode A: they commit and pass through (§3.5).
 
-| Key | Unshifted | Shift |
-|---|---|---|
-| Number row 1–0 | ㅃ ㅉ ㄸ ㄲ ㅆ ㅟ ㅝ ㅚ ㅢ ㅘ, as Mode A | the digit |
-| [ (`BracketLeft`) | [ | 「 |
-| ] (`BracketRight`) | ] | 」 |
-| the extra key (`IntlBackslash`) | · (U+00B7) | — (U+2014) |
-| everything else | the UK stock symbol | the UK stock symbol |
+The stock keyboard (JIS) drives everything that reads keys as plain characters: the **English
+readings** (`Engine::english`) and the **standard 2-set reading** (§10.2).
 
-The three symbol keys ([, ], `IntlBackslash`) are optional: a setting, **Dedicated symbol keys**,
-turns them off, and then they type their UK ISO characters (`[ {`, `] }`, `\ |`), as the stock
-keyboard does. They don't pass through to the OS layout, so they type the same whatever it is. The
-number row is always dedicated. Default: on.
-`IntlBackslash` isn't in Modes A or B, nor `IntlYen` and `IntlRo` in Mode C: they commit and pass
-through (§3.5). On macOS, ISO keyboards send the extra key and the key left of 1 with each other's
-key codes; the shell maps them back (§2).
-
-**Mode B** keeps Mode A's number row (§3.1: ㅃ ㅉ ㄸ ㄲ ㅆ ㅟ ㅝ ㅚ ㅢ ㅘ, digits on Shift) and moves the
-brackets to the US `[` and `]` keys:
-
-| Key | Unshifted | Shift |
-|---|---|---|
-| [ (`BracketLeft`) | [ | 「 |
-| ] (`BracketRight`) | ] | 」 |
-
-Every other key types what it does on US ANSI, **by design**: - = \ ` ; ' , . / keep their
-unshifted and shifted characters, so every symbol stays where a US typist expects it. `IntlYen` and
-`IntlRo` aren't in Mode B: they commit and pass through (§3.5). `Backquote` isn't in Mode A (on a JIS
-board it's the 半角/全角 key).
-
-US ANSI users are encouraged to use Mode B as-is, to keep every symbol where they know it, or to
-fork it into a mode of their own that fits their typing or their keyboard (docs/modes.md).
-
-The stock keyboard drives everything that reads keys as plain characters, so nothing implies
-JIS in Mode B:
-
-- **English readings** (`Engine::english`) and the **standard 2-set reading** (§10.2) use the
-  stock characters: in Mode B, `ㅎ ㅏ ㄴ Shift+2` (G K S Shift+2) predicts 한2 and 한@, where Mode A
-  predicts 한2 and 한".
-
-Examples (Mode B): `Shift+[` → 「; `Shift+2` → 2, read in English as @;
-`ㅎ ㅏ ㄴ Shift+Z` → gks.
+**JIS Kana** (`A_KANA`) isn't a 2-set mode: every key types its JIS kana legend, nothing is
+predicted, and the staged keys show as hiragana or katakana (moonshot.md §2.1, §3).
 
 #### 3.6.1 Mode ids and names
 
@@ -199,16 +172,17 @@ Ids are in ranges; they don't have to be given in order:
 
 | Ids | For |
 |---|---|
-| 0–14 | Mirae Research's official modes. 0–10 are taken or reserved (below); 11–14 are held for future official designations. |
+| 0–14 | Official modes. 0–12 are taken, retired or reserved (below); 13–14 are held for future official designations. |
 | 15–30 | Official modes contributed from outside, each accepted by a majority of the contributors. |
 | 31–99 | Custom layouts: any free id, chosen by whoever makes the layout. Nothing coordinates them, so two forks can pick the same one. |
 | 10000–11000 | Development and preview builds: a temporary id for a mode still being made. When it's done it gets a permanent id in its range (0–30 for an official mode), and the temporary one is dropped. Never saved by a release build's settings. |
 
 Every other id is invalid for now (0–99 may grow later). Every platform can hold ids up to
-2,147,483,647 (Minecraft's Java `int` is the narrowest), so the ranges have room to grow.
+2,147,483,647, so the ranges have room to grow.
 
-**Ids are looked up, never counted.** Ids have gaps (3, then 7, or 31), and a build has only the
-modes it was built with (JIS English needs `ENGLISH=1`; reserved ids have no mode yet). So the
+**Ids are looked up, never counted.** Ids have gaps (0, 3, 7, 8, 11), and a build has only the
+modes it was built with (the English modes need the `english` feature, on in every shell build;
+retired and reserved ids have no mode). So the
 engine keeps an explicit table of the modes it has, each with its id, and nothing assumes ids run
 from 0 without gaps:
 
@@ -218,7 +192,7 @@ from 0 without gaps:
 - **An unknown id is refused, not replaced.** `jk_set_mode` returns 1 and switches, or returns 0 and
   keeps the current mode for an id this build doesn't have. `jk_legend_in` gives no legend (0), and
   the name and mode-name calls give an empty string. A shell that loads a saved id this build
-  doesn't have (say, JIS English after a build without it) falls back to Mode A itself, visibly.
+  doesn't have (say, Mode B saved by JIS Korean) falls back to Mode A itself, visibly.
 - **Names:** `jk_mode_name_ptr`/`_len` give the display name, `jk_mode_code_ptr`/`_len` the mode name
   (`A`, `A_QWERTY`).
 
@@ -241,9 +215,9 @@ Modes A, B and C do; the **id range** says who maintains it:
   naming rules and §3.6's "what every mode keeps"; not reviewed here. Use a prefix of your own, such
   as your company or your name.
 
-**The first three modes keep their one-letter names**, `A`, `B` and `C` (ids 0, 1, 2), as released:
-tools and the public API already use them. A one-letter name has no `_`, so it's in no namespace,
-and no new mode gets one.
+**Mode A keeps its one-letter name**, `A` (id 0), as released: tools and the public API already use
+it. `B` and `C` (ids 1, 2) are retired. A one-letter name has no `_`, so it's in no namespace, and
+no new mode gets one.
 
 **How a `CJ_` mode is designed.** The European layouts are `CJ_` modes: their people mostly have
 ISO boards, and JIS users can use them too. Every `CJ_` mode follows two rules:
@@ -263,27 +237,29 @@ an ISO board, for example, isn't an issue this repository will fix.
 
 | Id | Mode name | Display name | Badge text | Status |
 |---|---|---|---|---|
-| 0 | `A` | JIS Korean Original Layout | (keys) | Shipped |
-| 1 | `B` | JIS Korean for US ANSI | (keys) | Shipped |
-| 2 | `C` | JIS Korean for UK ISO | (keys) | Shipped |
+| 0 | `A` | JIS Moonshot | (keys) | Shipped |
+| 1 | `B` | JIS Korean for US ANSI | | Retired |
+| 2 | `C` | JIS Korean for UK ISO | | Retired |
 | 3 | `A_QWERTY` | JIS English | ABC | Specified (§3.6.2) |
 | 4 | `CJ_QWERTZ` | **[decide]** | QZ | Reserved |
 | 5 | `CJ_SWISS_QZ` | **[decide]** | CH | Reserved |
 | 6 | `CJ_AZERTY` | **[decide]** | AY | Reserved |
 | 7 | `A_DVORAK` | JIS Dvorak | DV | Specified (§3.6.4) |
 | 8 | `A_COLEMAK` | JIS Colemak | CMK | Specified (§3.6.4) |
-| 9 | `B_QWERTY` | US English | US | Specified (§3.6.2) |
-| 10 | `CJ_QWERTY` | UK English | GB | Specified (§3.6.2) |
+| 9 | `B_QWERTY` | US English | | Retired |
+| 10 | `CJ_QWERTY` | UK English | | Retired |
+| 11 | `A_KANA` | JIS Kana | KA | Specified (moonshot.md §2.1, §3) |
+| 12 | `A_ROMAJI` | (none yet) | | Reserved: romaji kana typing, the `KanaScheme::Romaji` slot (moonshot.md §2.1) |
 
-A **reserved** mode has its id and name held for it, and nothing else yet: no key table, no build.
+A **retired** mode's id and name are never reused, and `jk_set_mode` refuses them. A **reserved**
+mode has its id and name held for it, and nothing else yet: no key table, no build.
 Ids 4–8 are Mirae Research's Latin-layout modes in the family of JIS English (§3.6.2): the European
 layouts as `CJ_` modes (4–6), and Dvorak and Colemak as `A_` modes (7–8), which aren't tied to
 European ISO boards. Each has its layout's letters, with the symbols still to be decided per mode
 (Dvorak's and Colemak's are, §3.6.4), and a badge of the taegeuk with its badge text over the lower
-right, as `ABC` on JIS English's. Ids 11–14 are held for Mirae Research's
-next official modes.
+right, as `ABC` on JIS English's. Ids 13–14 are held for the next official modes.
 
-#### 3.6.2 `A_QWERTY`: JIS English, and `B_QWERTY` and `CJ_QWERTY`
+#### 3.6.2 `A_QWERTY`: JIS English
 
 **JIS English** types English: the standard JIS QWERTY layout, with JIS English legends and JIS
 symbols, on any keyboard (Shift+2 is `"`, the key right of P is `@`, `IntlYen` is `¥`, `IntlRo` is
@@ -299,15 +275,11 @@ is unaffected. The engine still names the layout: its key table is the JIS stock
 stock keyboard), which the macOS keyboard layout is generated from, so the symbols can't drift from
 Mode A's stock keyboard.
 
-**US English** (`B_QWERTY`, id 9) and **UK English** (`CJ_QWERTY`, id 10) are the same mode on the
-other keyboard families: QWERTY with Mode B's stock symbols (US ANSI: Shift+2 is `@`) and Mode C's
-(UK ISO: Shift+2 is `"`, Shift+3 is `£`, the ISO extra key is `\`). UK English is a `CJ_` mode: on
-a JIS board ろ types `\ |` and ¥ types `` ` ¬ `` (§3.6.1). Everything else here, press and
-hold (§3.6.3) included, is the same for all three. Together they're the
-**English modes**.
+JIS English, JIS Dvorak and JIS Colemak (§3.6.4) are the **English modes**. JIS Korean's US English
+(`B_QWERTY`) and UK English (`CJ_QWERTY`) are retired with Modes B and C.
 
-They're **optional**: built only on request (the engine's `english` feature; `make ENGLISH=1` on
-macOS), so a default build has the Korean modes only. Their ids and names are reserved either way.
+They're **always built** in JIS Moonshot (the engine's `english` feature is on by default and in
+every shell build): 英数 / 無変換 need them (moonshot.md §2, §4).
 
 #### 3.6.3 Letter variants (⌥ + letter)
 
@@ -503,7 +475,7 @@ Korean IME, and it is what F9/F10 need **[decide]**.
 | Input | Effect |
 |---|---|
 | Space | Commit the segment, then type a space. Space **never converts** (unlike the Japanese kana IME). |
-| F6 | Commit the segment (§6). Nothing else is typed. |
+| F6 / F7 | No commit: the staged keys show as hiragana / katakana, in JIS Kana (§6, moonshot.md §4). |
 | Shift+Enter | Commit the segment. Nothing else is typed. *(planned)* |
 | Enter | Default: commit the segment, then pass Enter to the app. Setting "Enter commits": commit only, as Shift+Enter does. *(planned)* **[decide]** |
 | Focus loss, app switch, IME switch | Commit the segment. |
@@ -538,15 +510,17 @@ Forms pairs ¢ £ ¬ ¯ ¦ ¥ ₩ and ｡ ｢ ｣ ､ ･ (。「」、・ full-
 
 | Key | Label | Behavior | Status |
 |---|---|---|---|
-| F6 | 한글 | **Right after F9/F10:** restore the Hangul of the converted word. **On a plain implied ㅇ:** drop it (§4.2). Then **commit** everything unconfirmed, as switching to English and back does (한 F6 ㅏ → 한 committed, 아 unconfirmed; one more F6 → 한ㅏ). F6 changes nothing else. Also the return path from 한자 (F7). | done in prototype |
-| F7 | 한자 | Hanja conversion of the word at the end of the unconfirmed text, with a candidate list (§7). Pairs with F6 (native / borrowed script), mirroring JIS F6 hiragana / F7 katakana. | done |
+| F6 | ひらがな | **Hiragana:** to JIS Kana (`A_KANA`), the staged keys read as kana and shown in hiragana; nothing is committed. Right after F9/F10 it undoes the conversion first; an open hanja list closes. With nothing staged it still switches (consumed). Shift+F6 with something staged does nothing (reserved). | moonshot.md §4 |
+| F7 | カタカナ | **Katakana:** the same, shown in katakana. | moonshot.md §4 |
+| Shift+F7 | 한자 | Hanja conversion of the word at the end of the unconfirmed text, with a candidate list (§7). Mode A only. (F7 in JIS Korean.) | done |
 | F8 | — | **Reserved** (§6.1): does nothing. | retired 2026-10-27 |
 | F9 | 전각영숫자 | Convert the current word to full-width alphanumerics, from the raw characters (§5.2). | done in prototype |
-| F10 | 반각영숫자 | Same, half-width. **Shift+Z does the same**, on every platform, since F10 isn't always reachable (Windows browsers take it for their menu). Shift+Z is taken even with nothing unconfirmed. With predictions on (§10), when the top prediction is already byte-identical to what F10 would give, the first Shift+Z presses F10 twice (hello → HELLO); later presses step the cycle as F10 does. F10 itself never skips. | done |
+| F10 | 반각영숫자 | Same, half-width. (In JIS Korean Shift+Z did the same; in JIS Moonshot it's ㅋ, §3.4.) | done |
 
-**With nothing unconfirmed, F6–F10 go to the app** (F6 to the browser's address bar, F7 to caret
-browsing): they act only on unconfirmed text. Shift+Z is the exception: it's a JIS Korean key, not a
-real F10, so it's taken either way.
+**With nothing unconfirmed, F8–F10 go to the app** (and Shift+F6, Shift+F7): they act only on
+unconfirmed text. F6 and F7 are the exception: they switch to JIS Kana even with nothing staged, so
+kana typing is reachable without typing something first (moonshot.md §4, **[decide]**). In an
+English mode every F-key goes to the app.
 
 ### 6.1 F8 (reserved)
 
@@ -562,16 +536,17 @@ keeps each mode's stock keyboard for the English and standard 2-set readings (§
 - The first press converts the word as typed (raw case kept).
 - Repeated presses of the same key cycle **as typed → UPPER → Capitalized → as typed …**
 - Pressing the other key switches width and keeps the current case step.
-- F6 right after either key restores the original Hangul and commits it.
+- F6 or F7 right after either key undoes the conversion, then shows the keys as kana (moonshot.md
+  §4); かな / 変換 undoes it and forces Korean.
 - Any other input ends the conversion state. The converted text stays in the segment as plain
   characters.
 - With no word to convert, F9/F10 do nothing (with nothing unconfirmed they go to the app, §6).
 
-Example: ㅎ ㅏ ㄴ (keys G K S) → 한. F10 → `gks`. F10 → `GKS`. F10 → `Gks`. F9 → `Ｇｋｓ`. F6 → 한, committed.
+Example: ㅎ ㅏ ㄴ (keys G K S) → 한. F10 → `gks`. F10 → `GKS`. F10 → `Gks`. F9 → `Ｇｋｓ`. F6 → きのと.
 
 ---
 
-## 7. Hanja (F7)
+## 7. Hanja (Shift+F7)
 
 Basic support: dictionary lookup with a candidate list. No learning, no reconversion of committed
 text.
@@ -594,21 +569,21 @@ license files sit next to the dictionary and ship with it.
 
 | State | Key | Effect |
 |---|---|---|
-| no list | F7 | Open a list for the **longest dictionary word at the end of the unconfirmed text**: 나는학교 → 학교. Only whole syllables count. No match, or no dictionary: nothing happens. |
-| list open | F7, ↓ | Next candidate (wraps) |
-| | Shift+F7, ↑ | Previous candidate (wraps) |
+| no list | Shift+F7 | In Mode A, open a list for the **longest dictionary word at the end of the unconfirmed text**: 나는학교 → 학교. Only whole syllables count. No match, or no dictionary: nothing happens. (F7 in JIS Korean; F7 is now katakana, §6.) |
+| list open | Shift+F7, ↓ | Next candidate (wraps) |
+| | ↑ | Previous candidate (wraps) |
 | | → / ← | Next / previous page of 9 |
 | | 1–9 (number row, no Shift) | Pick that candidate on the current page |
 | | Enter | Pick the selected candidate. No new line. |
 | | Esc, Backspace | Close the list; the Hangul stays unconfirmed and editable |
-| | F6 | Close the list and commit the Hangul (back to Hangul, spec §6) |
-| | anything else | Pick the selected candidate, then handle the key as usual (가 F7 Space → 可 committed + space) |
+| | F6, F7 | Close the list, then hiragana / katakana as usual (§6) |
+| | anything else | Pick the selected candidate, then handle the key as usual (가 Shift+F7 Space → 可 committed + space) |
 | | focus loss | Commit the selected candidate |
 
 While the list is open, the preedit shows the **selected candidate in place** of the reading. A
 pick stays unconfirmed like any other text. Earlier syllables keep their jamo, so Backspace still
 works on them by jamo. When the reading doesn't start on a keystroke boundary (말이 typed with
-the double press, then F7 on 이), the text before it becomes plain characters first.
+the double press, then Shift+F7 on 이), the text before it becomes plain characters first.
 
 Shells show the page that holds the selected candidate, numbered 1–9, with comments. The web
 playground draws it under the caret; the macOS shell for now shows only the inline preview.
@@ -625,35 +600,27 @@ engine:
   same whatever layout Windows has loaded; on a JIS keyboard, the Japanese (106/109) hardware
   keyboard setting makes ¥ and ろ arrive. Password fields and the secure desktop do not load TIPs.
   That is a known limit. Modes, 한/영 and settings: §8.4.
-- **Minecraft** (`/minecraft`): a Fabric mod running the engine (as wasm) in-game. It adds its own
-  layer on top of the engine: each staging area is read as Korean and as English (`Engine::english`),
-  Space/Enter/Tab commit the more likely one, F6 forces Korean and **F7 forces English instead of
-  hanja**. A click, a focus change or a screen closing commits the staged text into its field; a
-  mode change commits it first. Esc with staged text drops it (unlike §5.1, where Esc commits): in
-  game screens Esc is the way out of a field. Selecting an English mode in the input method picks
-  the Korean mode on the same keyboard (`A_` → A, `B_QWERTY` → B, `CJ_QWERTY` → C). See
-  `minecraft/README.md`.
-- **Web** (`/web`): a React playground that runs the same engine in the browser, keyed on
+- **Web** (`/web`): a React playground (a demo) that runs the same engine in the browser, keyed on
   `KeyboardEvent.code`. On non-JIS keyboards, `IntlYen` and `IntlRo` don't exist, so the page needs
   on-screen keys for them.
 
-Android and iPhone are out of scope.
+Android and iPhone are out of scope. JIS Korean's Minecraft mod is dropped in JIS Moonshot (its
+corpus tools moved to `engine/tools/corpora/`).
 
-**Language keys.** Three platform-independent keys select a language, whatever is selected now:
+**Language keys** (moonshot.md §4). Two keys of the JIS keyboard select where typing goes, whatever
+is selected now:
 
-| Key | Goes to | Meaning |
+| Key | macOS / Windows | Goes to |
 |---|---|---|
-| `LANG_KO` | Korean: the Korean mode used last | always Korean, never a toggle |
-| `LANG_EN` | English: the English mode used last (§3.6.2) | always English |
-| `LANG_JA` | Japanese | handed to the platform's Japanese input method |
+| `LANG_EN` | 英数 / 無変換 | English: the English mode used last (§3.6.2), committing what shows |
+| `LANG_KO` | かな / 変換 | Mode A, the predictive mode. Pressed again in Mode A with something staged: **force Korean** (the staged keys' Korean reading, nothing predicted); nothing staged: nothing. From JIS Kana: to Mode A, the staged keys forced Korean |
 
-Each platform says which physical keys they are, where it has keys to spare (macOS: §8.2.1, where
-英数, かな and the Windows JIS カタカナ key give three). A platform without independent one-way keys
-doesn't have to invent them: Windows and Linux keyboards usually have one toggle per language pair
-(한/영 on Korean keyboards, 半角/全角 on Japanese ones), and there the toggle is the platform's key
-(Windows: 한/영 switches JIS Korean off and on, §8.4). Where they exist, each works while the others
-are held: holding `LANG_KO` doesn't stop `LANG_JA` from going to Japanese. These are shell keys, like Ctrl+Space:
-they select input modes and never reach the engine.
+There is no `LANG_JA` any more: kana is part of JIS Moonshot (F6 hiragana, F7 katakana, §6), not
+handed to the platform's Japanese input method. Each platform says how it catches the keys (macOS:
+§8.2.1; Windows: §8.4). On Windows 한/영 (`VK_HANGUL`) still toggles English ↔ Mode A. The engine
+handles `LANG_KO` itself (`Engine::kana_key`, `jk_kana_key`), and the engine can change its own mode: shells read
+`jk_mode` after each call and select the matching input source; switching to English is the
+shell's, like Ctrl+Space.
 
 ---
 
@@ -702,22 +669,27 @@ Raised by this spec:
 
 ## 10. Prediction *(draft)*
 
-An optional layer on top of the deterministic engine that ranks **readings of the staged,
-uncommitted text**. It never changes what the keys do; it only offers alternatives to commit.
+A layer on top of the deterministic engine that ranks **readings of the staged, uncommitted
+text**. It never changes what the keys do; it only offers alternatives to commit. In JIS Moonshot
+it's **always on** in the shells (§10.1).
 
 ### 10.1 Lite and full
 
 | | Lite | Legacy | Full |
 |---|---|---|---|
 | Build | `cargo build --no-default-features` | `--features legacy-predict` | default (`predict` feature) |
-| macOS / Windows | `make PREDICT=0` / `build.ps1 -Lite` | `make LEGACY_PREDICT=1` / `build.ps1 -Legacy` | `make` / `build.ps1` |
+| macOS / Windows | none (engine only) | `make LEGACY_PREDICT=1` / `build.ps1 -Legacy` | `make` / `build.ps1` |
 | Ranking | — | the rules (§10.3) | the learned ranker (§10.13) on top of the rules |
 | Model files | — | `ranker.bin`, word lists | also `learned.bin` (2 MB) |
 | Run time | — | prediction is on only after the host loads a predictor (`jk_predictor_new`, `jk_set_predictor`); with none set, behaves exactly like lite | the same; without `jk_predictor_with_learned` the rules rank, as in legacy |
 | What the user gets | §1–§7 only: Space commits the JIS Korean reading | ranked readings to choose from, in addition | the same readings, ranked better |
 
-Hosts choose per user setting. Turning it off is always a complete fallback: no state, no model,
-no behavior change.
+**JIS Moonshot's shells always load the predictor** (moonshot.md §3, §6): there is no Predictions
+switch, no `PREDICT=0` and no `-Lite`. The user accepts predictive typing once, before JIS Moonshot
+types anything; until then every key passes through. Learning (§10.11) stays a separate opt-in, and
+the per-app exclusions (§10.11.1) stay: in those apps Mode A types forced Korean. The lite engine
+remains a build the tests and CI check (`cargo test --no-default-features`), and with no predictor
+set the engine still behaves exactly like it.
 
 ### 10.2 Readings (candidates)
 
@@ -726,20 +698,25 @@ no behavior change.
 | Korean | JIS Korean, as composed | `gksrmf` → 한글 |
 | English | the same keys on QWERTY (the mode's stock symbols, §3.6) | `gksrmf` → gksrmf |
 | English, Capitalized / UPPER | case variants, **only when English ranks first** | `hello` → Hello, HELLO |
-| Standard 2-set | plain 2-set on the mode's stock keyboard (JIS, or US ANSI in Mode B): no implied ㅇ, no double press, Shift+vowel is just the vowel, number-row keys type digits | `bb` → ㅠㅠ (JIS Korean: 유유); `rk1` → 가1 |
+| Standard 2-set | plain 2-set on the mode's stock keyboard (JIS): no implied ㅇ, no double press, Shift+vowel is just the vowel, number-row keys type digits | `bb` → ㅠㅠ (JIS Korean: 유유); `rk1` → 가1 |
 | Korean, finals kept | each vowel after a final starts its own syllable on ㅇ | `akfl` → 말이 (JIS Korean: 마리) |
 | Bare vowels | JIS Korean without the implied ㅇ (§10.3) | `bb` → ㅠㅠ, `nn` → ㅜㅜ |
 | English + particle | an English start with a Korean particle or ending (§10.3); after an acronym, a Korean word; or a Korean start with an acronym | Anthropic에서, report에, RLHF에, server를; LG에너지솔루션은; 한전KPS |
 | Hanja | the top dictionary form of the **whole** Korean reading, 2+ syllables only; plus the everyday exceptions (§10.4) | 학교 → 學校, 2026년 → 2026年 |
+| Kana | the JIS kana of every staged key, composed (゛ ゜, moonshot.md §3.1), in hiragana. Shift on the number row, E and Z gives small kana, Shift+0 を; a つ before a kana of the か, さ, た or ぱ rows may also be read as っ | `G K S` → きのと |
+| Katakana | the kana reading in katakana, offered instead of hiragana when that is the known word | コーヒー |
 
-Duplicates are removed (most readings coincide for most words), and **at most 4** are offered.
+Duplicates are removed (most readings coincide for most words), and **at most 4** are offered, plus
+the kana reading in one extra slot. The kana reading always uses the JIS kana layout, and it's scored
+as moonshot.md §5 says (its own lexicon, `engine/predict/common-ja.txt`; the learned ranker doesn't
+score it, and it's merged into the list by score).
 
 ### 10.3 Ranking
 
 Scores are in bits per key, positive leaning Korean:
 
 1. **Model:** the same keys under two key-trigram models, English spelling vs JIS Korean typing
-   (`engine/predict/ranker.bin`, built by `minecraft/tools/build_ranker.py`; held-out accuracy
+   (`engine/predict/ranker.bin`, built by `engine/tools/corpora/build_ranker.py`; held-out accuracy
    about 99% on words, 96% on real Korean text). English nouns train at 3× weight.
    **Nouns weigh more than verbs:** an English reading that is a noun in its normalized form
    (Princeton WordNet 3.0 lemmas, 3+ letters: report, server, model) gets a bonus; verbs,
@@ -843,7 +820,8 @@ Each scenario has a weight, a multiplier on its learned probability: 1.0 is as l
 0.8 makes English readings 0.8 times as likely, and Korean 1.2 makes Korean ones 1.2 times as
 likely. A weight adds log2(weight) bits to that reading's score (per key for Korean and English,
 per implied ㅇ for the implied ㅇ). Scenarios: Korean, English, implied ㅇ, English + particle,
-plain 2-set, finals kept, hanja, implied ㄹ after ㄴ. Weights are clamped to 0.1–10; 0 turns an
+plain 2-set, finals kept, hanja, implied ㄹ after ㄴ, and **kana** (the kana reading, moonshot.md §5:
+`Weight.Kana`, id 8; 0 turns it off; learned like the others when learning is on). Weights are clamped to 0.1–10; 0 turns an
 alternative scenario off entirely (its readings aren't offered), but not Korean or English, which
 always show. They never override the hard rules (a capital at the start of a word, command names).
 
@@ -855,8 +833,8 @@ often valid (저녁, 전력), so it's a slider (default 1.0; 0.00 turns it off; 
 `Weight.ImpliedL`).
 
 Hosts store them per user: the web playground has sliders under "Tune predictions" (remembered
-in the browser); macOS reads `defaults write me.sjun.inputmethod.JISKorean Weight.<Scenario>`;
-Windows reads `HKCU\Software\JIS Korean`, value `Weight.<Scenario>` (§8.4).
+in the browser); macOS reads `defaults write me.sjun.inputmethod.JISMoonshot Weight.<Scenario>`;
+Windows reads `HKCU\Software\JIS Moonshot`, value `Weight.<Scenario>` (§8.4).
 
 ### 10.6 Open questions
 
@@ -919,7 +897,7 @@ saved − bias), clamped to 2–98%.
   colloquial corpora with their counts (`word<TAB>count`), and business terms, each counted the same
   (20, or more if chat uses them more) whatever its frequency. Generated Korean words need 8 uses
   (one-syllable words 20, and a lone jamo never counts); English ones 30 and 3+ letters. Sources and notices:
-  `engine/predict/LICENSE-corpora.txt`; fetch with `minecraft/tools/fetch_corpora.py`, train with
+  `engine/predict/LICENSE-corpora.txt`; fetch with `engine/tools/corpora/fetch_corpora.py`, train with
   `build_ranker.py --corpora corpora`. 1 in 10 sentences is held out. Lexicon evidence for an
   alternative against the Korean reading: +4 bits if only the alternative is a word, −2 if only the
   Korean one is, and when both are, 2 bits plus log2 of their count ratio, within ±4. All three
@@ -1011,7 +989,7 @@ one line of counts and show the setting.
   - **Web:** the browser's local storage only, forgotten 24 hours after learning started, whether or
     not it's the same session. The age is checked when the page loads, on every save, and once a
     minute.
-  - **Windows:** `HKCU\Software\JIS Korean`, values `LearnFromChoices` and `Learned`. The
+  - **Windows:** `HKCU\Software\JIS Moonshot`, values `LearnFromChoices` and `Learned`. The
     indicator's menu has "Learn from My Choices (Stays on This PC)" and "Learned Weights"
     (read-only, with "Reset What It Learned").
   - **Minecraft:** not yet; it would need the mod's config.
@@ -1048,15 +1026,15 @@ one line of counts and show the setting.
 
 ### 8.1 Keyboard Viewer (macOS)
 
-While JIS Korean is active, macOS uses a private layout bundled with the input method, one per
-mode: `JISKorean.keylayout` for Mode A, `JISKoreanANSI.keylayout` for Mode B and
-`JISKoreanISO.keylayout` for Mode C. The input method
+While JIS Moonshot is active, macOS uses a private layout bundled with the input method, one per
+mode: `JISMoonshot.keylayout` for Mode A (JIS Kana uses it too: it consumes every key it maps), and
+`JISMoonshotEnglish`, `JISMoonshotDvorak` and `JISMoonshotColemak` for the English modes. The input method
 names the mode's layout to the client on each activation (`overrideKeyboard(withKeyboardNamed:)`).
 - **Generated at build time** by `mac/tools/make-keylayout` from the engine's own legends
   (`cargo run --example legends <mode id>`), so it can't drift from §3.
-- **Its plain and Shift layers** carry the mode's legends. Shift+Z shows F10.
-- **Its Cmd, Ctrl and Option layers, and unlabelled keys,** are ABC's on the mode's keyboard (JIS
-  for Mode A, ANSI for Mode B, ISO for Mode C), so shortcuts and Option characters are unchanged.
+- **Its plain and Shift layers** carry the mode's legends.
+- **Its Cmd, Ctrl and Option layers, and unlabelled keys,** are ABC's (JIS), so shortcuts and
+  Option characters are unchanged.
 - **The engine reads key codes,** not characters, so the layout never changes what a key JIS Korean
   consumes types. A key it passes on (letters in an English mode, shortcuts) is typed by this layout,
   and so is every key an app types without asking the input method: password fields, where macOS
@@ -1075,157 +1053,122 @@ names the mode's layout to the client on each activation (`overrideKeyboard(with
 Each mode (§3.6) is its own **input mode** of the one input method, the way Japanese has Kana and
 Romaji:
 
-| Mode | Input source ID | Shown as |
-|---|---|---|
-| A | `me.sjun.inputmethod.JISKorean.2Set` | JIS Korean |
-| B | `me.sjun.inputmethod.JISKorean.2SetANSI` | JIS Korean for US ANSI |
-| C | `me.sjun.inputmethod.JISKorean.2SetISO` | JIS Korean for UK ISO |
-| `A_QWERTY` | `me.sjun.inputmethod.JISKorean.A_QWERTY` | JIS English |
-| `B_QWERTY` | `me.sjun.inputmethod.JISKorean.B_QWERTY` | US English |
-| `CJ_QWERTY` | `me.sjun.inputmethod.JISKorean.CJ_QWERTY` | UK English |
+| Mode | Input source ID | Shown as | Script |
+|---|---|---|---|
+| A | `me.sjun.inputmethod.JISMoonshot.2Set` | JIS Moonshot | Korean |
+| `A_KANA` | `me.sjun.inputmethod.JISMoonshot.A_KANA` | JIS Kana | Japanese |
+| `A_QWERTY` | `me.sjun.inputmethod.JISMoonshot.A_QWERTY` | JIS English | Roman |
+| `A_DVORAK` | `me.sjun.inputmethod.JISMoonshot.A_DVORAK` | JIS Dvorak | Roman |
+| `A_COLEMAK` | `me.sjun.inputmethod.JISMoonshot.A_COLEMAK` | JIS Colemak | Roman |
 
-Modes after C take their mode name as the last part of the input source ID (§3.6.1).
+Modes after A take their mode name as the last part of the input source ID (§3.6.1). The bundle id
+is `me.sjun.inputmethod.JISMoonshot` (`JISMoonshot.app`), so JIS Moonshot installs beside JIS Korean
+(`me.sjun.inputmethod.JISKorean`) without colliding.
 
-The user adds the ones they want in System Settings → Keyboard → Input Sources (Korean → JIS
-Korean). Installing enables Mode A only.
+The user adds the ones they want in System Settings → Keyboard → Input Sources. A first
+`make install` enables JIS Moonshot, JIS Kana and JIS English.
 
 **Why input sources, and not a setting.** The mode follows the keyboard, and switching apps
 doesn't change which keyboard the user is typing on, so a per-app mode would mean nothing. As input
 sources, the modes are visible to everything that already understands input sources: the input
-menu, System Settings, and tools JIS Korean has no integration with, such as Hammerspoon and
+menu, System Settings, and tools JIS Moonshot has no integration with, such as Hammerspoon and
 Karabiner, which can read and select them by ID. Never rename an ID: those tools match on it.
 
-**Public API.** The JIS Korean program also answers any other program, without an input-source
+**Public API.** The JIS Moonshot program also answers any other program, without an input-source
 API:
 
 | | How | Allowed |
 |---|---|---|
-| Read the mode | `defaults read me.sjun.inputmethod.JISKorean CurrentMode` → the mode name, `A`, `B`, `C` or `A_QWERTY` (also `CurrentModeID`, `CurrentModeInputSourceID`, `CurrentModeName`), or `JISKorean.app/Contents/MacOS/JISKorean mode` | always |
-| Hear changes | distributed notification `me.sjun.inputmethod.JISKorean.ModeDidChange`, user info `mode`, `id`, `inputSourceID`, `name` | always |
-| Change the mode | distributed notification `me.sjun.inputmethod.JISKorean.SetMode`, user info `mode` (a mode name, an engine id or an input source ID), or `JISKorean mode B` | only with **Let Other Apps Change the Mode** on, in the input menu with JIS Korean's other settings (off by default) |
+| Read the mode | `defaults read me.sjun.inputmethod.JISMoonshot CurrentMode` → the mode name, `A`, `A_KANA` or an English mode (`A_QWERTY`…) (also `CurrentModeID`, `CurrentModeInputSourceID`, `CurrentModeName`), or `JISMoonshot.app/Contents/MacOS/JISMoonshot mode` | always |
+| Hear changes | distributed notification `me.sjun.inputmethod.JISMoonshot.ModeDidChange`, user info `mode`, `id`, `inputSourceID`, `name` | always |
+| Change the mode | distributed notification `me.sjun.inputmethod.JISMoonshot.SetMode`, user info `mode` (a mode name, an engine id or an input source ID), or `JISMoonshot mode A_KANA` | only with **Let Other Apps Change the Mode** on, in the input menu with JIS Moonshot's other settings (off by default) |
 
 A change request is answered with `ModeDidChange`, or with
-`me.sjun.inputmethod.JISKorean.ModeChangeRefused` and a `reason`: the setting is off, the mode is
+`me.sjun.inputmethod.JISMoonshot.ModeChangeRefused` and a `reason`: the setting is off, the mode is
 unknown, or the mode isn't added in System Settings (the API never adds one). `CurrentMode` is the
-mode last used, whether or not JIS Korean is the selected input source now; the selected source
+mode last used, whether or not JIS Moonshot is the selected input source now; the selected source
 says that. Selecting the input source directly (the input menu, `TISSelectInputSource`,
 Hammerspoon's `hs.keycodes.currentSourceID`) is macOS's own switching and isn't gated by the
 setting.
 
 ### 8.2.1 Switching between Korean and English (macOS)
 
-The language keys (§8) on macOS:
+The language keys (§8, moonshot.md §4) on macOS:
 
 | Key | macOS keys |
 |---|---|
-| `LANG_KO` | カタカナ (the Windows JIS keyboards' カタカナ/ひらがな key, read at the hardware level): Mode A if it's added, else the Korean mode used last; and the Korean Key (F18 by default): the Korean mode used last |
-| `LANG_EN` | 英数: a JIS English mode (`A_`: the one used last if it was one, else `A_QWERTY`, else another `A_` mode), else the English mode used last |
-| `LANG_JA` | かな, left to macOS |
+| `LANG_KO` | かな; also カタカナ (which macOS turns into かな) and the Korean Key (F18 by default), which act as かな: Mode A if it's added; in Mode A, force Korean; from JIS Kana, Mode A with the staged keys forced Korean |
+| `LANG_EN` | 英数: a JIS English mode (`A_`: the one used last if it was one, else `A_QWERTY`, else another), committing what shows |
 
-
-On Windows, 한/영 switches JIS Korean off and on inside one input method (§8.4). On macOS the same
-idea is an input mode, JIS English (`A_QWERTY`, §3.6.2), instead of a hidden on/off flag. The same
-goes for US and UK English: where this section says JIS English, it means **the English mode used
-last** (or, if that one isn't added in System Settings, the first English mode that is), and keys
-that go back to Korean go to the Korean mode used last.
+On Windows the same keys are 無変換 and 変換 (§8.4). On macOS English is an input mode, JIS English
+(`A_QWERTY`, §3.6.2), instead of a hidden on/off flag. Where this section says JIS English, it means
+**the English mode used last** (or, if that one isn't added in System Settings, the first English
+mode that is).
 
 - **Why a mode, not a flag.** A flag inside the controller would switch fastest, but macOS wouldn't
   know about it: the menu bar would keep the Korean icon, 英数 and Ctrl+Space would go to Apple's
   ABC, and the state would be lost whenever macOS reselects an input source.
 - **Why a mode, not a separate input method.** Each input method is its own process. Switching
-  between two (JIS Korean and ABC) has macOS deselect one, select the other and reconnect the app,
+  between two (JIS Moonshot and ABC) has macOS deselect one, select the other and reconnect the app,
   asynchronously, so a key pressed right after can land in the wrong one. Switching between modes of
   one input method stays in the same process and the same session with the app, which is how
   Japanese switches between Kana and Romaji.
 - **Selecting is asynchronous.** The field switches in place first (its engine and its app's
   layout), then the mode is selected: through the field's own session (`selectInputMode:`, IMK's
-  way for an input method to change its mode) when one of JIS Korean's modes is selected, and with
+  way for an input method to change its mode) when one of JIS Moonshot's modes is selected, and with
   `TISSelectInputSource` only when coming from another input source. Selected through TIS from the
   input method's own process, Chrome's session was cut off and Chrome typed every key through the
   layout itself, as bare jamo. The selection counts as made from the moment of the switch: until
-  macOS reports it, it
-  still names the old source, so a field activated meanwhile (Chrome activates its fields out of
-  order) counts the selection as made instead of reverting to the old mode, which every other field
-  would then follow. macOS's notice of a selection is taken even while the input method's
-  notifications are suspended (AppKit suspends them whenever the app isn't active, and an input
-  method never is).
+  macOS reports it, it still names the old source, so a field activated meanwhile (Chrome activates
+  its fields out of order) counts the selection as made instead of reverting to the old mode, which
+  every other field would then follow. macOS's notice of a selection is taken even while the input
+  method's notifications are suspended (AppKit suspends them whenever the app isn't active, and an
+  input method never is).
+- **The engine changes its own mode.** F6 and F7 switch to JIS Kana, and かな from JIS Kana back to
+  Mode A, inside the engine: the shell reads `jk_mode` after each key and selects the matching input
+  source.
 - **It's macOS's English input source.** It's declared with the Roman script (JIS English as the
-  script's primary mode, US and UK English beside it), so 英数 selects it
-  (as with Japanese input methods' own Romaji modes), Ctrl+Space switches between it and the last
-  Korean mode, and the menu bar shows its badge (`docs/logo/mode-a-qwerty.svg`). Unlike Windows'
-  ABC it's **remembered**, like any input source, not reset to Korean.
-- **Switching back.** In JIS English, JIS Korean is still the selected input method, so it still
-  sees every key, and the keys below go back to the last Korean mode used. かな isn't one of them:
-  JIS Korean leaves it to macOS, which selects Japanese.
-- **Korean Key:** one key that always goes to Korean, as 英数 always goes to English: from an
-  English mode to the last Korean mode used; in a Korean mode it selects that mode again, so macOS
-  shows Korean under the caret as on any switch (and nothing unconfirmed is committed). It never
-  reaches the app. **F18 by default**, so a key remapped to F18 (Karabiner, or a keyboard's own firmware)
-  works without further setup. The input menu offers None and F13 to F19 (Korean Key (Back to
-  Korean)); any other key code is set with `defaults write me.sjun.inputmethod.JISKorean KoreanKey
-  -int <code>` (-1 for none).
-- **カタカナ** goes to Korean like the Korean Key, from any input source (Japanese too). It's the
-  カタカナ/ひらがな key of Windows JIS keyboards, right of the space bar, where Korean keyboards have
-  한/영: the key no Mac user needs. macOS turns it into かな (key code 104) and loses the difference,
-  so JIS Korean also reads the keyboard at the hardware level (HID usage 0x88, Input Monitoring
-  permission) and catches the key with a system-wide key tap (Accessibility permission): a かな
-  event while カタカナ is held is swallowed and goes to Korean; a real かな key still goes to
-  Japanese. The other Windows keys are lost the same way (変換 and 無変換 become 英数).
-- **Which keyboards.** Only keyboards macOS has configured as JIS (Keyboard Setup Assistant's type
-  for each keyboard, `/Library/Preferences/com.apple.keyboardtype`) are read; カタカナ means nothing
-  on the others. **Karabiner-Elements** holds the keyboards it remaps exclusively, so they can't be
-  read directly, but it sends their keys out through its virtual keyboard, which reports itself as
-  an Apple keyboard (vendor 1452, product 593); with that configured as JIS, JIS Korean reads
-  カタカナ there instead. So カタカナ works with Karabiner on or off for the keyboard, as long as no
-  Karabiner rule remaps `japanese_pc_katakana`. (Tested with an HHKB Hybrid Type-S JIS and an HHKB
-  Studio, with Karabiner on and off.) A keyboard configured as JIS later counts right away: a
-  Japanese key from a keyboard not on the JIS list re-reads the list (at most once a second). The type is stored per keyboard (40 ANSI, 41 ISO, 42 JIS), and a JIS keyboard can be
-  stored as ANSI while typing JIS fine through Karabiner; Karabiner's own JIS setting doesn't write
-  it ([troubleshooting](troubleshooting/macos-katakana-and-eisu.md)).
-- **Caught system-wide.** The Korean Key, カタカナ and 英数 (without ⌘, Ctrl or ⌥) are caught by
-  that tap before any app sees them, so they work in apps that keep keys to themselves (iTerm keeps
-  F1–F19) and from other input sources, Japanese included. The tap runs only when it's useful (an
-  English mode is added, or a Korean mode is added and a keyboard is configured as JIS) and the
-  permissions are already granted: JIS Korean never asks for them at launch, only from the input
-  menu's "Allow カタカナ and F18 Everywhere…". It checks again when input sources change and, at most
-  every 30 seconds, when a field activates. A key whose target mode isn't added passes through
-  (F18 and カタカナ with no Korean mode, 英数 with no English mode). Until both permissions are
-  granted, the Korean Key works only in apps that pass it on, and カタカナ acts as かな. Caps Lock was tried and dropped: macOS toggles its light before an
-  input method hears of it.
-- 英数, the Korean Key and カタカナ only act when the mode they'd select is added in System Settings;
-  otherwise they go on as usual. The switch
-  key is consumed (it never reaches the app); 英数 reaches JIS Korean only if macOS passes it on, and
-  is left to macOS when it doesn't. Switching commits what's unconfirmed first (§5.1).
-- These keys are the shell's, like Ctrl+Space: they select input modes and never reach the engine.
+  script's primary mode, JIS Dvorak and JIS Colemak beside it), so 英数 selects it (as with Japanese
+  input methods' own Romaji modes), and the menu bar shows its badge
+  (`docs/logo/mode-a-qwerty.svg`). JIS Kana is declared with the Japanese script. Unlike Windows'
+  ABC the mode is **remembered**, like any input source.
+- **かな and カタカナ are one key.** macOS turns カタカナ (the カタカナ/ひらがな key of Windows JIS
+  keyboards, right of the space bar) into かな (key code 104). JIS Korean read the keyboard at the
+  hardware level to tell them apart; JIS Moonshot doesn't need to, since both go to Mode A. There is
+  no hardware listener and no Input Monitoring permission. かな is no longer left to macOS: with the
+  key tap running and Mode A added, it never selects Apple's Japanese input method.
+- **Korean Key:** F18 by default, so a key remapped to F18 (Karabiner, or a keyboard's own firmware)
+  acts as かな without further setup. The input menu offers None and F13 to F19 (Korean Key (Same as
+  かな)); any other key code is set with `defaults write me.sjun.inputmethod.JISMoonshot KoreanKey
+  -int <code>` (-1 for none). It never reaches the app.
+- **Caught system-wide.** かな (with カタカナ and the Korean Key) and 英数, without ⌘, Ctrl or ⌥, are
+  caught by a system-wide key tap before any app sees them, so they work in apps that keep keys to
+  themselves (iTerm keeps F1–F19) and from other input sources, Japanese included. The tap needs
+  **Accessibility** only. It runs when one of JIS Moonshot's modes is added and the permission is
+  already granted: JIS Moonshot never asks at launch, only from the input menu's "Allow 英数 and かな
+  Everywhere…". It checks again when input sources change and, at most every 30 seconds, when a
+  field activates. A key whose target mode isn't added passes through (かな with Mode A not added, 英数
+  with no English mode). Without the permission, the keys work only in apps that pass them on to
+  the input method. Caps Lock was tried and dropped: macOS toggles its light before an input method
+  hears of it.
+- **Starting at login.** The tap lives in the input method's process, which macOS otherwise starts
+  only once JIS Moonshot is selected somewhere, so `make install` adds a login agent
+  (`~/Library/LaunchAgents/me.sjun.inputmethod.JISMoonshot.login.plist`) that starts it in the
+  background.
+- Switching commits what's unconfirmed first (§5.1), except かな in Mode A and JIS Kana, which
+  re-read the staged keys (moonshot.md §4).
 
-**Recommended flow (macOS, JIS keyboard, Japanese also installed).** Each key always leads to the
-same language, whatever is selected:
-
-| From | To | Key |
-|---|---|---|
-| any | Korean (Mode A, or the last Korean mode) | カタカナ (Windows JIS keyboards), or F18 (the last Korean mode; another key remapped to it, e.g. with Karabiner) |
-| any | English (JIS English, or the English mode used last) | 英数, the JIS Romaji key |
-| any | Japanese (Kana) | かな, the JIS Kana key, handled by macOS |
-| Japanese | Korean | カタカナ or F18 too: the tap catches them whatever is selected. Otherwise the Japanese input method owns its keys; Ctrl+Space or the input menu work. |
-
-Each key has one direction: 英数 to English, カタカナ (or F18) to Korean, かな to Japanese. The English modes take no shortcut of their own on a letter key (Shift+X was tried and
-dropped: it costs a capital letter for a switch F18 already does).
-
-A Mac JIS keyboard (a MacBook's built-in one) has 英数 and かな but no カタカナ. The recommended
-setup, [macbook-jis-to-hhkb](https://github.com/themrsung/keyboard-troubleshooting/tree/main/layouts/macbook-jis-to-hhkb), makes a tap
-of Caps Lock カタカナ with Karabiner-Elements, which JIS Korean then reads like any カタカナ; a hold
-is the HHKB Fn layer, and Caps Lock moves to Fn+Tab. JIS Korean itself leaves Caps Lock alone.
+A Mac JIS keyboard (a MacBook's built-in one) has 英数 and かな, which is all JIS Moonshot needs.
 
 **ABC stays.** macOS always keeps at least one plain keyboard layout enabled (ABC, or a country
 layout), and an input method's modes don't count as one, so Apple's ABC can't be removed from the
 input sources. macOS needs it for secure input (password fields), where it bypasses input methods
 and types through a plain layout. JIS English sits beside it.
 
-Seen on macOS 27.0.1: with Apple's ABC enabled, 英数 selects ABC, not JIS English, although JIS
-Korean's tap sees the key. The tap now swallows 英数 and selects JIS English itself, which is meant
-to make the swap unnecessary (not yet confirmed on that setup). With ABC – Extended as the plain
-layout instead of ABC, 英数 goes to JIS English. Until JIS Korean is confirmed to win over ABC by
-itself, that swap is the documented workaround
+Seen on macOS 27.0.1 with JIS Korean: with Apple's ABC enabled, 英数 selected ABC, not JIS English,
+although the tap saw the key. The tap now swallows 英数 and selects JIS English itself, which is
+meant to make the swap unnecessary (not yet confirmed on that setup). With ABC – Extended as the
+plain layout instead of ABC, 英数 goes to JIS English; that swap stays the documented workaround
 ([#2](https://github.com/team-mirae/jis-korean/issues/2),
 [troubleshooting](troubleshooting/macos-katakana-and-eisu.md)).
 
@@ -1242,8 +1185,7 @@ A key press is a `KeyboardEvent.code` with `S-` for Shift held (`KeyG`, `S-Digit
 also takes a virtual key code (`5`, `S-5`). One press is one key, with or without Shift.
 
 - **resolveKeyCodeInput(keyCode)** → the character the key types on its own in the mode (`KeyG` →
-  ㅎ, `S-BracketLeft` → 「 in Mode B). None for keys that type no character: F-keys, Space,
-  Shift+Z (F10).
+  ㅎ, `S-BracketLeft` → " in Mode A). None for keys that type no character: F-keys, Space.
 - **resolveKeyCodeInput(keyCode, context)** → what the field shows after `context` (unconfirmed
   text typed so far) and then the key: the context with the key's effect, including anything it
   commits (`하` + `KeyS` → 한; `한` + `Space` → `한 `; with predictions on, `hello` + `Space` →
@@ -1263,67 +1205,67 @@ and F7, F9, F10, Space and Enter only where the text needs them; it skips presse
 nothing, and follows only key routes whose text heads toward the target (its jamo, its letters
 before F9/F10, a hanja's reading before F7). Every combination returned is checked by typing it.
 
-### 8.4 Windows: modes, 한/영 and settings
+### 8.4 Windows: modes, 無変換 / 変換, 한/영 and settings
 
-**One input method, the mode as a setting.** Windows lists one keyboard, **JIS Korean** (ko-KR),
-and the mode (§3.6) is chosen in its menu (right-click the taskbar indicator): Mode A, B or C,
-listed from the engine's modes, one setting for every app, Mode A by default. In Mode C the menu
-also has Dedicated symbol keys (§3.6). This differs from macOS (§8.2) on purpose: on
-Windows each input method is one more entry in the Win+Space list and in the language settings,
-and none of the tools that read input sources there select them by ID the way Hammerspoon and
-Karabiner do on macOS, so a mode per input method would cost more than it gives. The reason the
-mode is not per app is the same as on macOS: it follows the keyboard.
+Windows comes after macOS in JIS Moonshot (moonshot.md §7); this is the design the shell follows.
 
-**한/영** works exactly like the Microsoft Korean IME's: it switches JIS Korean to English (**ABC**)
-and back (**한글**), committing what's unconfirmed first (§5.1, IME switch). The state is one for the whole session, shared by every
-app, and never stored: it starts on 한글 after a restart or a crash. The taskbar shows 한글 or ABC
-where the Microsoft IME shows 가 / A, and a click there switches too. On a US ANSI keyboard,
-Windows' Korean layout sends 한/영 from Right Alt.
+**One input method, the mode as a setting.** Windows lists one keyboard, **JIS Moonshot**, with new
+CLSID and profile GUIDs, so it installs beside JIS Korean. The mode (§3.6) is chosen in its menu
+(right-click the taskbar indicator): **Mode A** or **JIS Kana**, one setting for every app, Mode A by
+default. This differs from macOS (§8.2) on purpose: on Windows each input method is one more entry
+in the Win+Space list and in the language settings, and none of the tools that read input sources
+there select them by ID the way Hammerspoon and Karabiner do on macOS, so a mode per input method
+would cost more than it gives. The engine can change the mode itself (F6, F7, 変換 from JIS Kana);
+the shell reads `jk_mode` after each key and follows it.
 
-**JIS and ISO keyboards have no 한/영 key, and JIS Korean deliberately doesn't make one.** Which key
-should switch (Right Alt, 変換, 無変換, カタカナ, Caps Lock...) is the keyboard owner's choice, so it's
-configured outside JIS Korean, by mapping a key to 한/영 (`VK_HANGUL`) with the keyboard's own
-software, Windows' Korean keyboard type, or a remapper such as PowerToys. JIS Korean handles
-`VK_HANGUL` from wherever it comes. The indicator's click and menu work on every keyboard.
+**The language keys** (§8):
 
-**ABC's layout** is an English mode (§3.6.2, §3.6.4), chosen in the menu's **English Layout
-(한/영)**, a selector of its own next to the Korean mode's:
+| Key | Does |
+|---|---|
+| 無変換 (`VK_NONCONVERT`) | English (**ABC**, typed with the English layout below), committing what shows |
+| 変換 (`VK_CONVERT`) | Mode A; in Mode A with something staged, force Korean (`jk_kana_key`) |
+| 한/영 (`VK_HANGUL`) | Toggles English ↔ Mode A, as the Microsoft Korean IME does, committing first (§5.1, IME switch) |
+
+The English state is one for the whole session, shared by every app, and never stored: it starts in
+Mode A after a restart or a crash. The taskbar shows the state where the Microsoft IME shows 가 / A,
+and a click there switches too. JIS keyboards have 無変換 and 変換 next to the space bar; a 한/영
+key can still be mapped with the keyboard's own software or a remapper such as PowerToys.
+
+**ABC's layout** is an English mode (§3.6.2, §3.6.4), chosen in the menu's **English Layout**:
 
 | Setting | ABC types |
 |---|---|
-| Default for this keyboard (unset) | the Korean mode's keyboard's English: Mode A → JIS English (`A_QWERTY`), B → US English (`B_QWERTY`), C → UK English (`CJ_QWERTY`) |
-| Any English mode | that mode, whatever the Korean mode: the same keyboard's (`A_` for A, `B_` for B, `C_` and `CJ_` for C) are listed first, the others after |
-| Windows' keyboard layout | every key goes to the app untouched, typed by Windows' own layout (the earlier behaviour) |
+| Default (unset) | JIS English (`A_QWERTY`) |
+| Any English mode | that mode (JIS English, JIS Dvorak, JIS Colemak) |
+| Windows' keyboard layout | every key goes to the app untouched, typed by Windows' own layout |
 
-Windows doesn't switch between three languages, so the English modes are only this: the layout 한/영
-types, not input methods of their own. As on macOS the engine consumes no key in an English mode;
-the shell types each key's character from the engine's table (`jk_legend_in`), as macOS's keyboard
-layout is generated from it, so the symbols can't drift. Caps Lock types capitals. Shortcuts
-(Ctrl, Alt, Win), Space, Enter, Tab, the arrows and the F-keys go to the app. **Letter variants
-(§3.6.3) are deliberately left out on Windows**, and on every platform but macOS: Alt + letter is
-Windows' menu and shortcut key, used far too much to take. `jk_mode_is_english` tells a shell which
-modes are English; the Windows build has them (the engine's `english` feature).
+Windows doesn't switch between three input sources, so the English modes are only this: the layout
+ABC types, not input methods of their own. As on macOS the engine consumes no key in an English
+mode; the shell types each key's character from the engine's table (`jk_legend_in`), as macOS's
+keyboard layout is generated from it, so the symbols can't drift. Caps Lock types capitals.
+Shortcuts (Ctrl, Alt, Win), Space, Enter, Tab, the arrows and the F-keys go to the app. **Letter
+variants (§3.6.3) are deliberately left out on Windows**: Alt + letter is Windows' menu and shortcut
+key, used far too much to take.
 
-It's an on/off switch, nothing more: the English typed in ABC never reaches the engine's
-composition (no predictions, F9/F10, hanja or learning), and switching mid-word splits the word. The recommended
-way to mix English in is to stay in JIS Korean (Mode B on US ANSI keyboards), let the predictions
-read English words (§10), and train them on the user's own English words with a training file
-(§10.12); `windows/README.md` explains this to users.
+**Predictive typing must be accepted** (moonshot.md §6). The installer shows the notice as a page
+that must be accepted, and the TIP checks `HKCU\Software\JIS Moonshot\PredictiveAccepted`: until
+it's set, every key passes through, and the indicator menu has "Accept Predictive Typing…". There is
+no Predictions switch and no lite build (`build.ps1` has no `-Lite`).
 
 **Private fields.** The list (§7, §10) shows readings of what's typed, so it's excluded from
 screen capture (recordings, screenshots, screen sharing). In a field marked as a password or PIN
 (input scope, disabled keyboard, a password character) every key passes through, as in ABC;
 Windows already keeps TIPs out of most of them. Password boxes that aren't marked (common in
 banking and certificate programs) can't be told apart from text: there the user switches to ABC,
-or turns JIS Korean off for that program in the menu (`Apps\<program.exe>\Off`), which passes
+or turns JIS Moonshot off for that program in the menu (`Apps\<program.exe>\Off`), which passes
 every key through there only.
 
-**Settings** are the macOS ones, stored in `HKCU\Software\JIS Korean` (`Mode` by engine id, a
-Korean mode; `EnglishMode`, ABC's layout: an English mode's id, `0xFFFFFFFF` for Windows' layout,
-unset for the default; `DedicatedSymbols`, `Predictions`, `EnterCommits`, `LearnFromChoices`, `Learned`, `Weight.<Scenario>`, per app
-`Apps\<program.exe>\Predictions`); the default-off apps (§10.11.1) are matched by program file name.
-The training file is `%APPDATA%\JIS Korean\training.json`. The Minecraft mod reads `Mode` to type
-the same mode in the game.
+**Settings** are the macOS ones, stored in `HKCU\Software\JIS Moonshot` (`Mode` by engine id;
+`EnglishMode`, ABC's layout: an English mode's id, `0xFFFFFFFF` for Windows' layout, unset for the
+default; `PredictiveAccepted`, `EnterCommits`, `LearnFromChoices`, `Learned`, `Weight.<Scenario>`,
+per app `Apps\<program.exe>\Predictions`); the default-off apps (§10.11.1) are matched by program
+file name. A saved `Mode` naming a retired id (JIS Korean's B or C) falls back to Mode A. The
+training file is `%APPDATA%\JIS Moonshot\training.json`.
 
 ---
 

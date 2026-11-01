@@ -1,6 +1,6 @@
 import Foundation
 
-/// Apps JIS Korean treats differently, by bundle identifier (compared lower-cased).
+/// Apps JIS Moonshot treats differently, by bundle identifier (compared lower-cased).
 enum KnownApps {
     /// Terminals: typing there is commands. Predictions start off there (DefaultOffApps), and ⌥ goes
     /// to the app untouched in the English modes (readline's ⌥ shortcuts, spec §3.6.3).

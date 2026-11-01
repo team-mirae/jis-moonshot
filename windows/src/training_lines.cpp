@@ -26,6 +26,12 @@ bool EnglishWord(const std::wstring& w) {
     });
 }
 
+bool KanaWord(const std::wstring& w) {
+    return !w.empty() && std::all_of(w.begin(), w.end(), [](wchar_t c) {
+        return (c >= 0x3041 && c <= 0x3096) || (c >= 0x30A1 && c <= 0x30FA) || c == 0x30FC;
+    });
+}
+
 int ClampCount(double x, int lo, int hi, int fallback) {
     if (!std::isfinite(x)) return fallback;
     return static_cast<int>(std::clamp(x, static_cast<double>(lo), static_cast<double>(hi)));

@@ -1,4 +1,5 @@
-//! F7 hanja conversion (spec §7) and F9/F10 on symbol runs (spec §5.3).
+//! Shift+F7 hanja conversion (spec §7; it moved from F7, docs/moonshot.md §4) and F9/F10 on
+//! symbol runs (spec §5.3).
 
 use std::sync::Arc;
 
@@ -65,118 +66,119 @@ fn selected(out: &Output) -> Option<(&str, usize)> {
 // §7 Opening the list
 
 #[test]
-fn f7_opens_the_longest_word_and_previews_the_first_candidate() {
+fn shift_f7_opens_the_longest_word_and_previews_the_first_candidate() {
     let (_, out) = run(&mut engine(), "KeyG KeyK KeyR KeyR KeyY");
     assert_eq!(out.preedit, "학교");
-    let (_, out) = run(&mut engine(), "KeyG KeyK KeyR KeyR KeyY F7");
+    let (_, out) = run(&mut engine(), "KeyG KeyK KeyR KeyR KeyY S-F7");
     assert_eq!(out.preedit, "學校");
     assert_eq!(selected(&out), Some(("學校", 0)));
     assert_eq!(out.candidates.unwrap().items.len(), 2);
 }
 
 #[test]
-fn f7_converts_only_the_matching_suffix() {
+fn shift_f7_converts_only_the_matching_suffix() {
     // 나학 → only 학 is in the dictionary.
-    check("KeyS KeyK KeyG KeyK KeyR F7", "", "나學");
+    check("KeyS KeyK KeyG KeyK KeyR S-F7", "", "나學");
 }
 
 #[test]
-fn f7_without_a_match_or_dictionary_does_nothing() {
-    let (_, out) = run(&mut engine(), "KeyS KeyK F7");
+fn shift_f7_without_a_match_or_dictionary_does_nothing() {
+    let (_, out) = run(&mut engine(), "KeyS KeyK S-F7");
     assert_eq!((out.preedit.as_str(), out.candidates.is_none()), ("나", true));
-    let (_, out) = run(&mut Engine::new(), "KeyG KeyK KeyS F7");
+    let (_, out) = run(&mut Engine::new(), "KeyG KeyK KeyS S-F7");
     assert_eq!((out.preedit.as_str(), out.candidates.is_none()), ("한", true));
-    // With nothing unconfirmed, F7 goes to the app (spec §6).
-    let (_, out) = run(&mut engine(), "F7");
+    // With nothing unconfirmed, Shift+F7 goes to the app (spec §6).
+    let (_, out) = run(&mut engine(), "S-F7");
     assert!(!out.consumed && out.candidates.is_none());
 }
 
 #[test]
-fn f7_needs_complete_syllables() {
-    check("KeyG KeyK KeyS KeyR F7", "", "한ㄱ");
+fn shift_f7_needs_complete_syllables() {
+    check("KeyG KeyK KeyS KeyR S-F7", "", "한ㄱ");
 }
 
 // §7 Moving and picking
 
 #[test]
-fn f7_and_arrows_move_the_selection() {
-    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS F7 F7");
+fn shift_f7_and_arrows_move_the_selection() {
+    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS S-F7 S-F7");
     assert_eq!(selected(&out), Some(("漢", 1)));
-    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS F7 F7 F7");
+    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS S-F7 S-F7 S-F7");
     assert_eq!(selected(&out), Some(("韓", 0)), "wraps around");
-    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS F7 ArrowUp");
+    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS S-F7 ArrowUp");
     assert_eq!(selected(&out), Some(("漢", 1)));
-    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS F7 S-F7");
+    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS S-F7 ArrowDown");
     assert_eq!(selected(&out), Some(("漢", 1)));
-    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS F7 ArrowDown");
-    assert_eq!(selected(&out), Some(("漢", 1)));
+    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS S-F7 ArrowDown ArrowDown");
+    assert_eq!(selected(&out), Some(("韓", 0)), "wraps around");
 }
 
 #[test]
 fn arrows_left_and_right_page() {
     assert_eq!(PAGE_SIZE, 9);
     // 11 candidates: page 2 is 架 賈.
-    let (_, out) = run(&mut engine(), "KeyR KeyK F7 ArrowRight");
+    let (_, out) = run(&mut engine(), "KeyR KeyK S-F7 ArrowRight");
     assert_eq!(selected(&out), Some(("架", 9)));
-    let (_, out) = run(&mut engine(), "KeyR KeyK F7 ArrowRight ArrowRight");
+    let (_, out) = run(&mut engine(), "KeyR KeyK S-F7 ArrowRight ArrowRight");
     assert_eq!(selected(&out), Some(("賈", 10)), "stops at the last candidate");
-    let (_, out) = run(&mut engine(), "KeyR KeyK F7 ArrowRight ArrowLeft");
+    let (_, out) = run(&mut engine(), "KeyR KeyK S-F7 ArrowRight ArrowLeft");
     assert_eq!(selected(&out), Some(("可", 0)));
 }
 
 #[test]
 fn number_keys_pick_on_the_current_page() {
-    check("KeyR KeyK F7 Digit2", "", "家");
-    check("KeyR KeyK F7 Digit9", "", "暇");
-    check("KeyR KeyK F7 ArrowRight Digit2", "", "賈");
+    check("KeyR KeyK S-F7 Digit2", "", "家");
+    check("KeyR KeyK S-F7 Digit9", "", "暇");
+    check("KeyR KeyK S-F7 ArrowRight Digit2", "", "賈");
 }
 
 #[test]
 fn number_past_the_end_picks_current_then_types() {
     // Page 2 has two candidates, so 3 picks the selected 架 and then types ㄸ.
-    check("KeyR KeyK F7 ArrowRight Digit3", "", "架ㄸ");
+    check("KeyR KeyK S-F7 ArrowRight Digit3", "", "架ㄸ");
 }
 
 #[test]
 fn enter_picks_without_a_new_line() {
-    let (doc, out) = run(&mut engine(), "KeyG KeyK KeyS F7 F7 Enter");
+    let (doc, out) = run(&mut engine(), "KeyG KeyK KeyS S-F7 S-F7 Enter");
     assert_eq!((doc.as_str(), out.preedit.as_str()), ("", "漢"));
     assert!(out.candidates.is_none());
 }
 
 #[test]
 fn other_keys_pick_then_act() {
-    check("KeyG KeyK KeyS F7 Space", "韓 ", "");
-    check("KeyG KeyK KeyS F7 KeyR KeyK", "", "韓가");
-    check("KeyG KeyK KeyS F7 Minus", "", "韓!");
+    check("KeyG KeyK KeyS S-F7 Space", "韓 ", "");
+    check("KeyG KeyK KeyS S-F7 KeyR KeyK", "", "韓가");
+    check("KeyG KeyK KeyS S-F7 Minus", "", "韓!");
 }
 
 #[test]
 fn escape_and_backspace_cancel_to_the_hangul() {
-    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS F7 F7 Escape");
+    let (_, out) = run(&mut engine(), "KeyG KeyK KeyS S-F7 S-F7 Escape");
     assert_eq!((out.preedit.as_str(), out.candidates.is_none()), ("한", true));
-    check("KeyG KeyK KeyS F7 Backspace", "", "한");
+    check("KeyG KeyK KeyS S-F7 Backspace", "", "한");
     // The jamo are still editable after a cancel.
-    check("KeyG KeyK KeyS F7 Escape Backspace", "", "하");
+    check("KeyG KeyK KeyS S-F7 Escape Backspace", "", "하");
 }
 
 #[test]
-fn f6_cancels_and_commits_the_hangul() {
-    check("KeyG KeyK KeyS F7 F7 F6", "한", "");
+fn f6_and_f7_close_the_list_and_show_kana() {
+    check("KeyG KeyK KeyS S-F7 S-F7 F6", "", "きのと");
+    check("KeyG KeyK KeyS S-F7 S-F7 F7", "", "キノト");
 }
 
 #[test]
 fn flush_commits_the_selected_candidate() {
     let mut e = engine();
-    run(&mut e, "KeyG KeyK KeyS F7 F7");
+    run(&mut e, "KeyG KeyK KeyS S-F7 S-F7");
     assert_eq!(e.flush().commit, "漢");
 }
 
 #[test]
 fn earlier_syllables_stay_editable_after_a_pick() {
-    check("KeyS KeyK KeyG KeyK KeyR F7 Enter", "", "나學");
+    check("KeyS KeyK KeyG KeyK KeyR S-F7 Enter", "", "나學");
     // Backspace removes 學, then the jamo of 나 one at a time.
-    check("KeyS KeyK KeyG KeyK KeyR F7 Enter Backspace Backspace", "", "ㄴ");
+    check("KeyS KeyK KeyG KeyK KeyR S-F7 Enter Backspace Backspace", "", "ㄴ");
 }
 
 #[test]
@@ -184,7 +186,7 @@ fn reading_inside_a_moved_final_still_converts() {
     // 말이 via the double press: 이 isn't a token boundary, so the prefix becomes plain text.
     let mut e = Engine::new();
     e.set_dictionary(Arc::new(Dictionary::parse("이\t李\t오얏 리\n")));
-    let (_, out) = run(&mut e, "KeyA KeyK KeyF KeyL KeyL F7");
+    let (_, out) = run(&mut e, "KeyA KeyK KeyF KeyL KeyL S-F7");
     assert_eq!(out.preedit, "말李");
 }
 
@@ -196,7 +198,7 @@ fn cancelling_a_reading_off_a_keystroke_boundary_keeps_the_keys_as_typed() {
     for cancel in ["Escape", "Backspace"] {
         let mut e = Engine::new();
         e.set_dictionary(Arc::new(Dictionary::parse("이\t李\t오얏 리\n")));
-        let (_, out) = run(&mut e, &format!("KeyA KeyK KeyF KeyL KeyL F7 {cancel}"));
+        let (_, out) = run(&mut e, &format!("KeyA KeyK KeyF KeyL KeyL S-F7 {cancel}"));
         assert_eq!(out.preedit, "말이", "{cancel}");
         let (_, out) = run(&mut e, "Backspace");
         assert_eq!(out.preedit, "마리", "{cancel}");
@@ -229,11 +231,6 @@ fn symbol_run_and_word_are_separate() {
     check("KeyG KeyK KeyS S-Digit1 F9", "", "한１");
     // A word after symbols converts on its own.
     check("S-Digit1 KeyG KeyK KeyS F10", "", "1gks");
-}
-
-#[test]
-fn f6_after_symbol_conversion_restores_and_commits() {
-    check("S-Digit1 S-Digit2 F9 F6", "12", "");
 }
 
 // The real dictionary

@@ -34,11 +34,9 @@ struct Press {
 };
 
 // Types `presses` into a fresh engine in `mode`; returns everything committed + the preedit.
-std::string Type(unsigned mode, const std::vector<Press>& presses, std::string* preedit = nullptr,
-                 bool dedicated_symbols = true) {
+std::string Type(unsigned mode, const std::vector<Press>& presses, std::string* preedit = nullptr) {
     JkEngine* e = jk_new();
     jk_set_mode(e, mode);
-    jk_set_dedicated_symbols(e, dedicated_symbols ? 1 : 0);
     std::string committed;
     for (const Press& p : presses) {
         jk_key(e, jk::EngineKey(p.vk, p.scan, false), p.shift ? JK_MOD_SHIFT : 0);
@@ -88,6 +86,17 @@ int main() {
     Check(jk::EngineKey(0x79, 0x44, false) == JK_KEY_F10, "F10");
     Check(jk::EngineKey(0x24, 0x47, true) == JK_KEY_OTHER, "Home");
     Check(jk::EngineKey(0x15, 0x38, true) == JK_KEY_OTHER, "한/영 isn't an engine key");
+    // 한/영, 無変換 and 変換 switch (docs/moonshot.md §4, §7): by virtual key, or 無変換 / 変換 by
+    // their JIS scan codes; never engine keys.
+    Check(jk::SwitchKeyOf(0x15, 0x01380001) == jk::SwitchKey::kHangul, "VK_HANGUL is 한/영");
+    Check(jk::SwitchKeyOf(0x1D, 0x007B0001) == jk::SwitchKey::kNonConvert, "VK_NONCONVERT is 無変換");
+    Check(jk::SwitchKeyOf(0x1C, 0x00790001) == jk::SwitchKey::kConvert, "VK_CONVERT is 変換");
+    Check(jk::SwitchKeyOf(0xFF, 0x007B0001) == jk::SwitchKey::kNonConvert, "無変換 by its scan code");
+    Check(jk::SwitchKeyOf(0xFF, 0x00790001) == jk::SwitchKey::kConvert, "変換 by its scan code");
+    Check(jk::SwitchKeyOf(0xE7, 0x00790001) == jk::SwitchKey::kNone, "VK_PACKET never switches");
+    Check(jk::SwitchKeyOf('G', 0x00220001) == jk::SwitchKey::kNone, "a letter doesn't switch");
+    Check(jk::EngineKey(0x1C, 0x79, false) == JK_KEY_OTHER && jk::EngineKey(0x1D, 0x7B, false) == JK_KEY_OTHER,
+          "無変換 and 変換 aren't engine keys");
     // #4: VK_PACKET carries a character's low byte where the scan code goes: never a position.
     for (unsigned scan : {0x20u, 0x2Cu, 0x30u, 0x10u, 0x56u, 0x73u, 0x7Du, 0x00u}) {
         Check(jk::EngineKey(0xE7, scan, false) == JK_KEY_OTHER, "VK_PACKET is never a letter key");
@@ -121,6 +130,16 @@ int main() {
                   "Lines clamps counts and skips words in the wrong script");
             Check(jk::training::Lines(&*list, jk::training::EnglishWord) == L"abc\t12", "English Lines");
         }
+        // Kana words (vocabulary.japanese, avoid "japanese"): hiragana, katakana and ー only.
+        const auto kana = jk::json::Parse(
+            R"([{"word": "きって", "count": 5}, {"word": "コーヒー"}, {"word": "漢字"}, {"word": "abc"}, {"word": "カナa"}])");
+        Check(kana && jk::training::Lines(&*kana, jk::training::KanaWord) == L"きって\t5\nコーヒー\t1000",
+              "Kana Lines");
+        const auto avoid = jk::json::Parse(
+            R"([{"word": "きのと", "language": "japanese", "strength": "strong"}, {"word": "한", "language": "korean"},)"
+            R"( {"word": "キノト", "language": "japanese"}])");
+        Check(avoid && jk::training::AvoidLines(&*avoid, "japanese", jk::training::KanaWord) == L"きのと\tstrong\nキノト",
+              "Japanese AvoidLines");
     }
 
     // #5: a key-down tested twice is recognised; separate presses and auto-repeats aren't.
@@ -143,32 +162,39 @@ int main() {
     Check(Type(0, {g, k, s, space}) == "한 ", "한 Space");
     // Spec §6.2: F10 → gks.
     Check((Type(0, {g, k, s, {0x79, 0x44}}, &preedit), preedit == "gks"), "한 F10 → gks");
-    // Shift+Z is F10 too (spec §3.4).
-    Check((Type(0, {g, k, s, {0x5A, 0x2C, true}}, &preedit), preedit == "gks"), "한 Shift+Z → gks");
-    // Number row: 1 → ㅃ; Mode B Shift+[ → 「 (spec §3.6).
+    // Shift+Z is ㅋ, no longer F10 (docs/moonshot.md §1).
+    Check((Type(0, {{0x5A, 0x2C, true}, k}, &preedit), preedit == "카"), "Shift+Z K → 카");
+    // Number row: 1 → ㅃ.
     Check((Type(0, {{0x31, 0x02}}, &preedit), preedit == "ㅃ"), "1 → ㅃ");
-    Check((Type(1, {{0xDB, 0x1A, true}}, &preedit), preedit == "「"), "Mode B Shift+[ → 「");
     // Mode A: the @ key (US [) is ' (spec §3.2).
     Check((Type(0, {{0xDB, 0x1A}}, &preedit), preedit == "'"), "Mode A @ → '");
-    // Mode C (spec §3.6): the ISO extra key types · and —, [ types 「 with Shift; with Dedicated
-    // symbol keys off they're UK ISO's \ | and { again.
-    Check(jk_mode_count() >= 3, "three modes");
-    // Mode ids have gaps (spec §3.6.1): the menu lists them by index, and refuses unknown ids.
-    bool listed_c = false;
-    for (std::uint32_t i = 0; i < jk_mode_count(); ++i) listed_c |= jk_mode_id_at(i) == 2;
-    Check(listed_c && jk_mode_id_at(jk_mode_count()) == UINT32_MAX, "jk_mode_id_at lists Mode C");
-    Check(Str(jk_mode_code_ptr(2), jk_mode_code_len(2)) == "C", "Mode C's code is C");
+    // The modes (docs/moonshot.md §2): A, the three JIS English modes and JIS Kana. Ids have gaps:
+    // the menu lists them by index; the retired 1, 2, 9, 10 and unknown ids are refused, which the
+    // shell turns into Mode A (SetMode).
+    bool listed_kana = false;
+    for (std::uint32_t i = 0; i < jk_mode_count(); ++i) listed_kana |= jk_mode_id_at(i) == JK_MODE_A_KANA;
+    Check(listed_kana && jk_mode_id_at(jk_mode_count()) == UINT32_MAX, "jk_mode_id_at lists JIS Kana");
     {
         JkEngine* e = jk_new();
-        Check(jk_set_mode(e, 2) == 1 && jk_set_mode(e, 4242) == 0, "unknown mode ids are refused");
+        Check(jk_set_mode(e, JK_MODE_A_KANA) == 1 && jk_set_mode(e, 4242) == 0, "unknown mode ids are refused");
+        for (std::uint32_t retired : {1u, 2u, 9u, 10u}) {
+            Check(jk_set_mode(e, retired) == 0, "the retired modes are refused");
+        }
         jk_free(e);
     }
-    const Press iso = {0xE2, 0x56}, iso_shift = {0xE2, 0x56, true}, bracket_shift = {0xDB, 0x1A, true};
-    Check((Type(2, {iso, iso_shift, bracket_shift}, &preedit), preedit == "\xC2\xB7\xE2\x80\x94\xE3\x80\x8C"),
-          "Mode C: extra key · —, Shift+[ 「");
-    Check((Type(2, {iso, iso_shift, bracket_shift}, &preedit, false), preedit == "\\|{"),
-          "Mode C, dedicated symbol keys off: \\ | {");
-    Check((Type(1, {iso}, &preedit), preedit.empty()), "the ISO extra key isn't in Mode B");
+    // The engine switches its own mode (docs/moonshot.md §4): F6 to JIS Kana, the かな key (変換)
+    // back to Mode A, keeping what's staged. The shell follows jk_mode after each call.
+    {
+        JkEngine* e = jk_new();
+        jk_set_mode(e, JK_MODE_A);
+        for (const Press& p : {g, k, s}) jk_key(e, jk::EngineKey(p.vk, p.scan, false), 0);
+        jk_key(e, JK_KEY_F6, 0);
+        Check(jk_mode(e) == JK_MODE_A_KANA && Str(jk_preedit_ptr(e), jk_preedit_len(e)) == "きのと",
+              "F6: JIS Kana, G K S as きのと");
+        Check(jk_kana_key(e) == 1 && jk_mode(e) == JK_MODE_A && Str(jk_preedit_ptr(e), jk_preedit_len(e)) == "한",
+              "変換 from JIS Kana: Mode A, 한 again");
+        jk_free(e);
+    }
 
     // The training-file reader (training.cpp): the repo's example, escapes, and bad input.
     {
@@ -176,7 +202,9 @@ int main() {
         std::stringstream text;
         text << file.rdbuf();
         const auto example = jk::json::Parse(text.str());
-        Check(example && example->Get("format") && *example->Get("format")->String() == "jis-korean-training",
+        const jk::json::Value* format = example ? example->Get("format") : nullptr;
+        Check(format && format->String() &&
+                  (*format->String() == "jis-moonshot-training" || *format->String() == "jis-korean-training"),
               "docs/training-example.json parses");
         Check(example && example->Get("version") && example->Get("version")->Number() == 1.0, "version 1");
         const auto escaped = jk::json::Parse(R"({"a": "\uD55C\u0041\n", "b": [1, -2.5e1, true, null]})");
@@ -191,16 +219,13 @@ int main() {
 
     // ABC's English layouts (spec §3.6.2, §3.6.4, §8.4): the shell types jk_legend_in.
     {
-        Check(!jk_mode_is_english(0) && !jk_mode_is_english(1) && !jk_mode_is_english(2) &&
-                  !jk_mode_is_english(4242),
-              "the Korean modes aren't English");
+        Check(!jk_mode_is_english(JK_MODE_A) && !jk_mode_is_english(JK_MODE_A_KANA) && !jk_mode_is_english(4242),
+              "Mode A and JIS Kana aren't English");
         const std::uint32_t digit2 = jk::EngineKey(0x32, 0x03, false), key_s = jk::EngineKey(0x53, 0x1F, false);
-        const std::uint32_t ro = jk::EngineKey(0xE2, 0x73, false);
         Check(jk_mode_is_english(3) && jk_legend_in(digit2, 1, 0, 3) == U'"', "JIS English: Shift+2 is \"");
-        Check(jk_mode_is_english(9) && jk_legend_in(digit2, 1, 0, 9) == U'@', "US English: Shift+2 is @");
         Check(jk_mode_is_english(7) && jk_legend_in(key_s, 0, 0, 7) == U'o', "JIS Dvorak: the S key is o");
         Check(jk_mode_is_english(8) && jk_legend_in(key_s, 0, 0, 8) == U'r', "JIS Colemak: the S key is r");
-        Check(jk_mode_is_english(10) && jk_legend_in(ro, 0, 0, 10) == U'\\', "UK English: ろ is \\");
+        Check(!jk_mode_is_english(9) && !jk_mode_is_english(10), "US and UK English are retired");
     }
 
     // The log truncates an overlong line instead of ending the process (log.cpp).

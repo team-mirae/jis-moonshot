@@ -235,25 +235,6 @@ fn vowel_that_cannot_join_gets_implied_ieung() {
 }
 
 #[test]
-fn f6_drops_implied_ieung_and_commits() {
-    doc("KeyK F6", "ㅏ", "");
-    doc("KeyR KeyK KeyJ F6", "가ㅓ", "");
-    doc("KeyH KeyK F6", "ㅘ", "");
-    doc("KeyR KeyH Digit0 F6", "고ㅘ", "");
-}
-
-#[test]
-fn f6_keeps_implied_ieung_once_it_has_a_final() {
-    doc("KeyK KeyS F6", "안", "");
-}
-
-#[test]
-fn vowel_after_f6_gets_implied_ieung_again() {
-    doc("KeyK F6 KeyK", "ㅏ", "아");
-    doc("KeyK F6 Backspace KeyJ", "", "어");
-}
-
-#[test]
 fn implied_ieung_moves_like_a_real_initial() {
     pre("KeyK KeyS KeyK", "아나");
 }
@@ -273,14 +254,14 @@ fn same_vowel_again_puts_the_final_back() {
 fn final_toggle_needs_the_same_vowel_right_away() {
     pre("KeyA KeyK KeyF KeyL KeyK", "마리아");
     pre("KeyA KeyK KeyF KeyH KeyK", "마롸");
-    doc("KeyA KeyK KeyF KeyL F6 KeyL", "마리", "이");
+    doc("KeyA KeyK KeyF KeyL S-Enter KeyL", "마리", "이");
     pre("KeyA KeyK KeyF KeyL KeyL KeyL", "말이이");
 }
 
 #[test]
-fn final_toggle_then_f6_and_backspace() {
-    // F6 commits the double-press ㅇ as it is.
-    doc("KeyA KeyK KeyF KeyL KeyL F6", "말이", "");
+fn final_toggle_then_commit_and_backspace() {
+    // Committing keeps the double-press ㅇ as it is.
+    doc("KeyA KeyK KeyF KeyL KeyL S-Enter", "말이", "");
     pre("KeyA KeyK KeyF KeyL KeyL Backspace", "마리");
 }
 
@@ -348,36 +329,22 @@ fn flush_commits_everything() {
     assert_eq!((h.doc.as_str(), h.preedit.as_str()), ("한!", ""));
 }
 
-// §6 F6
-
-#[test]
-fn f6_commits() {
-    doc("KeyG KeyK KeyS F6", "한", "");
-    doc("KeyG KeyK KeyS F6 KeyK", "한", "아");
-    doc("KeyG KeyK KeyS F6 KeyR", "한", "ㄱ");
-    doc("KeyR KeyK F6 KeyS", "가", "ㄴ");
-    doc("KeyG KeyK KeyS F6 KeyK F6", "한ㅏ", "");
-    doc("Minus F6", "!", "");
-}
-
-#[test]
-fn f6_with_nothing_unconfirmed_is_a_no_op() {
-    doc("F6", "", "");
-}
+// §6 Function keys
 
 #[test]
 fn function_keys_with_nothing_unconfirmed_go_to_the_app() {
-    for key in [Key::F6, Key::F7, Key::F8, Key::F9, Key::F10] {
+    // F6 and F7 are taken even then: they switch to kana typing (tests/moonshot.rs).
+    for key in [Key::F8, Key::F9, Key::F10] {
         assert!(!Engine::new().key(key, Mods::NONE).consumed, "{key:?}");
     }
-    // Shift+Z is a JIS Korean key, not a real F10: taken either way.
+    // Shift+Z is ㅋ, a key like any other: taken.
     assert!(Engine::new().key(Key::KeyZ, Mods::SHIFTED).consumed);
     // With something unconfirmed they act and are taken.
     let mut e = Engine::new();
     e.key(Key::KeyR, Mods::NONE);
-    let out = e.key(Key::F6, Mods::NONE);
+    let out = e.key(Key::F10, Mods::NONE);
     assert!(out.consumed);
-    assert_eq!(out.commit, "ㄱ");
+    assert_eq!((out.commit.as_str(), out.preedit.as_str()), ("", "r"));
 }
 
 // §6 F8 (reserved)
@@ -410,8 +377,6 @@ fn f9_f10_cycle() {
     step("F10", "GKS");
     step("F10", "Gks");
     step("F9", "Ｇｋｓ");
-    step("F6", "");
-    assert_eq!(h.doc, "한", "F6 restores the Hangul and commits it");
 }
 
 #[test]
@@ -427,21 +392,21 @@ fn conversion_uses_raw_keys() {
 }
 
 #[test]
-fn conversion_word_ends_at_symbols_and_f6() {
+fn conversion_word_ends_at_symbols_and_commits() {
     pre("KeyG KeyK KeyS Minus KeyG KeyK KeyS F10", "한!gks");
-    doc("KeyG KeyK F6 KeyG KeyK F10", "하", "gk");
+    doc("KeyG KeyK S-Enter KeyG KeyK F10", "하", "gk");
 }
 
 #[test]
 fn conversion_with_no_word_is_a_no_op() {
     pre("F10", "");
-    doc("KeyG KeyK KeyS F6 F9", "한", "");
+    doc("KeyG KeyK KeyS S-Enter F9", "한", "");
 }
 
 #[test]
 fn input_after_conversion_ends_it() {
     pre("KeyG KeyK KeyS F10 KeyK", "gks아");
-    doc("KeyG KeyK KeyS F10 KeyR F6", "gksㄱ", "");
+    doc("KeyG KeyK KeyS F10 KeyR S-Enter", "gksㄱ", "");
 }
 
 #[test]
@@ -514,13 +479,6 @@ fn shift_vowel_on_its_own_is_like_the_implied_ieung() {
 }
 
 #[test]
-fn f6_keeps_a_shift_vowel_ieung() {
-    // Asked for with Shift, so unlike the implied ㅇ, F6 commits it as it is.
-    doc("KeyA KeyK KeyF S-KeyL F6", "말이", "");
-    doc("KeyA KeyK KeyF KeyL F6", "마리", "");
-}
-
-#[test]
 fn backspace_removes_the_shift_vowel_in_one_press() {
     pre("KeyA KeyK KeyF S-KeyL Backspace", "말");
 }
@@ -554,15 +512,15 @@ fn shift_still_held_after_a_double_types_the_syllable() {
     pre("KeyR S-KeyK", "가");
 }
 
-// §6 Shift+Z is F10
+// Shift+Z is ㅋ (docs/moonshot.md §1: no longer F10)
 
 #[test]
-fn shift_z_is_f10() {
-    pre("KeyG KeyK KeyS S-KeyZ", "gks");
-    pre("KeyG KeyK KeyS S-KeyZ S-KeyZ", "GKS");
-    pre("KeyG KeyK KeyS S-KeyZ S-KeyZ S-KeyZ", "Gks");
-    pre("KeyG KeyK KeyS S-KeyZ F9", "ｇｋｓ");
-    doc("KeyG KeyK KeyS S-KeyZ F6", "한", "");
+fn shift_z_types_kieuk() {
+    pre("S-KeyZ S-KeyZ", "ㅋㅋ");
+    pre("S-KeyZ KeyK", "카");
+    pre("KeyG KeyK KeyS S-KeyZ", "한ㅋ");
+    pre("KeyG KeyK KeyS S-KeyZ KeyK", "한카");
+    pre("KeyG KeyK KeyS S-KeyZ F10", "gksZ");
 }
 
 #[test]
@@ -581,6 +539,6 @@ fn the_engine_says_which_keys_commit_what_stands() {
     for key in [Key::KeyG, Key::Digit1, Key::Minus, Key::Backspace, Key::F6, Key::F10, Key::Modifier] {
         assert!(!e.commits(key, Mods::NONE), "{key:?}");
     }
-    // Shift+Z is F10 here, not a commit.
+    // Shift+Z is ㅋ, not a commit.
     assert!(!e.commits(Key::KeyZ, Mods::SHIFTED));
 }

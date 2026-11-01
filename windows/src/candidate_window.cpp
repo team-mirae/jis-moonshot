@@ -9,7 +9,7 @@
 namespace jk {
 namespace {
 
-constexpr wchar_t kClassName[] = L"JISKoreanCandidateWindow";
+constexpr wchar_t kClassName[] = L"JISMoonshotCandidateWindow";
 
 int Scale(int value, UINT dpi) { return MulDiv(value, static_cast<int>(dpi), 96); }
 

@@ -1,7 +1,7 @@
 import Cocoa
 import InputMethodKit
 
-// `JISKorean mode [A|B|C]`: the public API from the command line (spec §8.2), not the input method.
+// `JISMoonshot mode [A|A_KANA|A_QWERTY…]`: the public API from the command line (spec §8.2), not the input method.
 if CommandLine.arguments.count > 1 {
     exit(PublicAPI.runCommand(Array(CommandLine.arguments.dropFirst())))
 }
@@ -9,7 +9,7 @@ if CommandLine.arguments.count > 1 {
 // Input methods are background apps: IMKServer accepts client connections, and the system creates
 // one JKInputController per text input client.
 let connectionName = Bundle.main.infoDictionary?["InputMethodConnectionName"] as? String
-    ?? "me.sjun.inputmethod.JISKorean_Connection"
+    ?? "me.sjun.inputmethod.JISMoonshot_Connection"
 /// The hanja dictionary, parsed once and shared by every controller's engine.
 let sharedDictionary: OpaquePointer? = {
     guard let url = Bundle.main.url(forResource: "hanja", withExtension: "tsv"),
@@ -44,13 +44,19 @@ let sharedPredictor: OpaquePointer? = {
     }
     // The learned ranker (spec §10.13). Without its model (or in the legacy build, which ignores
     // it), the rules rank.
-    guard let base, let learned = data("learned", "bin") else { return base }
-    let ranked = learned.withUnsafeBytes { l in
-        jk_predictor_with_learned(base, l.bindMemory(to: UInt8.self).baseAddress, l.count)
+    var predictor = base
+    if let current = predictor, let learned = data("learned", "bin"),
+       let ranked = learned.withUnsafeBytes({ l in jk_predictor_with_learned(current, l.bindMemory(to: UInt8.self).baseAddress, l.count) }) {
+        jk_predictor_free(current)
+        predictor = ranked
     }
-    guard let ranked else { return base }
-    jk_predictor_free(base)
-    return ranked
+    // The kana reading's lexicon (docs/moonshot.md §5): without it, no kana reading.
+    if let current = predictor, let japanese = data("common-ja", "txt"),
+       let withKana = japanese.withUnsafeBytes({ j in jk_predictor_with_japanese(current, j.bindMemory(to: UInt8.self).baseAddress, j.count) }) {
+        jk_predictor_free(current)
+        predictor = withKana
+    }
+    return predictor
 }()
 #endif
 

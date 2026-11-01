@@ -1,10 +1,7 @@
 import Cocoa
 import InputMethodKit
-import IOKit.hid
 
 private let enterCommitsDefault = "EnterCommits"
-/// Dedicated symbol keys (spec §3.6): Mode C's [ ] and ISO extra key. On by default.
-private let symbolKeysDefault = "DedicatedSymbolKeys"
 #if ENGLISH
 /// The Korean Key (spec §8.2.1): a virtual key code that always selects Korean: from an English
 /// mode the last Korean mode, in a Korean mode that mode again (so macOS shows it under the caret).
@@ -16,13 +13,12 @@ private func registerSwitchDefaults() {
 }
 #endif
 #if PREDICT
-private let predictionsDefault = "Predictions"
 /// Learning from the user's choices (spec §10.11): opt-in, stays on this Mac.
 private let learningDefault = "LearnFromChoices"
 /// What was learned: one line of counts, no text or keys.
 let learnedDefault = "Learned"
 /// The scenarios' names (`Weight.<name>`), by engine id.
-let weightNames = ["Korean", "English", "Implied", "Mixed", "TwoSet", "KeepFinals", "Hanja", "ImpliedL"]
+let weightNames = ["Korean", "English", "Implied", "Mixed", "TwoSet", "KeepFinals", "Hanja", "ImpliedL", "Kana"]
 #endif
 
 /// One controller per text input client; each owns its own engine. All behavior is in the engine
@@ -32,7 +28,7 @@ final class JKInputController: IMKInputController {
     /// This controller's engine. The public API resolves keys on a copy of it (spec §8.3).
     let engine = jk_new()
     private var hasMarkedText = false
-    /// The controller JIS Korean was last activated in: the focused app's, while JIS Korean is the
+    /// The controller JIS Moonshot was last activated in: the focused app's, while JIS Moonshot is the
     /// input source. The public API answers for it.
     private(set) static weak var focused: JKInputController?
     /// The controller that last received a key: the field really being typed in. Chrome activates
@@ -40,7 +36,7 @@ final class JKInputController: IMKInputController {
     /// always it.
     private(set) static weak var keyed: JKInputController?
     /// The controller a switch key acts on, in place: the one that last got a key when it's in the
-    /// app JIS Korean was last activated in (Chrome activates its fields out of order, so the last
+    /// app JIS Moonshot was last activated in (Chrome activates its fields out of order, so the last
     /// activated one isn't always the field typed in), else the last activated one (the user moved
     /// to another app and hasn't typed there yet).
     static var typing: JKInputController? {
@@ -71,8 +67,10 @@ final class JKInputController: IMKInputController {
     override init!(server: IMKServer!, delegate: Any!, client inputClient: Any!) {
         super.init(server: server, delegate: delegate, client: inputClient)
         jk_set_dictionary(engine, sharedDictionary)
+        // ⌥Space: a full-width space, or `_` in English (docs/moonshot.md §4). macOS only.
+        jk_set_option_space(engine, 1)
         #if PREDICT
-        UserDefaults.standard.register(defaults: [predictionsDefault: true, learningDefault: false])
+        UserDefaults.standard.register(defaults: [learningDefault: false])
         applyPredictionsSetting()
         #endif
     }
@@ -87,12 +85,18 @@ final class JKInputController: IMKInputController {
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, event.type == .keyDown, let client = sender as? IMKTextInput else { return false }
+        // Predictive typing must be accepted before JIS Moonshot types anything (docs/moonshot.md §6):
+        // until then every key goes to the app untouched.
+        guard Consent.accepted else {
+            Consent.askSoon()
+            return false
+        }
         let started = Date()
         defer { noteSlowKey(started, client) }
         Self.keyed = self
         syncMode(client)
         if engineKey(event.keyCode) == UInt32(JK_KEY_OTHER) {
-            // Keys JIS Korean doesn't map, with the app: shows which keys an app passes on at all
+            // Keys JIS Moonshot doesn't map, with the app: shows which keys an app passes on at all
             // (iTerm keeps F1–F19 to itself) and what code a remapped key arrives as. Once per code
             // and app, so what's typed on unmapped keys (a PIN on the keypad) isn't in the log.
             let note = "unmapped key code \(event.keyCode) in \(client.bundleIdentifier() ?? "?")"
@@ -107,7 +111,7 @@ final class JKInputController: IMKInputController {
         #endif
         // In a terminal, ⌥ in an English mode goes to the app untouched: readline's ⌥C, ⌥U and ⌥L
         // with Option as Meta, not letter variants (spec §3.6.3).
-        if !InputModes.current.korean && event.modifierFlags.contains(.option)
+        if InputModes.current.english && event.modifierFlags.contains(.option)
             && KnownApps.isTerminal(client.bundleIdentifier()) {
             return false
         }
@@ -133,6 +137,8 @@ final class JKInputController: IMKInputController {
         #endif
         let consumed = jk_key(engine, engineKey(event.keyCode), mods)
         apply(to: client)
+        // F6 and F7 switch the engine to JIS Kana itself (docs/moonshot.md §4).
+        followEngineMode(client)
         #if PREDICT
         saveLearned()
         #endif
@@ -168,6 +174,7 @@ final class JKInputController: IMKInputController {
         // ours is still in flight. setValue(_:forTag:client:) also reports it, but not always
         // before the first key.
         let mode = InputModes.selected() ?? InputModes.current
+        Consent.askSoon()
         DiagnosticLog.note("activated in \(appID ?? "?"): selected \(InputModes.selectedNow()?.letter ?? "another input source"), current \(InputModes.current.letter), using \(mode.letter)")
         #if PREDICT
         clientApp = (sender as? IMKTextInput)?.bundleIdentifier()
@@ -183,7 +190,6 @@ final class JKInputController: IMKInputController {
         applyPredictionsSetting()
         #endif
         jk_set_enter_commits(engine, UserDefaults.standard.bool(forKey: enterCommitsDefault) ? 1 : 0)
-        applySymbolKeysSetting()
         #if ENGLISH
         // A keyboard configured as JIS or a permission granted since launch: the key tap starts
         // now (at most one check every 30 s, after this call).
@@ -191,15 +197,14 @@ final class JKInputController: IMKInputController {
         #endif
     }
 
-    private func applySymbolKeysSetting() {
-        UserDefaults.standard.register(defaults: [symbolKeysDefault: true])
-        jk_set_dedicated_symbols(engine, UserDefaults.standard.bool(forKey: symbolKeysDefault) ? 1 : 0)
-    }
-
-    /// The system names the input mode the user picked: JIS Korean's modes are input modes.
+    /// The system names the input mode the user picked: JIS Moonshot's modes are input modes.
     override func setValue(_ value: Any!, forTag tag: Int, client sender: Any!) {
         // Switching commits what's unconfirmed first (spec §8.2.1): applyMode does it.
-        if tag == kTextServiceInputModePropertyTag, let id = value as? String, let mode = InputModes.mode(sourceID: id) {
+        if tag == kTextServiceInputModePropertyTag, let id = value as? String, id == InputModes.kanaProxySourceID {
+            // かな, through macOS's own routing: the proxy is never left selected.
+            DiagnosticLog.note("かな (proxy)")
+            kanaKey(client: sender as? IMKTextInput, reselect: true)
+        } else if tag == kTextServiceInputModePropertyTag, let id = value as? String, let mode = InputModes.mode(sourceID: id) {
             applyMode(mode, client: sender as? IMKTextInput)
         }
         super.setValue(value, forTag: tag, client: sender)
@@ -221,7 +226,45 @@ final class JKInputController: IMKInputController {
         KeyboardViewerLayout.select(mode.keyboardViewerLayout, for: client)
     }
 
-    /// Keeps this field's engine, and its app's keyboard layout, on the mode JIS Korean is in. A
+    /// The engine changed its own mode (F6 and F7 to JIS Kana, かな back to Mode A): the field and
+    /// macOS follow, without committing (the engine kept what's staged).
+    private func followEngineMode(_ client: IMKTextInput) {
+        let id = jk_mode(engine)
+        guard id != modeID, let mode = InputModes.mode(id: id) else { return }
+        DiagnosticLog.note("engine switched to \(mode.letter)")
+        modeID = id
+        InputModes.becameCurrent(mode)
+        KeyboardViewerLayout.select(mode.keyboardViewerLayout, for: client)
+        selectLater(mode, client)
+    }
+
+    /// かな, カタカナ or the Korean Key (docs/moonshot.md §4), from the key tap or a key that reached
+    /// the input method: from an English mode to Mode A; otherwise the engine's かな key (force
+    /// Korean in Mode A, back to Mode A from JIS Kana).
+    /// `reselect`: the かな proxy was selected (macOS's own かな), so Mode A is selected again
+    /// whatever happens, never leaving the proxy selected.
+    func kanaKey(client given: IMKTextInput? = nil, reselect: Bool = false) {
+        guard let client = given ?? (client() as IMKTextInput?) else { return }
+        if InputModes.current.english || modeID.flatMap(InputModes.mode(id:))?.english == true {
+            let target = InputModes.defaultMode
+            applyMode(target, client: client)
+            selectLater(target, client)
+            return
+        }
+        #if PREDICT
+        chosen = nil
+        #endif
+        jk_kana_key(engine)
+        apply(to: client)
+        if reselect || jk_mode(engine) == modeID {
+            // Nothing changed mode, or the proxy is selected: Mode A again, shown under the caret.
+            InputModes.becameCurrent(InputModes.defaultMode)
+            selectLater(InputModes.defaultMode, client)
+        }
+        followEngineMode(client)
+    }
+
+    /// Keeps this field's engine, and its app's keyboard layout, on the mode JIS Moonshot is in. A
     /// switch can reach another controller than the one typing (カタカナ and F18 from the key tap,
     /// the public API, a selection macOS didn't report to this session); this field then catches up
     /// on its next key. Otherwise its engine stays in the old mode, and an English engine passes
@@ -268,17 +311,18 @@ final class JKInputController: IMKInputController {
 
     override func menu() -> NSMenu! {
         let menu = NSMenu()
+        guard Consent.accepted else {
+            menu.addItem(NSMenuItem(title: "Accept Predictive Typing…", action: #selector(askConsent(_:)), keyEquivalent: ""))
+            return menu
+        }
         #if PREDICT
-        let predictions = NSMenuItem(title: "Predictions", action: #selector(togglePredictions(_:)), keyEquivalent: "")
-        predictions.state = UserDefaults.standard.bool(forKey: predictionsDefault) ? .on : .off
-        menu.addItem(predictions)
         let learning = NSMenuItem(title: "Learn from My Choices (Stays on This Mac)", action: #selector(toggleLearning(_:)), keyEquivalent: "")
         learning.state = UserDefaults.standard.bool(forKey: learningDefault) ? .on : .off
         menu.addItem(learning)
         // What was learned, read-only: one line per scenario that moved.
         let learned = NSMenuItem(title: "Learned Weights", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
-        let labels = ["Korean", "English", "Implied ㅇ", "English + particle", "Plain 2-set", "Finals kept", "Hanja", "Implied ㄹ after ㄴ"]
+        let labels = ["Korean", "English", "Implied ㅇ", "English + particle", "Plain 2-set", "Finals kept", "Hanja", "Implied ㄹ after ㄴ", "Kana"]
         for (id, label) in labels.enumerated() {
             let value = jk_learned_weight(engine, UInt32(id))
             let item = NSMenuItem(title: String(format: "%@  ×%.2f", label, value), action: nil, keyEquivalent: "")
@@ -312,17 +356,10 @@ final class JKInputController: IMKInputController {
         let item = NSMenuItem(title: "Enter Commits Without a New Line", action: #selector(toggleEnterCommits(_:)), keyEquivalent: "")
         item.state = UserDefaults.standard.bool(forKey: enterCommitsDefault) ? .on : .off
         menu.addItem(item)
-        // Only Mode C has optional symbol keys (spec §3.6).
-        if InputModes.current.id == 2 {
-            let symbols = NSMenuItem(title: "Dedicated Symbol Keys ([ ] and the Key Left of Z)", action: #selector(toggleSymbolKeys(_:)), keyEquivalent: "")
-            UserDefaults.standard.register(defaults: [symbolKeysDefault: true])
-            symbols.state = UserDefaults.standard.bool(forKey: symbolKeysDefault) ? .on : .off
-            menu.addItem(symbols)
-        }
         #if ENGLISH
         // The Korean Key (spec §8.2.1); any other key code can be set with
-        // `defaults write me.sjun.inputmethod.JISKorean KoreanKey -int <code>`.
-        let switching = NSMenuItem(title: "Korean Key (Back to Korean)", action: nil, keyEquivalent: "")
+        // `defaults write me.sjun.inputmethod.JISMoonshot KoreanKey -int <code>`.
+        let switching = NSMenuItem(title: "Korean Key (Same as かな)", action: nil, keyEquivalent: "")
         let keys = NSMenu()
         registerSwitchDefaults()
         let current = UserDefaults.standard.integer(forKey: switchKeyDefault)
@@ -335,9 +372,9 @@ final class JKInputController: IMKInputController {
         }
         switching.submenu = keys
         menu.addItem(switching)
-        // カタカナ and the Korean Key everywhere (iTerm, other input sources) need two permissions.
-        if !AXIsProcessTrusted() || IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
-            menu.addItem(NSMenuItem(title: "Allow カタカナ and F18 Everywhere…", action: #selector(askForKeyPermissions(_:)), keyEquivalent: ""))
+        // 英数, かな and the Korean Key everywhere (iTerm, other input sources) need Accessibility.
+        if !AXIsProcessTrusted() {
+            menu.addItem(NSMenuItem(title: "Allow 英数 and かな Everywhere…", action: #selector(askForKeyPermissions(_:)), keyEquivalent: ""))
         }
         #endif
         // The public API's one setting (spec §8.2): reading the mode is always open, changing it isn't.
@@ -357,11 +394,10 @@ final class JKInputController: IMKInputController {
         UserDefaults.standard.set(code, forKey: switchKeyDefault)
     }
 
-    /// 英数 and the Korean Key (spec §8.2.1), when they reach the input method (without the key tap,
-    /// or in apps that pass them on): 英数 always goes to English (JIS English, `eisuTarget`), the
-    /// Korean Key always to Korean (the last Korean mode), inside this input method. Nil: not a
-    /// switch key here, or the mode to switch to isn't added in System Settings (then the key goes on
-    /// as usual, and macOS may act on it). かな is left to macOS, which selects Japanese.
+    /// 英数, かな and the Korean Key (docs/moonshot.md §4), when they reach the input method (without
+    /// the key tap, or in apps that pass them on): 英数 always goes to English (`eisuTarget`), かな and
+    /// the Korean Key to Mode A, or force Korean there (`kanaKey`). Nil: not a switch key here, or
+    /// the mode to switch to isn't added in System Settings (then the key goes on as usual).
     private func handleSwitchKey(_ event: NSEvent, _ client: IMKTextInput) -> Bool? {
         let mods = modifiers(event.modifierFlags)
         guard !InputModes.english.isEmpty, mods & UInt32(JK_MOD_CTRL | JK_MOD_ALT | JK_MOD_META) == 0
@@ -369,16 +405,12 @@ final class JKInputController: IMKInputController {
         registerSwitchDefaults()
         let defaults = UserDefaults.standard
         let code = Int(event.keyCode)
-        let inEnglish = !InputModes.current.korean
         let target: InputModes.Mode?
-        if code == defaults.integer(forKey: switchKeyDefault) {
-            // In a Korean mode it selects that mode again: macOS shows the input source under the
-            // caret, confirming Korean. Nothing unconfirmed is committed then.
-            if !inEnglish {
-                if !event.isARepeat { selectLater(InputModes.current, client) }
-                return true
-            }
-            target = InputModes.koreanTarget
+        if code == defaults.integer(forKey: switchKeyDefault) || code == kVK_JIS_Kana {
+            // かな (and the Korean Key): docs/moonshot.md §4.
+            guard InputModes.kanaTarget != nil else { return nil }
+            if !event.isARepeat { kanaKey() }
+            return true
         } else if code == kVK_JIS_Eisu {
             target = InputModes.eisuTarget
             // Already there: nothing to do, and ABC isn't wanted.
@@ -422,14 +454,12 @@ final class JKInputController: IMKInputController {
     }
     #endif
 
-    @objc func toggleAllowModeChange(_ sender: Any?) {
-        UserDefaults.standard.set(!PublicAPI.allowed, forKey: PublicAPI.allowKey)
+    @objc func askConsent(_ sender: Any?) {
+        Consent.ask()
     }
 
-    @objc func toggleSymbolKeys(_ sender: Any?) {
-        UserDefaults.standard.register(defaults: [symbolKeysDefault: true])
-        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: symbolKeysDefault), forKey: symbolKeysDefault)
-        applySymbolKeysSetting()
+    @objc func toggleAllowModeChange(_ sender: Any?) {
+        UserDefaults.standard.set(!PublicAPI.allowed, forKey: PublicAPI.allowKey)
     }
 
     @objc func toggleEnterCommits(_ sender: Any?) {
@@ -439,11 +469,6 @@ final class JKInputController: IMKInputController {
     }
 
     #if PREDICT
-    @objc func togglePredictions(_ sender: Any?) {
-        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: predictionsDefault), forKey: predictionsDefault)
-        applyPredictionsSetting()
-    }
-
     @objc func toggleLearning(_ sender: Any?) {
         UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: learningDefault), forKey: learningDefault)
         applyPredictionsSetting()
@@ -486,15 +511,16 @@ final class JKInputController: IMKInputController {
         UserDefaults.standard.removeObject(forKey: learnedDefault)
     }
 
-    /// On: the shared predictor. Off: the deterministic lite behavior. Also applies the user's
-    /// tuning (spec §10.5), e.g. `defaults write me.sjun.inputmethod.JISKorean Weight.English -float 0.8`
+    /// The shared predictor, always on (docs/moonshot.md §6), except in apps excluded from
+    /// predictions (spec §10.11.1), where Mode A types forced Korean. Also applies the user's
+    /// tuning (spec §10.5), e.g. `defaults write me.sjun.inputmethod.JISMoonshot Weight.English -float 0.8`
     /// (`Weight.ImpliedL -float 0` turns the implied ㄹ after ㄴ off)
     /// (a weight set this way wins over the learned one), and what was learned (spec §10.11).
     private func applyPredictionsSetting() {
         let defaults = UserDefaults.standard
         // Per app (spec §10.11): no predictions, or no learning recorded, where the user said so.
         let app = DisabledApps.entry(clientApp)
-        let predicting = defaults.bool(forKey: predictionsDefault) && DefaultOffApps.predicting(clientApp)
+        let predicting = DefaultOffApps.predicting(clientApp)
         let predictor = predicting ? Training.predictor() : nil
         jk_set_predictor(engine, predictor)
         self.predicting = predictor != nil
@@ -666,7 +692,7 @@ final class JKInputController: IMKInputController {
             let selected = jk_candidate_selected(engine)
             window.onPick = { [weak self] index in self?.pickHanja(index, from: selected, client) }
             // An English mode's list is letter variants (spec §3.6.3): one row.
-            show(items, selected: selected < hanja ? selected : nil, horizontal: !InputModes.current.korean)
+            show(items, selected: selected < hanja ? selected : nil, horizontal: InputModes.current.english)
             return
         }
         #if PREDICT

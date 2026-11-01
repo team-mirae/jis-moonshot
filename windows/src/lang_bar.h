@@ -1,5 +1,5 @@
-// The button JIS Korean puts in the input indicator (the taskbar, where the Microsoft Korean IME
-// shows 가 / A): 한글 while JIS Korean types, ABC while 한/영 passes keys through. A click
+// The button JIS Moonshot puts in the input indicator (the taskbar, where the Microsoft Korean IME
+// shows 가 / A): 한글 in Mode A, かな in JIS Kana, ABC after 無変換 or 한/영. A click
 // switches between them; right-click opens the settings menu (the macOS input menu's items), a
 // popup the IME shows itself: the indicator only reports the click.
 #pragma once
@@ -19,8 +19,8 @@ public:
     LangBarButton(const LangBarButton&) = delete;
     LangBarButton& operator=(const LangBarButton&) = delete;
 
-    // `mode` (engine id) names the tooltip; `open` false shows ABC, not 한글, and the tooltip
-    // names `english`, ABC's layout (an engine id, or anything else for Windows' own layout).
+    // `mode` (engine id) names the tooltip, and JIS Kana shows かな; `open` false shows ABC, and
+    // the tooltip names `english`, ABC's layout (an engine id, or anything else for Windows' own).
     void SetState(unsigned mode, bool open, unsigned english);
     void Detach();  // drops the callbacks (the text service is going away)
 
@@ -45,6 +45,7 @@ public:
 
 private:
     ~LangBarButton();
+    const wchar_t* Label() const;  // 한글, かな or ABC
     LONG refs_ = 1;
     unsigned mode_ = 0;  // for the tooltip
     unsigned english_ = 0xFFFFFFFF;

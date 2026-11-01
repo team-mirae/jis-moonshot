@@ -1,7 +1,7 @@
 #pragma once
 
 // The logo: the first icon (index 0), which the profile names.
-#define IDI_TAEGEUK 101
+#define IDI_LOGO 101
 
 // The profile's display name (Windows Settings, the input indicator).
 #define IDS_PROFILE 201
@@ -13,3 +13,4 @@
 #define IDR_COMMON_KO 304
 #define IDR_NOUNS 305
 #define IDR_LEARNED 306
+#define IDR_COMMON_JA 307  // the kana reading's lexicon (docs/moonshot.md §5)

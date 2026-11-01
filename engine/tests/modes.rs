@@ -1,5 +1,5 @@
-//! The mode contract (spec §3.6, docs/modes.md), checked for every mode, and Modes B and C's own
-//! examples.
+//! The mode contract (spec §3.6, docs/modes.md), checked for every mode. JIS Moonshot is JIS only
+//! (docs/moonshot.md §2): Modes B and C and their English modes are retired.
 
 use jis_korean::{Engine, Key, Layout, Mode, Mods, Out, output_in, output_with};
 
@@ -21,7 +21,8 @@ fn ids_are_unique_and_round_trip() {
     }
     #[cfg(not(feature = "english"))]
     assert_eq!(Mode::from_id(3), None, "JIS English is built only with the english feature");
-    for id in [4, 11, 31, 99, 10_000, u32::MAX] {
+    // Retired (B, C, B_QWERTY, CJ_QWERTY), reserved (4–6, A_ROMAJI) or never given.
+    for id in [1, 2, 4, 9, 10, 12, 31, 99, 10_000, u32::MAX] {
         assert_eq!(Mode::from_id(id), None, "id {id} has no mode in this build: it's refused, not replaced");
     }
     assert_eq!(Mode::default(), Mode::A);
@@ -40,21 +41,12 @@ fn mode_names_and_ids_are_in_their_ranges() {
         );
         let in_range = match words.as_slice() {
             _ if (10_000..=11_000).contains(&id) => true, // a preview's temporary id
-            [_] => id <= 2,                              // A, B and C keep their letters
+            [_] => id == 0,                              // A keeps its letter
             // A_ JIS, B_ US ANSI, C_ ISO, CJ_ ISO also on JIS: official (0–14) or contributed (15–30).
             ["A" | "B" | "C" | "CJ", ..] => id <= 30,
             _ => (31..=99).contains(&id),
         };
         assert!(in_range, "{code} can't have id {id}");
-    }
-}
-
-/// Mode C (id 2) is the ISO mode: no other mode may take its id or letter.
-#[test]
-fn mode_c_is_the_iso_mode() {
-    for &mode in Mode::ALL {
-        let is_c = mode.id() == 2 || format!("{mode:?}") == "C";
-        assert!(!is_c || mode.name().contains("ISO"), "{mode:?} ({}) takes Mode C, reserved for ISO", mode.name());
     }
 }
 
@@ -126,65 +118,11 @@ fn every_mode_leaves_the_control_keys_alone() {
     }
 }
 
-// Mode B (spec §3.6)
-
-fn mode_b(keys: &str) -> Engine {
-    let mut e = Engine::new();
-    e.set_mode(Mode::B);
-    for token in keys.split_whitespace() {
-        let (mods, code) = match token.strip_prefix("S-") {
-            Some(code) => (Mods::SHIFTED, code),
-            None => (Mods::NONE, token),
-        };
-        e.key(Key::from_code(code), mods);
-    }
-    e
-}
-
 #[test]
-fn mode_b_number_row_is_mode_a_and_reads_as_us() {
-    let e = mode_b("Digit2 S-Digit2 Digit0 S-Digit0");
-    assert_eq!(e.preedit(), "ㅉ2와0"); // ㅘ gets the implied ㅇ (spec §4.2), as in Mode A
-    // Shift+2 reads @ on US ANSI, not " as on JIS.
-    assert_eq!(e.english(), "2@0)");
-}
-
-#[test]
-fn mode_b_brackets_keep_corner_brackets_on_shift() {
-    let e = mode_b("BracketLeft S-BracketLeft BracketRight S-BracketRight");
-    assert_eq!(e.preedit(), "[「]」");
-    assert_eq!(e.english(), "[{]}");
-}
-
-#[test]
-fn mode_b_other_symbols_are_us_ansi() {
-    let e = mode_b("Backquote S-Backquote Minus S-Minus Equal S-Equal Backslash S-Backslash Semicolon S-Semicolon Quote S-Quote Comma S-Comma Period S-Period Slash S-Slash");
-    assert_eq!(e.preedit(), "`~-_=+\\|;:'\",<.>/?");
-    assert_eq!(e.english(), e.preedit());
-}
-
-#[test]
-fn mode_b_shift_z_is_f10() {
-    // 한 (G K S), then Shift+Z converts it as F10 does.
-    assert_eq!(mode_b("KeyG KeyK KeyS S-KeyZ").preedit(), "gks");
-}
-
-#[test]
-fn mode_b_reads_english_on_us_keys() {
-    // Shift+2 types 2 in Mode B; the English reading is the stock US key's @.
-    let e = mode_b("KeyG KeyK S-Digit2");
-    assert_eq!(e.english(), "gk@");
-}
-
-#[test]
-fn jis_only_keys_pass_through_in_mode_b_and_backquote_in_mode_a() {
-    let mut e = Engine::new();
-    e.set_mode(Mode::B);
-    for key in [Key::IntlYen, Key::IntlRo] {
-        assert!(!e.key(key, Mods::NONE).consumed, "{key:?}");
-    }
+fn backquote_and_the_iso_key_pass_through_in_mode_a() {
     let mut a = Engine::new();
     assert!(!a.key(Key::Backquote, Mods::NONE).consumed);
+    assert!(!a.key(Key::IntlBackslash, Mods::NONE).consumed);
 }
 
 #[test]
@@ -196,79 +134,6 @@ fn mode_a_is_unchanged() {
     assert_eq!((e.preedit().as_str(), e.english().as_str()), ("2'(", "\"@^"));
 }
 
-// Mode C (spec §3.6)
-
-fn mode_c(keys: &str, symbols: bool) -> Engine {
-    let mut e = Engine::new();
-    e.set_mode(Mode::C);
-    e.set_dedicated_symbols(symbols);
-    for token in keys.split_whitespace() {
-        let (mods, code) = match token.strip_prefix("S-") {
-            Some(code) => (Mods::SHIFTED, code),
-            None => (Mods::NONE, token),
-        };
-        e.key(Key::from_code(code), mods);
-    }
-    e
-}
-
-#[test]
-fn mode_c_number_row_is_mode_a_and_reads_as_uk() {
-    let e = mode_c("Digit2 S-Digit2 Digit3 S-Digit3", true);
-    assert_eq!(e.preedit(), "ㅉ2ㄸ3");
-    // Shift+2 and Shift+3 read " and £ on UK ISO.
-    assert_eq!(e.english(), "2\"3£");
-}
-
-#[test]
-fn mode_c_extra_key_types_middle_dot_and_em_dash() {
-    let e = mode_c("IntlBackslash S-IntlBackslash", true);
-    assert_eq!(e.preedit(), "·—");
-    assert_eq!(e.english(), "\\|");
-}
-
-#[test]
-fn mode_c_brackets_keep_corner_brackets_on_shift() {
-    let e = mode_c("BracketLeft S-BracketLeft BracketRight S-BracketRight", true);
-    assert_eq!(e.preedit(), "[「]」");
-}
-
-#[test]
-fn mode_c_other_symbols_are_uk_iso() {
-    let e = mode_c("Backquote S-Backquote Minus S-Minus Equal S-Equal Semicolon S-Semicolon Quote S-Quote Backslash S-Backslash Comma S-Comma Period S-Period Slash S-Slash", true);
-    assert_eq!(e.preedit(), "`¬-_=+;:'@#~,<.>/?");
-}
-
-#[test]
-fn mode_c_symbol_keys_off_type_uk() {
-    // Off, [ ] and the extra key type UK ISO's own characters, not the dedicated ones.
-    let e = mode_c("KeyG KeyK BracketLeft S-BracketLeft BracketRight S-BracketRight IntlBackslash S-IntlBackslash", false);
-    assert_eq!(e.preedit(), "하[{]}\\|");
-    assert_eq!(e.english(), "gk[{]}\\|");
-    // Everything else is as with them on.
-    let e = mode_c("Digit1 KeyK S-Digit1 Minus", false);
-    assert_eq!(e.preedit(), "빠1-");
-}
-
-#[test]
-fn mode_c_shift_z_is_f10() {
-    assert_eq!(mode_c("KeyG KeyK KeyS S-KeyZ", true).preedit(), "gks");
-}
-
-#[test]
-fn mode_c_keys_pass_through_in_other_modes() {
-    for mode in [Mode::A, Mode::B] {
-        let mut e = Engine::new();
-        e.set_mode(mode);
-        assert!(!e.key(Key::IntlBackslash, Mods::NONE).consumed, "{mode:?}");
-    }
-    let mut c = Engine::new();
-    c.set_mode(Mode::C);
-    for key in [Key::IntlYen, Key::IntlRo] {
-        assert!(!c.key(key, Mods::NONE).consumed, "{key:?}");
-    }
-}
-
 /// Spec §3.6.1 over the C ABI: modes are listed by position, and an unknown id is refused.
 #[test]
 fn c_abi_lists_modes_by_position_and_refuses_unknown_ids() {
@@ -276,21 +141,27 @@ fn c_abi_lists_modes_by_position_and_refuses_unknown_ids() {
     let ids: Vec<u32> = (0..jk_mode_count()).map(|i| jk_mode_id_at(i)).collect();
     assert_eq!(ids, Mode::ALL.iter().map(|m| m.id()).collect::<Vec<_>>());
     assert_eq!(jk_mode_id_at(jk_mode_count()), u32::MAX);
-    assert_eq!(jk_mode_code_len(2), 1);
+    assert_eq!(jk_mode_code_len(0), 1);
+    assert_eq!(jk_mode_code_len(2), 0, "Mode C is retired");
     assert_eq!((jk_mode_name_len(9_999), jk_mode_code_len(9_999)), (0, 0));
     for mode in Mode::ALL {
-        assert_eq!(jk_mode_is_english(mode.id()), !mode.is_korean() as u32, "{mode:?}");
+        assert_eq!(jk_mode_is_english(mode.id()), mode.is_english() as u32, "{mode:?}");
     }
     assert_eq!(jk_mode_is_english(9_999), 0);
     let id = |key: Key| Key::ALL.iter().position(|&k| k == key).unwrap() as u32;
-    assert_ne!(jk_legend_in(id(Key::Digit1), 0, 0, 1), 0);
-    assert_eq!(jk_legend_in(id(Key::Digit1), 0, 0, 4), 0);
+    assert_ne!(jk_legend_in(id(Key::Digit1), 0, 0, 0), 0);
+    assert_eq!(jk_legend_in(id(Key::Digit1), 0, 0, 1), 0, "Mode B is retired");
 
     let engine = jk_new();
-    assert_eq!(jk_set_mode(engine, 1), 1);
-    assert_eq!(jk_set_mode(engine, 4), 0, "no mode 4 in this build");
-    // Still Mode B: Shift+[ is 「 there.
-    jk_key(engine, id(Key::BracketLeft), Mods::SHIFT);
-    assert_eq!(unsafe { std::slice::from_raw_parts(jk_preedit_ptr(engine), jk_preedit_len(engine)) }, "「".as_bytes());
+    assert_eq!(jk_set_mode(engine, 11), 1);
+    assert_eq!(jk_mode(engine), 11);
+    assert_eq!(jk_set_mode(engine, 1), 0, "Mode B is retired");
+    // Still JIS Kana: T types か.
+    jk_key(engine, id(Key::KeyT), 0);
+    assert_eq!(unsafe { std::slice::from_raw_parts(jk_preedit_ptr(engine), jk_preedit_len(engine)) }, "か".as_bytes());
+    // The かな key: back to Mode A, the key forced Korean.
+    assert_eq!(jk_kana_key(engine), 1);
+    assert_eq!((jk_mode(engine), jk_script(engine)), (0, 1));
+    assert_eq!(unsafe { std::slice::from_raw_parts(jk_preedit_ptr(engine), jk_preedit_len(engine)) }, "ㅅ".as_bytes());
     unsafe { jk_free(engine) };
 }

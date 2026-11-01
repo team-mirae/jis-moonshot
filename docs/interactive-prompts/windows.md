@@ -1,13 +1,14 @@
-# Set up JIS Korean on Windows
+# Set up JIS Moonshot on Windows
 
-You come here from [start.md](start.md) with the session notes: official builds or their own,
-the keyboards, and the remap answer.
-[rules.md](rules.md) applies to every step: ask before each scan, and ask before each install or
-change, one at a time.
+You come here from [start.md](start.md) with the session notes: the clone, the keyboards, and the
+remap answer. [rules.md](rules.md) applies to every step: ask before each scan, and ask before each
+install or change, one at a time.
 
-Facts come from [windows/README.md](../../windows/README.md) and spec §3.6 and §8.4. Read them
-before you explain anything, and follow them where this prompt is less precise. Before changing how
-keys reach apps, read [windows-tsf-notes.md](../troubleshooting/windows-tsf-notes.md).
+Facts come from [docs/moonshot.md](../moonshot.md), [windows/README.md](../../windows/README.md) and
+spec §8.4. Read them before you explain anything, and follow them where this prompt is less
+precise. Before changing how keys reach apps, read
+[windows-tsf-notes.md](../troubleshooting/windows-tsf-notes.md). Windows is JIS Moonshot's second
+platform: say that its shell is less tried than macOS's.
 
 ## 1. Check what's there (with permission)
 
@@ -17,146 +18,70 @@ it to the user to run.
 | To learn | Command |
 |---|---|
 | Windows version | `[Environment]::OSVersion.Version` or `winver` |
-| Keyboards | `Get-PnpDevice -Class Keyboard -PresentOnly \| Select FriendlyName, InstanceId` (the `VID_`/`PID_` part, and `BTHLE`/`BTHENUM` for Bluetooth) |
+| Keyboards | `Get-PnpDevice -Class Keyboard -PresentOnly \| Select FriendlyName` |
+| The hardware keyboard type (JIS: Japanese 106/109) | Settings → Time & language → Language & region → Japanese or Korean → Keyboard layout, or `Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\i8042prt\Parameters` (`LayerDriver JPN`) |
 | Languages and input methods | `Get-WinUserLanguageList` |
-| Build tools (building only) | `cmake --version`, `ninja --version`, `rustup target list --installed` |
-| Visual Studio Build Tools (building only) | `& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -products * -format text` |
-| JIS Korean already installed | `Test-Path "$env:ProgramFiles\JIS Korean"` |
-| Installed by the installer (it's in Apps) | `Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*, HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue \| Where-Object DisplayName -like "JIS Korean*" \| Select DisplayName, DisplayVersion` |
-| AutoHotkey or PowerToys running | `Get-Process AutoHotkey*, PowerToys* -ErrorAction SilentlyContinue` |
+| Build tools | `cmake --version`, `ninja --version`, `rustup target list --installed` |
+| Visual Studio Build Tools | `& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -products * -format text` |
+| JIS Moonshot or JIS Korean already installed | `Test-Path "$env:ProgramFiles\JIS Moonshot", "$env:ProgramFiles\JIS Korean"` |
 
-If the user chose to check things themselves: Settings → System → About (version), Device Manager →
-Keyboards (keyboards), Settings → Time & language → Language & region (languages and keyboards).
+JIS Korean and JIS Moonshot install side by side. If JIS Korean is installed, say both will be in
+the Win+Space list; removing it is the user's call.
 
-## 2. Install
+## 2. Build
 
-### An earlier copy
+Follow [windows/README.md](../../windows/README.md). Each missing tool is its own question (rules.md
+section 2): Visual Studio Build Tools (C++), CMake and Ninja, Rust with the MSVC targets, and Inno
+Setup for the installer. `tools/build.ps1` builds x64 and x86 and runs the shell tests; there is
+one build (predictions always on).
 
-The installer upgrades an older one, or a development install from `tools/install.ps1`, in place,
-and keeps the user's settings: no uninstall needed. Say that apps which were running keep the old
-DLL until they restart, and that signing out and back in restarts all of them. The release notes
-have the current version of this: follow them where they differ.
+## 3. Install
 
-### Official builds
+Either the installer built by `tools/package.ps1`, or `tools/install.ps1` (administrator). Either is
+a change: ask first, and say what to expect:
+- **administrator rights (UAC)** once; an unsigned installer triggers SmartScreen (**More info →
+  Run anyway**, for this file only; never turn SmartScreen off);
+- the installer shows the **predictive typing notice**, which must be accepted to install
+  (docs/moonshot.md §6). With `install.ps1`, JIS Moonshot asks from its indicator menu instead
+  ("Accept Predictive Typing…"), and passes every key through until it's accepted;
+- it adds JIS Moonshot to the user's Korean keyboards, adding Korean to the language list if it
+  isn't there, without removing anything. Say this before: it changes their language list.
 
-The newest release (not a draft or prerelease) with `JISKorean-<version>-setup.exe` in its assets, whatever its tag
-(start.md, "Official builds: the releases"): since 0.3.1 one `v<version>` tag carries every
-platform; older `-windows` tags are 0.3.0 and before.
+Pick **JIS Moonshot** with Win+Space and **restart apps** that were open.
 
-1. **Download** `JISKorean-<version>-setup.exe` into a new, empty folder, and check its SHA-256
-   against the release's `digest` (`Get-FileHash`). This is the only check there is: the installer
-   isn't code-signed yet. Say so.
-2. **Run it.** That's an install, so ask first, and say what to expect:
-   - SmartScreen warns about an unsigned installer: **More info → Run anyway**. That's for this file
-     only; never turn SmartScreen off.
-   - It asks for **administrator rights (UAC)** once.
-   - The wizard asks **Full** (with predictions) or **Lite** (without), and, if they haven't picked
-     one before, the starting mode: A for JIS, B for US ANSI, C for UK ISO (start.md's mode table).
-   - It copies JIS Korean to Program Files, registers it for 64-bit and 32-bit apps, and adds it to
-     the user's Korean keyboards. If Korean isn't in their language list, it adds Korean, without
-     removing anything. Say this before they run it: it's a change to their language list.
-3. Pick **JIS Korean** with Win+Space, and **restart apps** that were open.
+## 4. The keyboard type
 
-The user runs the installer themselves (it needs their UAC answer). A silent install
-(`/VERYSILENT /VARIANT=full|lite /MODE=A|B|C`) is for admins deploying it, not for this.
+On a JIS keyboard, ¥ and ろ only arrive when Windows has the Japanese (106/109) hardware keyboard
+type. If step 1 showed otherwise, offer the change (Settings → Time & language → Language & region →
+Korean → Language options → Change layout → Japanese keyboard (106/109 key)). It needs a restart:
+the user does it.
 
-### Build it yourself
+## 5. Switch keys
 
-The source is in a folder of its own (start.md section 6). Building needs, each asked about
-separately (rules.md section 2):
-1. **Visual Studio 2022 Build Tools** with C++ for x64 and x86 (Microsoft, several GB);
-2. **CMake** 3.28+;
-3. **Ninja**;
-4. **Rust** through rustup, with the `x86_64-pc-windows-msvc` and `i686-pc-windows-msvc` targets.
+| Key | Goes to |
+|---|---|
+| 無変換 | English (ABC, typed with JIS English by default) |
+| 変換 | back to JIS Moonshot (Mode A); in Mode A or JIS Kana, forces the staged text Korean |
+| 한/영 | toggles English and JIS Moonshot, as the Microsoft Korean IME does |
+| F6 / F7 | hiragana / katakana for the text being typed, until it's committed |
 
-winget has all four. If the user prefers another source, use that.
+A JIS keyboard has 無変換 and 変換: nothing to remap. A keyboard without them: by the remap answer,
+map keys to `VK_NONCONVERT` / `VK_CONVERT` (PowerToys Keyboard Manager, or firmware). The indicator
+menu works on every keyboard.
 
-Then, in `windows/`:
-- `tools/build.ps1` builds x64 and x86 and runs the shell tests. `-Lite` leaves out predictions;
-  `-Legacy` ranks them by the rules alone, without the learned ranker.
-- Either install it as a development copy, with `tools/install.ps1`. It needs **administrator
-  rights (UAC)**: say so before running it. It copies to Program Files, registers the x64 and x86
-  DLLs, and adds JIS Korean to the Korean language's keyboards. It adds the Korean language if it's
-  missing: that's a change, so ask. `tools/install.ps1 -Update` copies a rebuild in without UAC.
-  It installs the full build (`build/<arch>`) only: for Lite, build the installer.
-- Or build the installer, as the official builds are: `tools/package.ps1` (needs Inno Setup 6,
-  another install to ask about), then run `build/dist/JISKorean-<version>-setup.exe` as above.
+## 6. Check it works
 
-Afterwards: pick **JIS Korean** with Win+Space, and **restart apps** that were open. They keep the
-old DLL, or none, until they restart.
+Ask the user to type, in Notepad: `G K S R M F` → 한글; `B Y I A F` → こんにちは; `H E L L O` →
+hello; `G K S` then 変換 → 한; F6 → きのと; 無変換 → English; 変換 → back.
 
-## 3. Pick the mode
+If something fails, read [windows/README.md](../../windows/README.md) and
+[windows-tsf-notes.md](../troubleshooting/windows-tsf-notes.md) before guessing.
 
-Right-click the 한글 / ABC indicator in the taskbar → Mode A (JIS), Mode B (US ANSI) or Mode C (UK
-ISO). It's one setting for every app. Use the mode table in start.md. With keyboards of different
-layouts, the mode is switched in the same menu when the keyboard changes.
+## 7. Wrap up, then the training setup
 
-Mention, without pushing it: the windows README recommends **typing in JIS Korean all the time** and
-letting predictions read English words, with a training file for the user's own words, rather than
-switching to English with 한/영. Point to that section if they type a lot of English.
+List what was installed and changed, and how to undo each: Apps → JIS Moonshot → Uninstall (or
+`tools/install.ps1 -Uninstall`), the language list in Settings, `HKCU\Software\JIS Moonshot` for its
+settings, PowerToys' remaps in PowerToys.
 
-## 4. 한/영, by keyboard and remap answer
-
-**US ANSI:** Windows' Korean layout sends 한/영 from Right Alt. Nothing to set up.
-
-**JIS and ISO keyboards have no 한/영 key**, and JIS Korean deliberately doesn't pick one (spec
-§8.4). Ask which key they want for it: Right Alt, 変換, 無変換, カタカナ/ひらがな, Caps Lock, or another.
-Then go by the remap answer. The indicator's click switches too, on every keyboard, so 한/영 can
-also wait.
-
-### a. Non-intrusive tools: PowerToys or AutoHotkey
-
-Ask about one tool, not both. Suggest **PowerToys** (Microsoft) first: its Keyboard Manager maps a
-key to 한/영 (`VK_HANGUL`) without a script. **AutoHotkey** is the alternative if they already use
-it: a one-line script that sends `vk15`, which they run at login.
-
-Either one only sends 한/영. JIS Korean handles `VK_HANGUL` from wherever it comes.
-
-### b. A custom stack
-
-Everything in a, plus whatever they want to maintain:
-- per-app AutoHotkey rules;
-- their own mode, forked from Mode A, B or C ([docs/modes.md](../modes.md)), built into their own
-  install (`tools/install.ps1 -Update` for development builds);
-- settings in `HKCU\Software\JIS Korean` (the README's Settings table): predictions per app,
-  `Off` per program, the English layout 한/영 types, the diagnostic log (`tools/install.ps1 -Log`).
-
-Say plainly that they own it: Windows and tool updates can break their scripts, and rebuilds need
-apps restarted.
-
-### c. No software remapping
-
-- **The keyboard's firmware or the maker's app** (QMK, VIA, Vial, ZMK, Realforce or HHKB keymap
-  tools): send **LANG1** (HID 0x90), which Windows reads as 한/영, from the key they chose.
-- **Windows' own Korean keyboard type**, which spec §8.4 lists as an option: it changes how Windows
-  reads the right Alt and Ctrl keys. It's a system setting, so it's a change (rules.md section 3),
-  and it may need a restart.
-- **No remapping at all:** click the indicator to switch.
-
-Changing a keyboard's firmware is a change too. Show the keymap and let the user flash it.
-
-## 5. Check it works
-
-Ask the user to type, in Notepad:
-- `ㅎ ㅏ ㄴ` → 한, and `ㄱ ㅏ ㄴ ㅏ` → 가나;
-- in Mode A, Shift+1 → 1 and 1 → ㅃ;
-- F6 after a word commits it (spec §6);
-- 한/영 switches to ABC and back.
-
-Password boxes that don't say they're one (banking and certificate programs) compose like text:
-point to the README's "Passwords and screen recording" section. If something fails, the diagnostic
-log is `tools/install.ps1 -Log` (ask first: it's a change).
-
-## 6. Wrap up
-
-List what was installed, what was changed, and how to undo each:
-- installed with the installer: Settings → Apps → Installed apps → JIS Korean → Uninstall, signed
-  in as the account that installed it (the uninstaller can only change the language list of the
-  account it runs as). Settings (`HKCU\Software\JIS Korean`) are kept, and so is
-  `%APPDATA%\JIS Korean` unless its box is ticked;
-- a development install: `tools/install.ps1 -Uninstall` (administrator);
-- the Korean language, if it was added, is removed in Settings → Time & language;
-- PowerToys and AutoHotkey mappings are undone in the tool, and the tools have their own uninstallers;
-- the build tools are removed in Settings → Apps or with winget.
-
-Then offer the Minecraft mod, if they play Minecraft Java Edition ([minecraft.md](minecraft.md)).
+Then go on to **[training.md](training.md)**, and recommend it strongly. The training folder on
+Windows is `%APPDATA%\JIS Moonshot\` (the indicator menu's Learned Weights → Open Training Folder).

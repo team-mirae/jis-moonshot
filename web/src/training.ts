@@ -10,7 +10,7 @@ export interface TrainingWord {
 
 export interface AvoidedWord {
   word: string;
-  language: "korean" | "english";
+  language: "korean" | "english" | "japanese";
   strength?: "soft" | "strong";
 }
 
@@ -21,14 +21,18 @@ export interface WordLists {
   english: string;
   avoidKorean?: string;
   avoidEnglish?: string;
+  /** The kana reading's words (vocabulary.japanese) and avoided words (avoid.japanese). */
+  japanese?: string;
+  avoidJapanese?: string;
 }
 
 export interface TrainingFile {
-  format: "jis-korean-training";
+  /** JIS Moonshot's format, or JIS Korean's (read too). */
+  format: "jis-moonshot-training" | "jis-korean-training";
   version: 1;
   source?: { tool?: string; created?: string; description?: string };
   weights?: Partial<Record<WeightName, number>>;
-  vocabulary?: { korean?: TrainingWord[]; english?: TrainingWord[] };
+  vocabulary?: { korean?: TrainingWord[]; english?: TrainingWord[]; japanese?: TrainingWord[] };
   examples?: { text: string; keys?: string; count?: number }[];
   avoid?: AvoidedWord[];
 }
@@ -42,15 +46,18 @@ export interface TrainingSummary {
   examples: { top: number; listed: number; missed: string[] };
 }
 
+/** Kana words as JIS Moonshot types them: hiragana, katakana and ー (training contract). */
+const KANA = /^[ぁ-ゖァ-ヺー]+$/;
 const CONFIDENCE_COUNT = { tentative: 10, likely: 20, confirmed: 50 } as const;
-const KEYS = /^((S-)?(Key[A-Z]|Digit[0-9]|Minus|Equal|IntlYen|BracketLeft|BracketRight|Semicolon|Quote|Backslash|Comma|Period|Slash|IntlRo|F6|F7|F8|F9|F10)( |$))+$/;
+const KEYS = /^((S-)?(Key[A-Z]|Digit[0-9]|Minus|Equal|IntlYen|BracketLeft|BracketRight|Semicolon|Quote|Backslash|Comma|Period|Slash|IntlRo|F9|F10)( |$))+$/;
 
 /** Checks a parsed file against the contract's rules; returns the problems, empty when it's fine. */
 export function check(file: unknown): string[] {
   const problems: string[] = [];
   const f = file as Partial<TrainingFile> | null;
   if (!f || typeof f !== "object") return ["not a JSON object"];
-  if (f.format !== "jis-korean-training") problems.push('format must be "jis-korean-training"');
+  if (f.format !== "jis-moonshot-training" && f.format !== "jis-korean-training")
+    problems.push('format must be "jis-moonshot-training" (or JIS Korean\'s "jis-korean-training")');
   if (f.version !== 1) problems.push("version must be 1");
   for (const [k, v] of Object.entries(f.weights ?? {})) {
     if (!(WEIGHTS as readonly string[]).includes(k)) problems.push(`unknown weight "${k}"`);
@@ -63,11 +70,13 @@ export function check(file: unknown): string[] {
   };
   words(f.vocabulary?.korean, /^[가-힣]+$/, "korean");
   words(f.vocabulary?.english, /^[A-Za-z]+$/, "english");
+  words(f.vocabulary?.japanese, KANA, "japanese");
   if (f.avoid !== undefined) {
     if (!Array.isArray(f.avoid) || f.avoid.length > 5000) problems.push("avoid: a list of at most 5,000 words");
     else
       for (const a of f.avoid) {
-        const pattern = a?.language === "korean" ? /^[가-힣]+$/ : a?.language === "english" ? /^[A-Za-z]+$/ : null;
+        const pattern =
+          a?.language === "korean" ? /^[가-힣]+$/ : a?.language === "english" ? /^[A-Za-z]+$/ : a?.language === "japanese" ? KANA : null;
         if (!pattern || typeof a.word !== "string" || !pattern.test(a.word)) problems.push(`avoid: bad word ${JSON.stringify(a?.word)}`);
         else if (a.strength !== undefined && a.strength !== "soft" && a.strength !== "strong") problems.push(`avoid: bad strength for ${a.word}`);
       }
@@ -97,6 +106,8 @@ export function wordLists(file: TrainingFile): WordLists {
     english: lines(file.vocabulary?.english),
     avoidKorean: avoided("korean"),
     avoidEnglish: avoided("english"),
+    japanese: lines(file.vocabulary?.japanese),
+    avoidJapanese: avoided("japanese"),
   };
 }
 

@@ -1,31 +1,100 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/team-mirae/jis-korean/blob/main/docs/training-contract.schema.json",
-  "title": "JIS Korean training file",
-  "description": "Tunes JIS Korean's predictions to one person. See docs/training-contract.md.",
+  "$id": "docs/training-contract.schema.json (JIS Moonshot)",
+  "title": "JIS Moonshot training file",
+  "description": "Tunes JIS Moonshot's predictions (Korean, English and kana) to one person. JIS Korean's files are read too. See docs/training-contract.md.",
   "type": "object",
-  "required": ["format", "version"],
+  "required": [
+    "format",
+    "version"
+  ],
   "properties": {
-    "format": { "const": "jis-korean-training" },
-    "version": { "const": 1 },
+    "format": {
+      "enum": [
+        "jis-moonshot-training",
+        "jis-korean-training"
+      ]
+    },
+    "version": {
+      "const": 1
+    },
     "source": {
       "type": "object",
       "properties": {
-        "tool": { "type": "string", "maxLength": 200 },
-        "created": { "type": "string", "maxLength": 40 },
-        "description": { "type": "string", "maxLength": 2000 }
+        "tool": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "created": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        }
       }
     },
     "weights": {
       "type": "object",
-      "propertyNames": { "enum": ["korean", "english", "implied", "mixed", "two-set", "keep-finals", "hanja", "implied-l"] },
-      "additionalProperties": { "type": "number", "minimum": 0, "maximum": 10 }
+      "propertyNames": {
+        "enum": [
+          "korean",
+          "english",
+          "implied",
+          "mixed",
+          "two-set",
+          "keep-finals",
+          "hanja",
+          "implied-l",
+          "kana"
+        ]
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 10
+      }
     },
     "vocabulary": {
       "type": "object",
       "properties": {
-        "korean": { "type": "array", "maxItems": 5000, "items": { "$ref": "#/$defs/word", "properties": { "word": { "pattern": "^[가-힣]+$" } } } },
-        "english": { "type": "array", "maxItems": 5000, "items": { "$ref": "#/$defs/word", "properties": { "word": { "pattern": "^[A-Za-z]+$" } } } }
+        "korean": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "$ref": "#/$defs/word",
+            "properties": {
+              "word": {
+                "pattern": "^[가-힣]+$"
+              }
+            }
+          }
+        },
+        "english": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "$ref": "#/$defs/word",
+            "properties": {
+              "word": {
+                "pattern": "^[A-Za-z]+$"
+              }
+            }
+          }
+        },
+        "japanese": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "$ref": "#/$defs/word",
+            "properties": {
+              "word": {
+                "pattern": "^[ぁ-ゖァ-ヺー]+$"
+              }
+            }
+          }
+        }
       }
     },
     "avoid": {
@@ -33,15 +102,79 @@
       "maxItems": 5000,
       "items": {
         "type": "object",
-        "required": ["word", "language"],
+        "required": [
+          "word",
+          "language"
+        ],
         "properties": {
-          "word": { "type": "string", "minLength": 1, "maxLength": 40 },
-          "language": { "enum": ["korean", "english"] },
-          "strength": { "enum": ["soft", "strong"] }
+          "word": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "language": {
+            "enum": [
+              "korean",
+              "english",
+              "japanese"
+            ]
+          },
+          "strength": {
+            "enum": [
+              "soft",
+              "strong"
+            ]
+          }
         },
         "allOf": [
-          { "if": { "properties": { "language": { "const": "korean" } } }, "then": { "properties": { "word": { "pattern": "^[가-힣]+$" } } } },
-          { "if": { "properties": { "language": { "const": "english" } } }, "then": { "properties": { "word": { "pattern": "^[A-Za-z]+$" } } } }
+          {
+            "if": {
+              "properties": {
+                "language": {
+                  "const": "korean"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "word": {
+                  "pattern": "^[가-힣]+$"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "language": {
+                  "const": "english"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "word": {
+                  "pattern": "^[A-Za-z]+$"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "language": {
+                  "const": "japanese"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "word": {
+                  "pattern": "^[ぁ-ゖァ-ヺー]+$"
+                }
+              }
+            }
+          }
         ]
       }
     },
@@ -50,12 +183,30 @@
       "maxItems": 2000,
       "items": {
         "type": "object",
-        "required": ["text"],
+        "required": [
+          "text"
+        ],
         "properties": {
-          "text": { "type": "string", "minLength": 1, "maxLength": 60, "pattern": "^\\S+$" },
-          "keys": { "type": "string", "maxLength": 600, "pattern": "^((S-)?(Key[A-Z]|Digit[0-9]|Minus|Equal|IntlYen|BracketLeft|BracketRight|Semicolon|Quote|Backslash|Comma|Period|Slash|IntlRo|F6|F7|F8|F9|F10)( |$))+$" },
-          "count": { "type": "integer", "minimum": 1, "maximum": 20 },
-          "note": { "type": "string", "maxLength": 500 }
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "pattern": "^\\S+$"
+          },
+          "keys": {
+            "type": "string",
+            "maxLength": 600,
+            "pattern": "^((S-)?(Key[A-Z]|Digit[0-9]|Minus|Equal|IntlYen|BracketLeft|BracketRight|Semicolon|Quote|Backslash|Comma|Period|Slash|IntlRo|F9|F10)( |$))+$"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
         }
       }
     },
@@ -63,13 +214,27 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["intended", "typed"],
+        "required": [
+          "intended",
+          "typed"
+        ],
         "properties": {
-          "intended": { "type": "string" },
-          "typed": { "type": "string" },
-          "class": { "type": "string" },
-          "count": { "type": "integer", "minimum": 1 },
-          "note": { "type": "string" }
+          "intended": {
+            "type": "string"
+          },
+          "typed": {
+            "type": "string"
+          },
+          "class": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "note": {
+            "type": "string"
+          }
         }
       }
     },
@@ -77,12 +242,26 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "answer"],
+        "required": [
+          "id",
+          "answer"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "question": { "type": "string" },
-          "answer": { "type": "string" },
-          "weights": { "type": "object", "additionalProperties": { "type": "number" } }
+          "id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "weights": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
         }
       }
     }
@@ -90,11 +269,27 @@
   "$defs": {
     "word": {
       "type": "object",
-      "required": ["word"],
+      "required": [
+        "word"
+      ],
       "properties": {
-        "word": { "type": "string", "minLength": 1, "maxLength": 40 },
-        "count": { "type": "integer", "minimum": 1, "maximum": 1000000 },
-        "confidence": { "enum": ["tentative", "likely", "confirmed"] }
+        "word": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "confidence": {
+          "enum": [
+            "tentative",
+            "likely",
+            "confirmed"
+          ]
+        }
       }
     }
   }

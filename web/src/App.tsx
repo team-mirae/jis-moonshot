@@ -8,7 +8,7 @@ import { ghost } from "./ghost";
 import { Keyboard } from "./Keyboard";
 import benchmarks from "./stats.json";
 
-const REPO = "https://github.com/team-mirae/jis-korean";
+const REPO = "https://github.com/team-mirae/jis-moonshot";
 
 /** Short runs on the number row and home row that type whole words (docs/easy-words.md). */
 const EASY_WORDS: [string, string][] = [
@@ -37,18 +37,12 @@ export function App({ engine }: { engine: Engine }) {
   // From the engine, which outlives the playground (Docs and back remounts it).
   const [shift, setShift] = useState(false);
   const [enterCommits, setEnterCommits] = useState(() => engine.enterCommits);
-  // The mode (spec §3.6): 0 Mode A (JIS), 1 Mode B (US ANSI), 2 Mode C (UK ISO). Remembered per
-  // browser. The engine's mode is set before the first render, so the key legends match it.
+  // The mode (docs/moonshot.md §2): 0 Mode A (JIS Moonshot), 11 JIS Kana. Remembered per browser.
+  // The engine's mode is set before the first render, so the key legends match it.
   const [mode, setMode] = useState(() => {
     const m = loadMode();
     engine.setMode(m);
     return m;
-  });
-  // Mode C's Dedicated symbol keys (spec §3.6), on by default.
-  const [symbols, setSymbols] = useState(() => {
-    const on = loadSetting("dedicatedSymbols", true);
-    engine.setDedicatedSymbols(on);
-    return on;
   });
   const [pressed, setPressed] = useState<Set<string>>(new Set());
   const [focused, setFocused] = useState(false);
@@ -58,7 +52,8 @@ export function App({ engine }: { engine: Engine }) {
   const [samples, setSamples] = useState<Record<string, string>>({});
   const sample = samples[sampleId] ?? "한글을 입력해 보세요";
   const [counts, setCounts] = useState<Counts | null>(null);
-  const [predictionsOn, setPredictionsOn] = useState(() => loadSetting("predictions", true));
+  // Predictions are always on (docs/moonshot.md §6): there is no switch, here or in the input methods.
+  const predictionsOn = true;
   const [readings, setReadings] = useState<Prediction[]>([]);
   // Side by side: the travel ranker's list next to the rules' (spec §10.7).
   const [ranking, setRanking] = useState<Ranking>(() => loadRanking());
@@ -220,7 +215,7 @@ export function App({ engine }: { engine: Engine }) {
   function changeRanking(mode: Ranking) {
     setRanking(mode);
     try {
-      localStorage.setItem("jis-korean:ranking", mode);
+      localStorage.setItem("jis-moonshot:ranking", mode);
     } catch {
       // Not remembered; fine.
     }
@@ -228,20 +223,12 @@ export function App({ engine }: { engine: Engine }) {
     showReadings(predictionsOn && Boolean(preedit), mode);
   }
 
-  function togglePredictions(on: boolean) {
-    setPredictionsOn(on);
-    saveSetting("predictions", on);
-    engine.setPredictions(on);
-    showReadings(on && Boolean(preedit));
-    surface.current?.focus();
-  }
-
   /** A weight set by hand: it wins over the learned one. */
   function setWeight(name: WeightName, value: number) {
     setWeights({ ...weights, [name]: value });
     engine.setWeight(name, value);
     try {
-      localStorage.setItem("jis-korean:weights", JSON.stringify({ ...storedWeights(), [name]: value }));
+      localStorage.setItem("jis-moonshot:weights", JSON.stringify({ ...storedWeights(), [name]: value }));
     } catch {
       // Not remembered; fine.
     }
@@ -253,7 +240,7 @@ export function App({ engine }: { engine: Engine }) {
     for (const name of WEIGHTS) engine.clearWeight(name);
     setWeights(loadWeights(true));
     try {
-      localStorage.removeItem("jis-korean:weights");
+      localStorage.removeItem("jis-moonshot:weights");
     } catch {
       // Nothing stored; fine.
     }
@@ -283,12 +270,13 @@ export function App({ engine }: { engine: Engine }) {
     }
     setWeights(next);
     try {
-      localStorage.setItem("jis-korean:weights", JSON.stringify({ ...storedWeights(), ...(f.weights ?? {}) }));
+      localStorage.setItem("jis-moonshot:weights", JSON.stringify({ ...storedWeights(), ...(f.weights ?? {}) }));
     } catch {
       // Not remembered; fine.
     }
     const lists = wordLists(f);
-    const count = (f.vocabulary?.korean?.length ?? 0) + (f.vocabulary?.english?.length ?? 0);
+    const count =
+      (f.vocabulary?.korean?.length ?? 0) + (f.vocabulary?.english?.length ?? 0) + (f.vocabulary?.japanese?.length ?? 0);
     const avoided = f.avoid?.length ?? 0;
     if (count || avoided) {
       engine.setUserWords(lists);
@@ -380,12 +368,19 @@ export function App({ engine }: { engine: Engine }) {
     <main className={floating ? "floating-keyboard" : undefined}>
       <header>
         <div className="title">
-          <h1>JIS Korean</h1>
+          <h1>JIS Moonshot</h1>
         </div>
         <p className="lede">
-          Korean 2-set (두벌식) for JIS keyboards: double consonants and compound vowels on the number row, Korean
-          punctuation on the symbol keys, and Japanese-IME-style F6–F10. Try it here before installing; on a US
-          keyboard, try Mode B, and on a UK keyboard Mode C.
+          One JIS keyboard read as Korean 2-set (두벌식), English and Japanese kana at once, with predictions picking the
+          reading. An experimental fork of{" "}
+          <a href="https://github.com/team-mirae/jis-korean" target="_blank" rel="noreferrer">
+            JIS Korean
+          </a>
+          : expect wrong guesses. Try it here before installing.
+        </p>
+        <p className="notice">
+          Dogfooded rolling release: each release is whatever its owner is typing with that week, tried by one person,
+          and anything can change or break between releases.
         </p>
       </header>
 
@@ -405,7 +400,7 @@ export function App({ engine }: { engine: Engine }) {
               </button>
             ))}
           </span>
-          <span className="chip">{MODES[mode]?.chip ?? "JIS Korean"}</span>
+          <span className="chip">{MODES.find((m) => m.id === mode)?.chip ?? "JIS Moonshot"}</span>
           <span className="hint">{focused ? "Use an English input source on your OS." : "Click the box to type."}</span>
           <span className="spacer" />
           <span className="samples" role="group" aria-label="Practice text">
@@ -464,10 +459,6 @@ export function App({ engine }: { engine: Engine }) {
             Shift
           </button>
           <label className="check">
-            <input type="checkbox" checked={predictionsOn} onChange={(e) => togglePredictions(e.target.checked)} />
-            Predictions
-          </label>
-          <label className="check">
             <input
               type="checkbox"
               checked={enterCommits}
@@ -478,20 +469,6 @@ export function App({ engine }: { engine: Engine }) {
             />
             Enter commits without a new line
           </label>
-          {mode === 2 && (
-            <label className="check" title="Off: [ ] and the key left of Z type their UK characters">
-              <input
-                type="checkbox"
-                checked={symbols}
-                onChange={(e) => {
-                  setSymbols(e.target.checked);
-                  engine.setDedicatedSymbols(e.target.checked);
-                  saveSetting("dedicatedSymbols", e.target.checked);
-                }}
-              />
-              Dedicated symbol keys
-            </label>
-          )}
           <span className="spacer" />
           <button type="button" onClick={() => navigator.clipboard?.writeText(doc + preedit)}>
             Copy
@@ -558,35 +535,47 @@ export function App({ engine }: { engine: Engine }) {
           </div>
           <div>
             <dt>Lone vowel</dt>
-            <dd>Gets an implied ㅇ: ㅏ → 아, 가 + ㅓ → 가어. F6 right after commits the bare vowel.</dd>
-          </div>
-          <div>
-            <dt>F6 한글</dt>
-            <dd>Commits. Right after F9/F10, commits the Hangul instead.</dd>
+            <dd>Gets an implied ㅇ: ㅏ → 아, 가 + ㅓ → 가어.</dd>
           </div>
           <div>
             <dt>Shift+vowel</dt>
             <dd>Starts a syllable on ㅇ and keeps the final: 말 + ⇧ㅣ → 말이, 오 + ⇧ㅣ → 오이. Pressing ㅣ twice works too.</dd>
           </div>
           <div>
-            <dt>F7 한자</dt>
-            <dd>{hanjaReady ? "Hanja for the word you just typed. F7 or ↓ for the next, 1–9 to pick, Esc to go back." : "Loading the hanja dictionary…"}</dd>
+            <dt>Three readings</dt>
+            <dd>Every key is read as Korean 2-set, as English (QWERTY) and as kana on the JIS kana legends: G K S shows 한 and h e l l o shows hello, and the kana reading is listed when it's likely (b y i a f reads こんにちは).</dd>
+          </div>
+          <div>
+            <dt>F6 / F7</dt>
+            <dd>Hiragana / katakana: the staged keys read as kana until the next commit, then predictive again. With nothing staged, the next word is kana. In JIS Kana they switch its script for good.</dd>
+          </div>
+          <div>
+            <dt>Shift+F7 漢字</dt>
+            <dd>{hanjaReady ? "Hanja for the word you just typed. F7 or ↓ for the next, 1–9 to pick, Esc to go back. Hanja also show as predictions." : "Loading the hanja dictionary…"}</dd>
           </div>
           <div>
             <dt>F8</dt>
             <dd>Reserved for future use: does nothing.</dd>
           </div>
           <div>
-            <dt>F9 / F10, Shift+Z</dt>
-            <dd>The word as full- or half-width letters. Press again to cycle case. Shift+Z does what F10 does, for keyboards and browsers where F10 is taken.</dd>
+            <dt>F9 / F10</dt>
+            <dd>The word's keys as full- or half-width letters. Press again to cycle case.</dd>
+          </div>
+          <div>
+            <dt>Shift+Z</dt>
+            <dd>A key like any other: ㅋ in Korean (standard 2-set), っ in kana, Z in English. It's no longer F10.</dd>
           </div>
           <div>
             <dt>Space</dt>
-            <dd>Commits and types a space. Shift+Enter commits only.</dd>
+            <dd>Commits what's shown and types a space; after F6 / F7 or in JIS Kana, a full-width space. Shift+Enter commits only.</dd>
           </div>
           <div>
             <dt>Predictions</dt>
-            <dd>On by default: the likeliest reading of what you typed (Korean, English, plain 2-set, …) is highlighted, and Space commits it. Click another to use it instead. Turn off for plain JIS Korean.</dd>
+            <dd>Always on: the likeliest reading of what you typed (Korean, English, kana, plain 2-set, …) is highlighted, and Space commits it. Click another to use it instead. The input methods ask you to accept predictive typing once, before they type anything.</dd>
+          </div>
+          <div>
+            <dt>英数 / かな</dt>
+            <dd>In the input methods: 英数 (無変換 on Windows) commits and goes to English, かな (変換) goes to Mode A, and in Mode A forces the staged keys' Korean. ⌥Space on macOS types a full-width space (_ in the English modes). Here, use the mode buttons above the box.</dd>
           </div>
         </dl>
       </section>
@@ -645,7 +634,7 @@ function KeyCounts({ counts, sample }: { counts: Counts; sample: boolean }) {
         <strong>{format(counts.conventional)}</strong>
       </span>
       <span className="count jis">
-        <span className="count-name">JIS Korean</span>
+        <span className="count-name">JIS Moonshot</span>
         <strong>{format(counts.jis)}</strong>
       </span>
       <span className="count saved">
@@ -672,7 +661,7 @@ function Benchmarks() {
             <th scope="col">Text</th>
             <th scope="col" className="number">Characters</th>
             <th scope="col" className="number">Conventional 2-set</th>
-            <th scope="col" className="number">JIS Korean</th>
+            <th scope="col" className="number">JIS Moonshot</th>
             <th scope="col" className="number">Fewer</th>
           </tr>
         </thead>
@@ -718,6 +707,8 @@ const KIND_LABELS: Record<PredictionKind, string> = {
   bare: "ㅏ",
   mixed: "En+한",
   "implied-l": "ㄹ",
+  kana: "かな",
+  katakana: "カナ",
 };
 
 /** The predictive layer's ranked readings of the staged text, top one first. */
@@ -745,26 +736,26 @@ function PredictionList({ readings, label, onPick }: { readings: Prediction[]; l
   );
 }
 
+// JIS Moonshot is JIS only (docs/moonshot.md §2): Mode A, and JIS Kana (F6 / F7 switch to it).
 const MODES = [
-  { id: 0, label: "Mode A · JIS", title: "JIS Korean Original Layout, for JIS keyboards", chip: "JIS Korean" },
-  { id: 1, label: "Mode B · US ANSI", title: "JIS Korean for US ANSI keyboards", chip: "JIS Korean for US ANSI" },
-  { id: 2, label: "Mode C · UK ISO", title: "JIS Korean for UK ISO keyboards", chip: "JIS Korean for UK ISO" },
+  { id: 0, label: "Mode A · JIS Moonshot", title: "Korean, English and kana from a JIS keyboard", chip: "JIS Moonshot" },
+  { id: 11, label: "JIS Kana", title: "Kana typing on the JIS kana layout", chip: "JIS Kana" },
 ];
 
-/** The saved mode, or Mode B if an older version saved "modeB". */
+/** The saved mode, or Mode A for anything else (a retired mode included). */
 function loadMode(): number {
   try {
-    const saved = localStorage.getItem("jis-korean:mode");
+    const saved = localStorage.getItem("jis-moonshot:mode");
     if (saved !== null && MODES.some((m) => String(m.id) === saved)) return Number(saved);
   } catch {
     return 0;
   }
-  return loadSetting("modeB", false) ? 1 : 0;
+  return 0;
 }
 
 function saveMode(mode: number) {
   try {
-    localStorage.setItem("jis-korean:mode", String(mode));
+    localStorage.setItem("jis-moonshot:mode", String(mode));
   } catch {
     // Not remembered; fine.
   }
@@ -772,7 +763,7 @@ function saveMode(mode: number) {
 
 function loadSetting(key: string, fallback: boolean): boolean {
   try {
-    const value = localStorage.getItem(`jis-korean:${key}`);
+    const value = localStorage.getItem(`jis-moonshot:${key}`);
     return value === null ? fallback : value === "true";
   } catch {
     return fallback;
@@ -781,7 +772,7 @@ function loadSetting(key: string, fallback: boolean): boolean {
 
 function saveSetting(key: string, value: boolean) {
   try {
-    localStorage.setItem(`jis-korean:${key}`, String(value));
+    localStorage.setItem(`jis-moonshot:${key}`, String(value));
   } catch {
     // Not remembered; fine.
   }
@@ -796,10 +787,11 @@ const WEIGHT_LABELS: Record<WeightName, string> = {
   "keep-finals": "Finals kept",
   hanja: "Hanja",
   "implied-l": "Implied ㄹ after ㄴ",
+  kana: "Kana",
 };
 
 /** Scenarios a slider can turn off (at 0); the rest go down to 0.5. */
-const CAN_TURN_OFF: WeightName[] = ["implied-l"];
+const CAN_TURN_OFF: WeightName[] = ["implied-l", "kana"];
 
 /** Which ranker orders the implied-ㅇ alternatives, or both lists side by side. */
 type Ranking = "rules" | "travel" | "route" | "side-by-side";
@@ -813,7 +805,7 @@ const RANKINGS: { value: Ranking; label: string }[] = [
 
 function loadRanking(): Ranking {
   try {
-    const value = localStorage.getItem("jis-korean:ranking");
+    const value = localStorage.getItem("jis-moonshot:ranking");
     return RANKINGS.some((r) => r.value === value) ? (value as Ranking) : "rules";
   } catch {
     return "rules";
@@ -827,7 +819,7 @@ function unlearned(): Record<WeightName, number> {
 /** The weights the user set by hand (only those). */
 function storedWeights(): Partial<Record<WeightName, number>> {
   try {
-    const stored = JSON.parse(localStorage.getItem("jis-korean:weights") ?? "{}");
+    const stored = JSON.parse(localStorage.getItem("jis-moonshot:weights") ?? "{}");
     return Object.fromEntries(Object.entries(stored).filter(([k, v]) => (WEIGHTS as readonly string[]).includes(k) && typeof v === "number"));
   } catch {
     return {};
@@ -843,7 +835,7 @@ function learnedWeights(engine: Engine): Record<WeightName, number> {
 }
 
 // The words from a training file, kept in this browser until forgotten.
-const TRAINING_WORDS_KEY = "jis-korean:training-words";
+const TRAINING_WORDS_KEY = "jis-moonshot:training-words";
 
 function loadTrainingWords(): WordLists | null {
   try {
@@ -863,7 +855,7 @@ function saveTrainingWords(words: WordLists) {
 }
 
 // What was learned, with when learning started: forgotten 24 hours after that, session or not.
-const LEARNED_KEY = "jis-korean:learned";
+const LEARNED_KEY = "jis-moonshot:learned";
 const LEARNED_FOR_MS = 24 * 60 * 60 * 1000;
 
 function loadLearned(): { created: number; state: string } | null {

@@ -1,5 +1,5 @@
 // The diagnostic log, off by default (setting DiagnosticLog = 1). It records activations, focus
-// and errors, never typed text: %ProgramData%\JIS Korean\jiskorean.log.
+// and errors, never typed text: %ProgramData%\JIS Moonshot\jismoonshot.log.
 #pragma once
 
 #include <cstdarg>

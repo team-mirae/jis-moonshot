@@ -1,21 +1,21 @@
 [package]
-name = "jis-korean-engine"
+name = "jis-moonshot-engine"
 version = "0.3.1"
 edition = "2024"
 publish = false
 license = "MIT"
-description = "Core engine of JIS Korean, a Korean 2-set input method for JIS keyboards"
+description = "Core engine of JIS Moonshot: Korean 2-set, English and Japanese kana from one JIS keyboard"
 
 [features]
 # The predictive layer (src/predict.rs, spec §10). Off: the deterministic lite engine only.
-default = ["predict"]
+default = ["predict", "english"]
 predict = []
 # The legacy predictor (spec §10.13): the predictive layer ranked by the rules (§10.3) alone, the
 # learned ranker left out (a learned model a host loads is ignored). Implies `predict`:
 # `cargo build --features legacy-predict`, or `--no-default-features --features legacy-predict`.
 legacy-predict = ["predict"]
-# JIS English, mode A_QWERTY (spec §3.6.2): an English mode with press-and-hold variants. Optional,
-# built on request (the macOS shell's `make ENGLISH=1`).
+# JIS English, mode A_QWERTY (spec §3.6.2): an English mode with press-and-hold variants. On by
+# default in JIS Moonshot: 英数 / 無変換 switch to it (docs/moonshot.md §4).
 english = []
 
 [lib]
@@ -48,4 +48,8 @@ name = "legends"
 
 [[example]]
 name = "learn_data"
+required-features = ["predict"]
+
+[[example]]
+name = "moonshot_probe"
 required-features = ["predict"]

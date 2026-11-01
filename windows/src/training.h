@@ -1,8 +1,10 @@
 // The training contract (docs/training-contract.md, spec §10.12) on Windows, as on macOS
-// (mac/Sources/Training.swift): %APPDATA%\JIS Korean\training.json is read when JIS Korean
+// (mac/Sources/Training.swift): %APPDATA%\JIS Moonshot\training.json is read when JIS Moonshot
 // activates and the file has changed since. Its weights become the Weight.<Scenario> settings
-// (set by hand), its words are kept in the settings and added to the shared predictor, and its
-// examples are learned from (turning LearnFromChoices on, since only then do they count).
+// (set by hand), its words (Korean, English and Japanese kana, docs/moonshot.md §5) are kept in
+// the settings and added to the shared predictor, and its examples are learned from (turning
+// LearnFromChoices on, since only then do they count). The format is "jis-moonshot-training" or
+// JIS Korean's "jis-korean-training", version 1.
 #pragma once
 
 #include "jis_korean.h"

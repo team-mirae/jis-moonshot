@@ -33,7 +33,7 @@ struct ScanTable {
                                       JK_KEY_PERIOD, JK_KEY_SLASH};
         for (int i = 0; i < 10; ++i) keys[0x2C + i] = z_row[i];
         keys[0x73] = JK_KEY_INTLRO;  // ろ, JIS only
-        keys[0x56] = JK_KEY_INTLBACKSLASH;  // between left Shift and Z, ISO only (Mode C)
+        keys[0x56] = JK_KEY_INTLBACKSLASH;  // between left Shift and Z, ISO only
     }
 };
 constexpr ScanTable kScan;
@@ -78,6 +78,20 @@ std::uint32_t KeyOf(unsigned vk, std::uintptr_t lparam, unsigned (*scan_of)(unsi
     const bool extended = (lparam & (std::uintptr_t{1} << 24)) != 0;
     if (scan == 0 && vk != vk::kPacket && scan_of) scan = scan_of(vk) & 0xFF;
     return EngineKey(vk, scan, extended);
+}
+
+SwitchKey SwitchKeyOf(unsigned vk, std::uintptr_t lparam) {
+    if (vk == vk::kKana) return SwitchKey::kHangul;  // VK_HANGUL is VK_KANA's value
+    if (vk == vk::kNonConvert) return SwitchKey::kNonConvert;
+    if (vk == vk::kConvert) return SwitchKey::kConvert;
+    // A character injected as Unicode carries no position (#4).
+    if (vk == vk::kPacket) return SwitchKey::kNone;
+    const unsigned scan = static_cast<unsigned>((lparam >> 16) & 0xFF);
+    const bool extended = (lparam & (std::uintptr_t{1} << 24)) != 0;
+    if (extended) return SwitchKey::kNone;
+    if (scan == 0x7B) return SwitchKey::kNonConvert;
+    if (scan == 0x79) return SwitchKey::kConvert;
+    return SwitchKey::kNone;
 }
 
 bool SameKeyDown(std::uintptr_t wparam, std::intptr_t lparam, std::int32_t time, std::uint64_t tick,

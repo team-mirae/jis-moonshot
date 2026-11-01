@@ -1,4 +1,4 @@
-// The JIS Korean engine, loaded from wasm through its C ABI (engine/include/jis_korean.h).
+// The JIS Moonshot engine (JIS Korean's, forked), loaded from wasm through its C ABI (engine/include/jis_korean.h).
 import wasmUrl from "./engine.wasm?url";
 import type { WordLists } from "./training";
 
@@ -19,7 +19,6 @@ interface Exports {
   jk_legend(key: number, shift: number, escaped: number): number;
   jk_legend_in(key: number, shift: number, escaped: number, mode: number): number;
   jk_set_mode(h: number, mode: number): number;
-  jk_set_dedicated_symbols(h: number, on: number): void;
   jk_mode_count(): number;
   jk_mode_id_at(index: number): number;
   jk_mode_name_ptr(mode: number): number;
@@ -47,6 +46,8 @@ interface Exports {
   jk_predictor_with_words(base: number, k: number, kl: number, e: number, el: number): number;
   jk_predictor_with_avoided(base: number, k: number, kl: number, e: number, el: number): number;
   jk_predictor_with_learned(base: number, m: number, ml: number): number;
+  jk_predictor_with_japanese(base: number, w: number, wl: number): number;
+  jk_predictor_with_avoided_japanese(base: number, w: number, wl: number): number;
   jk_learn_example(h: number, t: number, tl: number, keys: number, kl: number): number;
   jk_predict(h: number): number;
   jk_prediction_ptr(h: number, i: number): number;
@@ -78,13 +79,16 @@ export interface Prediction {
 }
 
 export type PredictionKind =
-  | "korean" | "english" | "capitalized" | "upper" | "two-set" | "keep-finals" | "hanja" | "bare" | "mixed" | "implied-l";
+  | "korean" | "english" | "capitalized" | "upper" | "two-set" | "keep-finals" | "hanja" | "bare" | "mixed" | "implied-l"
+  | "kana" | "katakana";
+/** In C ABI id order (JK_PREDICTION_*): kana (10) and katakana (11) are the kana reading. */
 const KINDS: PredictionKind[] = [
   "korean", "english", "capitalized", "upper", "two-set", "keep-finals", "hanja", "bare", "mixed", "implied-l",
+  "kana", "katakana",
 ];
 
 /** Scenarios the user can tune (spec §10.5), in C ABI id order. */
-export const WEIGHTS = ["korean", "english", "implied", "mixed", "two-set", "keep-finals", "hanja", "implied-l"] as const;
+export const WEIGHTS = ["korean", "english", "implied", "mixed", "two-set", "keep-finals", "hanja", "implied-l", "kana"] as const;
 export type WeightName = (typeof WEIGHTS)[number];
 
 /** How the implied-ㅇ alternatives are ranked (spec §10.7), in C ABI id order. */
@@ -122,7 +126,7 @@ export interface Output {
   commit: string;
   preedit: string;
   consumed: boolean;
-  /** The hanja list, while one is open (F7). */
+  /** The hanja list, while one is open (Shift+F7). */
   candidates: Candidates | null;
 }
 
@@ -179,7 +183,7 @@ export class Engine {
   private dictionaryLoad?: Promise<void>;
   private predictorLoad?: Promise<void>;
 
-  /** Loads the hanja dictionary (dict/hanja.tsv) so F7 works. Once per engine: a remounted
+  /** Loads the hanja dictionary (dict/hanja.tsv) so Shift+F7 works. Once per engine: a remounted
    * playground gets the same promise. A failed load can be tried again. */
   loadDictionary(url: string): Promise<void> {
     this.dictionaryLoad ??= this.fetchDictionary(url).catch((error) => {
@@ -251,17 +255,31 @@ export class Engine {
         this.predictor = ranked;
       }
     }
+    // The kana reading's lexicon (docs/moonshot.md §5): without it, no kana reading.
+    const japanese = await fetch(base + "common-ja.txt").then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+    if (japanese) {
+      const bytes = new Uint8Array(japanese);
+      const j = put(bytes);
+      const withKana = x.jk_predictor_with_japanese(this.predictor, j, bytes.length);
+      x.jk_dealloc(j, bytes.length);
+      if (withKana) {
+        x.jk_predictor_free(this.predictor);
+        this.predictor = withKana;
+      }
+    }
     this.basePredictor = this.predictor;
   }
 
-  /** On: the engine ranks readings of the staged text. Off: the deterministic lite engine. */
+  /** On: the engine ranks readings of the staged text (always on in the playground, as in the
+   * input methods). Off: no readings, Mode A types Korean. */
   setPredictions(on: boolean): void {
     this.predictionsOn = on;
     this.x.jk_set_predictor(this.handle, on ? this.predictor : 0);
   }
 
   /** Adds the user's own words (training contract): lines of `word` or `word<TAB>count`, and the
-   * words they never mean: lines of `word` or `word<TAB>strong`. Replaces any added before. */
+   * words they never mean: lines of `word` or `word<TAB>strong`, in Korean, English and kana.
+   * Replaces any added before. */
   setUserWords(lists: WordLists): void {
     const { x } = this;
     const withLists = (base: number, build: typeof x.jk_predictor_with_words, korean: string, english: string) => {
@@ -283,6 +301,20 @@ export class Engine {
       x.jk_predictor_free(next);
       next = avoided;
     }
+    // The kana reading's words (vocabulary.japanese, avoid.japanese): one list each.
+    const withKana = (build: typeof x.jk_predictor_with_japanese, words: string | undefined) => {
+      if (!words) return;
+      const w = encoder.encode(words);
+      const wp = x.jk_alloc(w.length);
+      new Uint8Array(x.memory.buffer, wp, w.length).set(w);
+      const kana = build.call(x, next, wp, w.length);
+      x.jk_dealloc(wp, w.length);
+      if (!kana) throw new Error("words are not UTF-8");
+      x.jk_predictor_free(next);
+      next = kana;
+    };
+    withKana(x.jk_predictor_with_japanese, lists.japanese);
+    withKana(x.jk_predictor_with_avoided_japanese, lists.avoidJapanese);
     this.usePredictor(next);
   }
 
@@ -404,7 +436,7 @@ export class Engine {
     return this.output(true);
   }
 
-  /** Counts the key presses `text` takes on JIS Korean and on conventional 2-set. */
+  /** Counts the key presses `text` takes on JIS Moonshot's Mode A and on conventional 2-set. */
   plan(text: string): Counts {
     const { x, handle: h } = this;
     const bytes = encoder.encode(text);
@@ -431,23 +463,14 @@ export class Engine {
     });
   }
 
-  /** Switches the mode: 0 = Mode A (JIS), 1 = Mode B (US ANSI), 2 = Mode C (UK ISO). */
+  /** Switches the mode: 0 = Mode A (JIS Moonshot), 11 = JIS Kana, 3 / 7 / 8 = the English modes.
+   * Ids 1, 2, 9 and 10 (Modes B and C) are retired and refused. */
   setMode(id: number): void {
     // An id this build doesn't have is refused and the mode stays as it was.
     if (this.x.jk_set_mode(this.handle, id)) this.mode = id;
   }
 
-  /**
-   * Dedicated symbol keys (spec §3.6), on by default. Off, Mode C's [ ] and ISO extra key type
-   * their UK ISO characters.
-   */
-  setDedicatedSymbols(on: boolean): void {
-    this.symbols = on;
-    this.x.jk_set_dedicated_symbols(this.handle, on ? 1 : 0);
-  }
-
   private mode = 0;
-  private symbols = true;
 
   /** Copies `text` into the engine's memory for one call. */
   private withBytes<T>(texts: string[], f: (args: number[]) => T): T {
@@ -525,15 +548,10 @@ export class Engine {
 
   /** The character a key types, for key legends. Empty if none. */
   legend(code: string, shift: boolean): string {
-    // With Dedicated symbol keys off, Mode C's optional keys type their stock characters.
-    const stock = !this.symbols && this.mode === 2 && OPTIONAL_KEYS.has(code);
-    const c = this.x.jk_legend_in(this.id(code), shift ? 1 : 0, stock ? 1 : 0, this.mode);
+    const c = this.x.jk_legend_in(this.id(code), shift ? 1 : 0, 0, this.mode);
     return c ? String.fromCodePoint(c) : "";
   }
 }
-
-/** Mode C's keys that Dedicated symbol keys turns off (the engine's Mode::optional_keys). */
-const OPTIONAL_KEYS = new Set(["BracketLeft", "BracketRight", "IntlBackslash"]);
 
 export async function loadEngine(): Promise<Engine> {
   const { instance } = await WebAssembly.instantiateStreaming(fetch(wasmUrl));

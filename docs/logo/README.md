@@ -1,4 +1,4 @@
-# The JIS Korean logo and mode badges
+# The JIS Moonshot logo and mode badges
 
 **License: MIT.** Everything in this folder (the drawings, `make_logo.py`, `render.sh` and this
 document), and the rendered icons in `mac/Resources/icons/`, are under the MIT license, the same as
@@ -7,15 +7,16 @@ them, and draw your own badges with them; keep the copyright notice.
 
 | File | What |
 |---|---|
-| `taegeuk.svg` | The logo: the taegeuk alone. |
-| `mode-a.svg` | Mode A, JIS: the taegeuk and the ISO/JIS Enter. |
-| `mode-b.svg` | Mode B, US ANSI: the taegeuk, backslash and Enter. |
-| `mode-iso.svg` | Mode C, ISO: the taegeuk, Caps Lock, Shift, the ISO extra key and Z. |
-| `mode-a-qwerty.svg` | JIS English (`A_QWERTY`): the taegeuk with `ABC` over its lower right. The other English-layout modes (spec §3.6.1) get the same badge with their own text: QZ, CH, AY, DV, CMK. |
-| `mode-b-qwerty.svg`, `mode-cj-qwerty.svg` | US English (`B_QWERTY`) and UK English (`CJ_QWERTY`): the same badge with their country codes, `US` and `GB`. |
-| `mode-a-dvorak.svg`, `mode-a-colemak.svg` | JIS Dvorak (`A_DVORAK`) and JIS Colemak (`A_COLEMAK`): DV and CMK. The macOS build with the English modes (`make ENGLISH=1`) ships them. |
-| `mode-cj-qwertz.svg`, `mode-cj-swiss-qz.svg`, `mode-cj-azerty.svg` | The reserved modes (ids 4–6): QZ, CH and AY. Drawn ahead of their layouts; no build ships them yet. |
+| `moonshot.svg` | The logo: the JIS Moonshot disc alone (below). |
+| `mode-a.svg` | Mode A, JIS Moonshot: the disc and the ISO/JIS Enter. |
+| `mode-a-kana.svg` | JIS Kana (`A_KANA`): the disc with `KA` over its lower right. |
+| `mode-a-qwerty.svg` | JIS English (`A_QWERTY`): the disc with `ABC` over its lower right. |
+| `mode-a-dvorak.svg`, `mode-a-colemak.svg` | JIS Dvorak (`A_DVORAK`) and JIS Colemak (`A_COLEMAK`): DV and CMK. |
 | `make_logo.py` | Draws all of the above. Edit this, never the SVGs. |
+
+JIS Korean's taegeuk logo (with a dark variant) and its Mode B, Mode C, US / UK English and
+reserved-mode badges are gone with those modes. There is no dark variant of `moonshot.svg`: it's
+drawn in black, as macOS template icons are.
 | `render.sh` | Renders the SVGs to the 16 px and 32 px PNGs the macOS input method ships. |
 | `downscale.swift` | Scales `render.sh`'s 1024 px renders down to icon size with smooth edges. |
 
@@ -27,14 +28,14 @@ These keep every badge in one family. Follow them for a badge of your own.
    recolors them for light and dark menu bars, so a second color would be lost anyway.
 2. **Shapes are separated only by transparent borders.** Nothing is outlined in another color: a
    gap where the background shows through is the only separator.
-3. **Overlapping borders are transparent too.** Where a key's border crosses the taegeuk, or
+3. **Overlapping borders are transparent too.** Where a key's border crosses the disc, or
    another key's border, all of it is cut out. Two keys side by side share one gap.
-4. **The taegeuk is split by its S only.** The S cuts the disc, never a key.
+4. **The disc is split by the S and the midpoint gap only.** They cut the disc, never a key.
 5. **A badge shows the keys that make its keyboard different,** in real key proportions (key
-   units), in the corner where they sit on that keyboard: Enter on the right, the ISO cluster on
-   the left.
-6. **Something singled out is hollow, not colored:** a ring as thick as the border, as with the ISO
-   extra key.
+   units), in the corner where they sit on that keyboard: Enter on the right (JIS Korean's ISO
+   badge had its cluster on the left).
+6. **Something singled out is hollow, not colored:** a ring as thick as the border, as JIS Korean's ISO
+   badge drew the extra key.
 7. **It must read at 16 px,** the menu bar's size: at least two clearly separate shapes, the disc
    and the keys. Check on a light and a dark bar.
 
@@ -42,9 +43,15 @@ These keep every badge in one family. Follow them for a badge of your own.
 
 All badges share a 100 × 100 canvas (`viewBox="0 0 100 100"`).
 
-### The taegeuk
+### The disc
 
-The taegeuk follows the construction of the flag of Korea:
+JIS Moonshot's disc is half taegeuk, half solid: the **left half** is the taegeuk with its S cut,
+cut off at the vertical midpoint; the **right half** is a solid half disc. A transparent gap as wide
+as the S (`MID_GAP`, 6 units) runs down the midpoint and separates them. In the drawing the S is
+clipped to the left half (a clip path in `badge()`, an intersection in `lettered()`), and the gap is
+a band cut out of the whole disc.
+
+The taegeuk half follows the construction of the flag of Korea:
 
 - A disc of radius *R*.
 - The dividing diameter on the flag's **2:3 slope**: its ends are the centre ± *R* · (3, 2) / √13
@@ -57,13 +64,12 @@ The taegeuk follows the construction of the flag of Korea:
 | Drawing | Centre | *R* |
 |---|---|---|
 | Logo | (50, 50) | 48 |
-| Badges with keys on the right | (41, 41) | 39 |
-| Badges with keys on the left | (59, 41) | 39 |
+| Badges (keys or letters on the lower right) | (41, 41) | 39 |
 
 ### The keys
 
 - **Key unit *u*:** one standard key's width, chosen per badge so the cluster is about half the
-  canvas: 29 (Mode A), 27 (Mode B), 24 (ISO).
+  canvas: 29 (Mode A).
 - **Placement:** the cluster is anchored to the canvas corner where it sits on the keyboard, 2
   units in from the edge (`EDGE` = 98), so its border stays inside the canvas.
 - **Corners:** radius `CORNER` = 7. The border takes half its width off each edge, leaving about 4.
@@ -72,13 +78,11 @@ The taegeuk follows the construction of the flag of Korea:
 | Badge | Keys, in key units |
 |---|---|
 | Mode A, JIS | Enter: 1.5 wide on the upper row, 1.25 on the lower (the step is on the left), 2 rows tall |
-| Mode B, US ANSI | Backslash 1.5 × 1, above Enter 2.25 × 1, right edges aligned |
-| Mode C, ISO | Caps Lock 1.75 × 1, above Shift 1.25, the extra key 1 (hollow) and Z 1 |
 
 ### Lettered badges
 
-English-layout modes show letters instead of keys (`lettered()` in `make_logo.py`): the badge's
-text over the lower right of a right-keyed taegeuk, (41, 41, 39). The letters are our own drawing in
+JIS Kana and the English-layout modes show letters instead of keys (`lettered()` in
+`make_logo.py`): the badge's text over the lower right of the disc, (41, 41, 39). The letters are our own drawing in
 the style of a bold neo-grotesque (Helvetica): strokes `LETTER` (6) wide with square ends, mitred
 corners with sharp points flattened (miter limit 2, so A, V and M have flat tips), a low crossbar on
 A, M's middle point on the baseline, and C, G and S ending in horizontal cuts (rectangles masked out
@@ -87,7 +91,7 @@ of the stroke). They're drawn, not taken from a font, so no font license comes i
 Lettered badges are computed as geometry rather than drawn with masks (`lettered()`, with
 [shapely](https://pypi.org/project/shapely/)): each letter's stroke becomes a filled outline (minus
 its cuts), its transparent border is that outline grown by half of `BORDER` (a key's gap), and the
-disc is what's left once the S and the borders are taken out. Any leftover piece of the disc smaller
+disc is what's left once the S, the midpoint gap and the borders are taken out. Any leftover piece of the disc smaller
 than `MIN_PIECE_AREA` or thinner than `MIN_PIECE_THICKNESS` is dropped: the disc shows inside a
 letter only where it comes in from outside (U's opening), never as a sliver or as a piece sealed
 inside a letter's bowl (G, B, D), which read as a stray shape. The SVG is two plain
@@ -102,7 +106,8 @@ Helvetica (A's apex, V's and M's points, K's and Y's arms). Every letter is `LET
 
 `make_logo.py` draws each badge as solid shapes with two masks:
 
-- **`s`**, on the disc only: the S, stroked `S_GAP` wide.
+- **`s`**, on the disc only: the S, stroked `S_GAP` wide and clipped to the left half, and the
+  midpoint gap, a band `MID_GAP` wide.
 - **`borders`**, on everything: each key's outline stroked `BORDER` (6) wide, half outside its
   edge and half inside, and for a hollow key its inside inset by `BORDER`.
 
@@ -111,9 +116,10 @@ alike, which is what makes overlapping borders transparent (rule 3).
 
 ## Drawing a badge for a new mode
 
-1. In `make_logo.py`, add a block to `main()` like Mode B's: pick *u*, build the key outlines with
+1. In `make_logo.py`, add a block to `main()` like Mode A's: pick *u*, build the key outlines with
    `rect(x, y, w, h)` (or `rounded([...points])` for a shape like the ISO Enter), put the disc on
    the side away from the keys, and write it with `badge(title, (cx, cy, r), keys, hollow=[...])`.
+   For a lettered badge, add it to the `lettered()` loop with its text.
 2. Run `python3 make_logo.py` (lettered badges need `pip install shapely`), then look at it at 128, 32 and 16 px on a light and a dark
    background. Check rule 7 above all.
 3. Run `sh render.sh` (needs Google Chrome) to write `mac/Resources/icons/<name>.png` and

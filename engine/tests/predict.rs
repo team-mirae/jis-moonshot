@@ -297,32 +297,26 @@ fn weights_are_clamped() {
     assert_eq!((w.get(Weight::Korean), w.get(Weight::English), w.get(Weight::Hanja)), (10.0, 0.1, 1.0));
 }
 
-// Shift+Z with predictions (spec §6)
+// Shift+Z with predictions (docs/moonshot.md §1: no longer F10)
 
 #[test]
-fn shift_z_skips_ahead_when_the_top_prediction_is_already_f10() {
-    // hello: the top prediction is "hello", exactly what F10 gives, so Shift+Z goes on to HELLO.
-    assert_eq!(typed("KeyH KeyE KeyL KeyL KeyO S-KeyZ").preedit(), "HELLO");
-    // The next Shift+Z steps the cycle once, as F10 does: Hello.
-    assert_eq!(typed("KeyH KeyE KeyL KeyL KeyO S-KeyZ S-KeyZ").preedit(), "Hello");
+fn shift_z_types_kieuk_and_z_with_predictions() {
+    // A key like any other: ㅋ in the Korean reading, Z in the English one. Nothing converts.
+    let e = typed("KeyG KeyK KeyS KeyR KeyM KeyF S-KeyZ");
+    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("한글ㅋ", "gksrmfZ"));
+    assert!(texts("KeyG KeyK KeyS KeyR KeyM KeyF S-KeyZ").iter().any(|t| t == "한글ㅋ"));
     // F10 itself is unchanged.
     assert_eq!(typed("KeyH KeyE KeyL KeyL KeyO F10").preedit(), "hello");
 }
 
 #[test]
-fn shift_z_is_plain_f10_when_the_top_prediction_differs() {
-    // 한글's top prediction is Korean, not gksrmf: Shift+Z is just F10.
-    assert_eq!(typed("KeyG KeyK KeyS KeyR KeyM KeyF S-KeyZ").preedit(), "gksrmf");
-}
-
-#[test]
-fn shift_z_without_a_predictor_is_plain_f10() {
+fn shift_z_without_a_predictor_types_kieuk() {
     let mut e = Engine::new();
-    for code in ["KeyH", "KeyE", "KeyL", "KeyL", "KeyO"] {
+    for code in ["KeyG", "KeyK", "KeyS"] {
         e.key(Key::from_code(code), Mods::NONE);
     }
     e.key(Key::from_code("KeyZ"), Mods::SHIFTED);
-    assert_eq!(e.preedit(), "hello");
+    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("한ㅋ", "gksZ"));
 }
 
 // Mixed words must not take over real Korean
@@ -605,27 +599,11 @@ fn an_implied_l_after_n_is_offered_and_its_weight_0_turns_it_off() {
     assert!(typed("KeyT KeyK KeyF KeyK KeyA").predictions().iter().all(|x| x.kind != Kind::ImpliedL));
 }
 
-/// Mode B (spec §3.6): predictions read the keys as US ANSI, so Shift+2 is @ there, never JIS's ".
+/// The standard 2-set reading (spec §10.2) types the stock JIS symbol: Shift+2 is ".
 #[test]
-fn mode_b_predictions_read_us_symbols() {
-    use jis_korean::Mode;
-    let typed_in = |mode: Mode, keys: &str| {
-        let mut e = Engine::new();
-        e.set_mode(mode);
-        e.set_predictor(Some(predictor()));
-        for token in keys.split_whitespace() {
-            let (mods, code) = match token.strip_prefix("S-") {
-                Some(code) => (Mods::SHIFTED, code),
-                None => (Mods::NONE, token),
-            };
-            e.key(Key::from_code(code), mods);
-        }
-        e.predictions().into_iter().map(|p| p.text).collect::<Vec<_>>()
-    };
-    // The standard 2-set reading (spec §10.2) types the stock keyboard's symbol: " on JIS, @ on US.
-    assert_eq!(typed_in(Mode::A, "KeyG KeyK KeyS S-Digit2"), ["한2", "한\"", "gks2"]);
-    let b = typed_in(Mode::B, "KeyG KeyK KeyS S-Digit2");
-    assert_eq!(b, ["한2", "한@", "gks2"]);
+fn predictions_read_jis_symbols() {
+    let t = texts("KeyG KeyK KeyS S-Digit2");
+    assert_eq!(t, ["한2", "한\"", "gks2"]);
 }
 
 /// Resolving keys (spec §8.3) follows what the shell shows with predictions on: the top prediction,

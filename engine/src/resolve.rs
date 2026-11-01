@@ -36,12 +36,10 @@ pub fn parse_press(text: &str) -> Option<Press> {
 }
 
 /// What the key types on its own, in the engine's mode: a jamo or a character. None when it types
-/// nothing by itself (F-keys, Space, Shift+Z, which is F10), or when the press isn't a key.
+/// nothing by itself (F-keys, Space), or when the press isn't a key. Shift+Z is ㅋ (it's no longer
+/// F10, docs/moonshot.md §1).
 pub fn key_input(template: &Engine, press: &str) -> Option<String> {
     let p = parse_press(press)?;
-    if p.key == Key::KeyZ && p.shift {
-        return None;
-    }
     output_with(template.mode(), template.dedicated_symbols(), Layout::JisKorean, p.key, p.shift).map(|out| out.char().to_string())
 }
 
@@ -183,9 +181,10 @@ fn search(
 }
 
 /// The presses a search for `text` tries, plain before Shift: the keys whose character (in the
-/// mode's layout) or letter is part of `text`, F6, and only where `text` needs them F7 (hanja), F9 (full-width), F10 (letters), Space
-/// and Enter. Backspace, Esc, the arrows, Tab and Shift+Enter are left out: they never shorten a way
-/// to type something.
+/// mode's layout) or letter is part of `text`, Shift+Enter (commit, before a bare jamo), and only
+/// where `text` needs them Shift+F7 (hanja), F9 (full-width), F10 (letters), Space and Enter.
+/// Backspace, Esc, the arrows and Tab are left out: they never shorten a way to type something.
+/// F6 and F7 switch to kana (docs/moonshot.md §4), which no Korean or English text needs.
 fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> {
     let (mode, symbols) = (template.mode(), template.dedicated_symbols());
     let wanted: std::collections::HashSet<char> = targets.iter().flatten().copied().collect();
@@ -201,9 +200,10 @@ fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> 
         }));
     }
     let has = |f: &dyn Fn(char) -> bool| text.chars().any(f);
-    let mut keys = vec![Key::F6];
+    let mut keys = vec![];
+    presses.push(Press { key: Key::Enter, shift: true });
     if has(&is_hanja) {
-        keys.push(Key::F7);
+        presses.push(Press { key: Key::F7, shift: true });
     }
     if has(&|c| crate::half_width(c) != c) {
         keys.push(Key::F9);
@@ -241,7 +241,7 @@ impl Field {
     /// A key that types nothing in the current layout would pass through to the app, whose text
     /// we can't know: those aren't pressed.
     fn can_press(&self, p: Press) -> bool {
-        matches!(p.key, Key::F6 | Key::F7 | Key::F9 | Key::F10 | Key::Space | Key::Enter)
+        matches!(p.key, Key::F9 | Key::F10 | Key::Space | Key::Enter) || (p.key == Key::F7 && p.shift)
             || output_with(self.engine.mode(), self.engine.dedicated_symbols(), Layout::JisKorean, p.key, p.shift).is_some()
     }
 
@@ -277,13 +277,15 @@ impl Field {
         }
     }
 
-    /// Whether a press changed nothing (F6 with nothing staged, F9 with no word, …): such presses
+    /// Whether a press changed nothing (Shift+Enter with nothing staged, F9 with no word, …): such presses
     /// aren't a way to type anything, so searches skip them.
     fn same_as(&self, before: &Field) -> bool {
         self.committed == before.committed
             && self.engine.preedit() == before.engine.preedit()
             && self.engine.english() == before.engine.english()
             && self.engine.hanja_open() == before.engine.hanja_open()
+            && self.engine.mode() == before.engine.mode()
+            && self.engine.script() == before.engine.script()
             && !self.engine.hanja_open()
     }
 

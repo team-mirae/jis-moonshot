@@ -233,6 +233,7 @@ impl Composer {
 
     /// Where the current syllable's vowel starts, if that syllable has an implied ㅇ and no
     /// final yet. F6 then drops the ㅇ by putting a bare marker at that position.
+    #[allow(dead_code)]
     pub fn implied_at(&self) -> Option<usize> {
         self.implied_at
     }

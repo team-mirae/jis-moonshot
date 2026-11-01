@@ -10,7 +10,7 @@ source = root / "mac" / "Resources" / "icons"
 out = root / "windows" / "icons"
 out.mkdir(exist_ok=True)
 
-for name in ("taegeuk",):
+for name in ("moonshot",):
     images = [(source / f"{name}.png").read_bytes(), (source / f"{name}@2x.png").read_bytes()]
     header = struct.pack("<HHH", 0, 1, len(images))
     entries = b""

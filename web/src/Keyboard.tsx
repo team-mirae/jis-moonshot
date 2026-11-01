@@ -15,33 +15,14 @@ const ROWS: Row[] = [
   { offset: 1.25, codes: [..."ZXCVBNM"].map((l) => "Key" + l).concat("Comma", "Period", "Slash", "IntlRo") },
 ];
 
+// F6 / F7 show the staged keys as hiragana / katakana; Shift+F7 is the hanja list.
 const FUNCTION_KEYS: Record<string, { label: string; planned?: boolean }> = {
-  F6: { label: "한글" },
-  F7: { label: "한자" },
+  F6: { label: "ひら" },
+  F7: { label: "カナ" },
   F8: { label: "—" },
   F9: { label: "전각" },
   F10: { label: "반각" },
 };
-
-// Mode B (spec §3.6): the same area on US ANSI, laid out as on a MacBook: ` left of 1, \ (1.5 keys)
-// right of ], and each row's offset after Tab, Caps Lock and Shift.
-const ANSI_ROWS: Row[] = [
-  { offset: 6, codes: ["F6", "F7", "F8", "F9", "F10"] },
-  { offset: 0, codes: ["Backquote", ...ROWS[1].codes.slice(0, 12)] },
-  { offset: 1.5, codes: [..."QWERTYUIOP"].map((l) => "Key" + l).concat("BracketLeft", "BracketRight", "Backslash") },
-  { offset: 1.75, codes: [..."ASDFGHJKL"].map((l) => "Key" + l).concat("Semicolon", "Quote") },
-  { offset: 2.25, codes: [..."ZXCVBNM"].map((l) => "Key" + l).concat("Comma", "Period", "Slash") },
-];
-
-// Mode C (spec §3.6): the same area on UK ISO: ` left of 1, # left of Enter, and the extra key
-// between a short left Shift and Z.
-const ISO_ROWS: Row[] = [
-  { offset: 6, codes: ["F6", "F7", "F8", "F9", "F10"] },
-  { offset: 0, codes: ["Backquote", ...ROWS[1].codes.slice(0, 12)] },
-  { offset: 1.5, codes: [..."QWERTYUIOP"].map((l) => "Key" + l).concat("BracketLeft", "BracketRight") },
-  { offset: 1.75, codes: [..."ASDFGHJKL"].map((l) => "Key" + l).concat("Semicolon", "Quote", "Backslash") },
-  { offset: 1.25, codes: ["IntlBackslash", ..."ZXCVBNM".split("").map((l) => "Key" + l), "Comma", "Period", "Slash"] },
-];
 
 // The editing keys, under the board, so a touch screen (no physical keyboard) can type spaces,
 // delete and start new lines. Shift is the toggle beside the typing area.
@@ -51,15 +32,9 @@ const EDIT_KEYS: { code: string; label: string; name: string }[] = [
   { code: "Enter", label: "⏎", name: "Enter" },
 ];
 
-const BOARDS = [
-  { rows: ROWS, className: "", label: "JIS Korean keyboard" },
-  { rows: ANSI_ROWS, className: " ansi", label: "JIS Korean for US ANSI keyboard" },
-  { rows: ISO_ROWS, className: " iso", label: "JIS Korean for UK ISO keyboard" },
-];
-
 interface Props {
   engine: Engine;
-  /** The mode: 0 = Mode A (JIS board), 1 = Mode B (US ANSI), 2 = Mode C (UK ISO). */
+  /** The mode: 0 = Mode A (JIS Moonshot), 11 = JIS Kana. Both use the JIS board. */
   mode: number;
   shift: boolean;
   pressed: Set<string>;
@@ -69,17 +44,15 @@ interface Props {
 }
 
 export function Keyboard({ engine, mode, shift, pressed, floating, onPress }: Props) {
-  const board = BOARDS[mode] ?? BOARDS[0];
   return (
-    <div className={"board" + board.className + (floating ? " floating" : "")}>
-      <div className="plate" role="group" aria-label={board.label}>
-        {board.rows.map((row, i) => (
+    <div className={"board" + (floating ? " floating" : "")}>
+      <div className="plate" role="group" aria-label={mode === 11 ? "JIS Kana keyboard" : "JIS Moonshot keyboard"}>
+        {ROWS.map((row, i) => (
           <div key={i} className={"row" + (i === 0 ? " fn-row" : "")} style={{ "--offset": row.offset } as CSSProperties}>
             {row.codes.map((code) => {
               const fn = FUNCTION_KEYS[code];
               const base = fn ? code : engine.legend(code, false);
-              // Shift+Z is F10 (half-width letters).
-              const shifted = fn ? fn.label : code === "KeyZ" ? "반각" : engine.legend(code, true);
+              const shifted = fn ? fn.label : engine.legend(code, true);
               const letter = code.startsWith("Key") ? code.slice(3) : "";
               const className = [
                 "key",
@@ -88,7 +61,6 @@ export function Keyboard({ engine, mode, shift, pressed, floating, onPress }: Pr
                 !letter && !fn && "sym",
                 pressed.has(code) && "down",
                 (code === "KeyF" || code === "KeyJ") && "home",
-                mode === 1 && code === "Backslash" && "wide",
               ]
                 .filter(Boolean)
                 .join(" ");

@@ -19,8 +19,8 @@ struct AttributeSpec {
 // Unconfirmed text: a solid underline, as on macOS. A reading shown in its place (a hanja
 // candidate, a prediction): a thick one. Colors are the app's (TF_CT_NONE).
 constexpr AttributeSpec kAttributes[] = {
-    {&kDisplayAttributeInput, L"JIS Korean unconfirmed text", TF_LS_SOLID, FALSE, TF_ATTR_INPUT},
-    {&kDisplayAttributeConverted, L"JIS Korean reading shown", TF_LS_SOLID, TRUE,
+    {&kDisplayAttributeInput, L"JIS Moonshot unconfirmed text", TF_LS_SOLID, FALSE, TF_ATTR_INPUT},
+    {&kDisplayAttributeConverted, L"JIS Moonshot reading shown", TF_LS_SOLID, TRUE,
      TF_ATTR_TARGET_CONVERTED},
 };
 constexpr ULONG kCount = ARRAYSIZE(kAttributes);

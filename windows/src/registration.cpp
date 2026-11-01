@@ -22,7 +22,7 @@ struct ProfileInfo {
 
 // One Korean keyboard (ko-KR); the mode is a setting. The logo is the DLL's first icon (index 0).
 constexpr ProfileInfo kProfiles[] = {
-    {&kProfile, L"JIS Korean", IDS_PROFILE},
+    {&kProfile, L"JIS Moonshot", IDS_PROFILE},
 };
 
 // As FKeyIME and Mozc register (FKeyIME docs/issues/settings-doesnt-list-fkeyime.md).
@@ -37,7 +37,7 @@ const GUID* const kCategories[] = {
     &GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT,
 };
 
-constexpr wchar_t kDescription[] = L"JIS Korean";
+constexpr wchar_t kDescription[] = L"JIS Moonshot";
 
 void ClsidKeyPath(wchar_t* path, size_t size) {
     wchar_t clsid[39];

@@ -1,8 +1,9 @@
-# Installs or removes the JIS Korean TIP on this PC (development install; needs admin, so it
-# re-launches itself elevated). Other input methods and the rest of the language list are left
-# as they are.
-#   tools/install.ps1              copy build/<arch>/jiskorean.dll, register x64 + x86, add JIS
-#                                  Korean to the Korean language's keyboards
+# Installs or removes the JIS Moonshot TIP on this PC (development install; needs admin, so it
+# re-launches itself elevated). Other input methods (JIS Korean included: it installs beside it)
+# and the rest of the language list are left as they are. Predictive typing isn't accepted for
+# you: the indicator's menu asks (docs/moonshot.md §6).
+#   tools/install.ps1              copy build/<arch>/jismoonshot.dll, register x64 + x86, add JIS
+#                                  Moonshot to the Korean language's keyboards
 #   tools/install.ps1 -Update      copy a new build over the installed one, no elevation (the
 #                                  install folder is writable by the user who installed it)
 #   tools/install.ps1 -Uninstall   undo all of it
@@ -16,37 +17,37 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path "$PSScriptRoot\.."
-$dest = "$env:ProgramFiles\JIS Korean"
-$data = "$env:ProgramData\JIS Korean"
-$clsid = '{D10651AD-51EA-4DBA-8BFF-1905261B26A1}'
-$tip = "0412:$clsid{669E0E87-FA58-46F6-96E1-0890A0224404}"
+$dest = "$env:ProgramFiles\JIS Moonshot"
+$data = "$env:ProgramData\JIS Moonshot"
+$clsid = '{EC381A55-0AD1-42DF-BBAB-AF4F34F90C1C}'
+$tip = "0412:$clsid{42BB462F-CA66-4FD0-9289-951EAE5C4BB3}"
 
 function Copy-Dlls {
     foreach ($arch in 'x64', 'x86') {
         New-Item "$dest\$arch" -ItemType Directory -Force | Out-Null
-        $target = "$dest\$arch\jiskorean.dll"
-        Get-ChildItem "$dest\$arch" -Filter 'jiskorean.dll.old-*' | Remove-Item -Force -ErrorAction SilentlyContinue
+        $target = "$dest\$arch\jismoonshot.dll"
+        Get-ChildItem "$dest\$arch" -Filter 'jismoonshot.dll.old-*' | Remove-Item -Force -ErrorAction SilentlyContinue
         if (Test-Path $target) {
             # A process with the TIP loaded keeps the file open, but it can be renamed: move it
             # aside so new processes load the new build.
             try { Remove-Item $target -Force } catch {
-                Rename-Item $target "jiskorean.dll.old-$(Get-Date -f yyyyMMddHHmmssfff)"
+                Rename-Item $target "jismoonshot.dll.old-$(Get-Date -f yyyyMMddHHmmssfff)"
             }
         }
-        Copy-Item "$root\build\$arch\jiskorean.dll" "$dest\$arch\"
+        Copy-Item "$root\build\$arch\jismoonshot.dll" "$dest\$arch\"
     }
 }
 
 if ($Update) {
     Copy-Dlls
-    Write-Host "Updated $dest (apps load it when they next start or activate JIS Korean)"
+    Write-Host "Updated $dest (apps load it when they next start or activate JIS Moonshot)"
     return
 }
 
 if ($Log) {
-    New-Item 'HKCU:\Software\JIS Korean' -Force -ErrorAction SilentlyContinue | Out-Null
-    Set-ItemProperty 'HKCU:\Software\JIS Korean' DiagnosticLog 1 -Type DWord
-    Get-Content "$data\jiskorean.log" -Tail 40 -Wait -Encoding utf8
+    New-Item 'HKCU:\Software\JIS Moonshot' -Force -ErrorAction SilentlyContinue | Out-Null
+    Set-ItemProperty 'HKCU:\Software\JIS Moonshot' DiagnosticLog 1 -Type DWord
+    Get-Content "$data\jismoonshot.log" -Tail 40 -Wait -Encoding utf8
     return
 }
 
@@ -94,8 +95,8 @@ trap { Write-Host $_ -ForegroundColor Red; Stop-Transcript | Out-Null; exit 1 }
 if ($Uninstall) {
     foreach ($arch in 'x64', 'x86') {
         $regsvr = if ($arch -eq 'x64') { 'System32' } else { 'SysWOW64' }
-        if (Test-Path "$dest\$arch\jiskorean.dll") {
-            & "$env:SystemRoot\$regsvr\regsvr32.exe" /s /u "$dest\$arch\jiskorean.dll"
+        if (Test-Path "$dest\$arch\jismoonshot.dll") {
+            & "$env:SystemRoot\$regsvr\regsvr32.exe" /s /u "$dest\$arch\jismoonshot.dll"
         }
     }
     foreach ($key in "HKLM:\SOFTWARE\Microsoft\CTF\TIP\$clsid", "HKLM:\SOFTWARE\Classes\CLSID\$clsid",
@@ -122,9 +123,9 @@ foreach ($f in "$root\..\engine\dict\LICENSE-libhangul-hanja.txt", "$root\..\eng
                "$root\..\LICENSE") {
     Copy-Item $f $dest -Force
 }
-& "$env:SystemRoot\System32\regsvr32.exe" /s "$dest\x64\jiskorean.dll"
+& "$env:SystemRoot\System32\regsvr32.exe" /s "$dest\x64\jismoonshot.dll"
 if ($LASTEXITCODE) { throw "regsvr32 x64 failed ($LASTEXITCODE)" }
-& "$env:SystemRoot\SysWOW64\regsvr32.exe" /s "$dest\x86\jiskorean.dll"
+& "$env:SystemRoot\SysWOW64\regsvr32.exe" /s "$dest\x86\jismoonshot.dll"
 if ($LASTEXITCODE) { throw "regsvr32 x86 failed ($LASTEXITCODE)" }
 Write-Host "Registered $dest"
 Stop-Transcript | Out-Null

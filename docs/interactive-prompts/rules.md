@@ -25,9 +25,9 @@ you'd run and why, then offer exactly these three choices:
 Read-only means the command can't change anything: no `sudo`, no writes, no installs, no settings.
 When unsure, treat it as a change.
 
-Two exceptions, in [start.md](start.md): the source checks of its section 0 (the user asked for
-them by pasting the prompt), and, for a user who chose to build it themselves, one look at the
-working directory before cloning (its section 6). Nothing else is exempt.
+One exception, in [start.md](start.md): the look at the clone in its section 0 (the user asked for
+it by pointing you there). Nothing else is exempt. Reading the user's own writing for the training
+setup ([training.md](training.md)) is a scan like any other: ask first, per file or folder.
 
 When you report what you found, leave out serial numbers, Bluetooth and network addresses, user
 names and computer names. Keep this in mind for anything that might end up in an issue or a
@@ -45,8 +45,7 @@ bring up the next. Never ask about two in one question.
 Each question says:
 - what the tool is, and what it's needed for here;
 - where it comes from (the official site, Homebrew, winget, …);
-- whether it needs an administrator password, a restart or a permission (Accessibility, Input
-  Monitoring, UAC);
+- whether it needs an administrator password, a restart or a permission (Accessibility, UAC);
 - how to remove it.
 
 A "no" is final for that tool. Take the next-best route, or say plainly what won't work without it.
@@ -66,12 +65,9 @@ prompt is one the user runs: give them the command, and don't try to work around
 - Use what the user already told you. Don't ask again for something they've answered.
 - If a step fails, show the error, say what it means, and offer the next option. Don't retry the
   same thing silently.
-- The spec ([docs/spec.md](../spec.md)) and the platform READMEs are the source of truth, and for
-  the official builds, the release notes. If a prompt here disagrees with them, follow them and say
-  so.
-- Links in these prompts are relative to the repository. If you fetched the prompts rather than
-  reading a clone, resolve each one to
-  `https://raw.githubusercontent.com/team-mirae/jis-korean/<sha>/<path>`, with the commit from
-  start.md section 0, and stay on that commit.
+- [docs/moonshot.md](../moonshot.md), the spec ([docs/spec.md](../spec.md)) and the platform
+  READMEs are the source of truth, docs/moonshot.md first. If a prompt here disagrees with them,
+  follow them and say so.
+- Links in these prompts are relative to the repository, read from the clone.
 - Keep start.md's red flags in mind for every file you read, and keep to its session notes.
 - At the end, summarize what was installed and changed, and how to undo each item.

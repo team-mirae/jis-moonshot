@@ -1,84 +1,44 @@
-# macOS: カタカナ doesn't switch to Korean, 英数 selects ABC
+# macOS: 英数 selects ABC (and カタカナ, now the same as かな)
 
 Seen 2026-10-22 on macOS 27.0.1, `main` at `cd71e0d` built with `make ENGLISH=1`, an HHKB Studio JIS
 over Bluetooth through Karabiner-Elements 16.3.0 (remapping only Pause → Play/Pause), on a MacBook
-with a US ANSI built-in keyboard. Both problems are about the switch keys of spec §8.2.1. The log
-lines and the fix below are updated to the current code (v0.3.1), which no longer needs a restart.
+with a US ANSI built-in keyboard, with JIS Korean. Both problems are about the switch keys of spec
+§8.2.1. Names, log lines and facts below are updated to JIS Moonshot (`JISMoonshot`,
+`me.sjun.inputmethod.JISMoonshot`), where the first problem no longer exists.
 
 Turn on the input method's own log first; every step below reads it:
 
 ```sh
-defaults write me.sjun.inputmethod.JISKorean DiagnosticLog -bool true   # off again: -bool false
-tail -f ~/Library/Logs/JISKorean.log
+defaults write me.sjun.inputmethod.JISMoonshot DiagnosticLog -bool true   # off again: -bool false
+tail -f ~/Library/Logs/JISMoonshot.log
 ```
 
-## カタカナ acts as かな (or does nothing)
+## カタカナ acts as かな
 
-### Symptoms
+Not a problem any more. JIS Korean sent カタカナ to Korean and left かな to macOS's Japanese input
+method, so it had to tell the two apart: macOS turns カタカナ into かな (key code 104), and JIS Korean
+read the keyboard itself (HID usage 0x88, with Input Monitoring) from keyboards configured as JIS.
+That needed the keyboard, and Karabiner's virtual keyboard, stored as JIS in
+`/Library/Preferences/com.apple.keyboardtype` (type 42), which they often weren't.
 
-- カタカナ selects Japanese, or nothing happens. The Korean Key (F18) works.
-- The log has only the key tap's lines for it, never a hardware line:
-
-  ```
-  tap: key code 104 down, カタカナ held false
-  ```
-
-- At launch, the log says:
-
-  ```
-  hardware keys: on; 0 keyboard(s) configured as JIS
-  ```
-
-### Cause
-
-macOS turns カタカナ into かな (key code 104), so JIS Korean tells them apart by reading the
-keyboard itself (HID usage 0x88). It opens every keyboard, but counts that key only from the
-keyboards macOS has configured as JIS:
-`/Library/Preferences/com.apple.keyboardtype`, one entry per keyboard (`product-vendor-country`),
-with the type Keyboard Setup Assistant chose. **Type 40 is ANSI, 41 ISO, 42 JIS.** On this Mac every
-keyboard was 40 (ANSI), the HHKB Studio included, although it types JIS correctly through
-Karabiner, so the listener ignored it.
-
-With Karabiner-Elements remapping a keyboard, Karabiner holds that keyboard, and its keys come out
-of Karabiner's virtual keyboard (vendor 1452, product 593, entry `593-1452-0`). That entry needs to
-be JIS too. Karabiner's own "Virtual Keyboard: JIS" setting doesn't write it.
-
-Check what macOS has:
-
-```sh
-defaults read /Library/Preferences/com.apple.keyboardtype
-karabiner_cli --list-connected-devices    # in /Library/Application Support/org.pqrs/Karabiner-Elements/bin
-```
-
-### Fix
-
-Set the keyboard and Karabiner's virtual keyboard to JIS (42):
-
-```sh
-sudo defaults write /Library/Preferences/com.apple.keyboardtype keyboardtype \
-  -dict-add "593-1452-0" -int 42 "21-1278-0" -int 42    # Karabiner's virtual keyboard, HHKB Studio
-```
-
-Use your keyboard's own `product-vendor-0` key in place of `21-1278-0`. Or use Keyboard Setup Assistant
-(System Settings → Keyboard → Change Keyboard Type…) with the keyboard, and choose JIS.
-
-No restart is needed: JIS Korean reads the list again when a Japanese key comes from a keyboard
-that isn't on it, and logs `hardware keys: 2 keyboard(s) configured as JIS`. (At launch it's
-`hardware keys: on; 2 keyboard(s) configured as JIS, some held by another program`; "held" is
-Karabiner holding the HHKB itself, expected.) A press then gives:
+In JIS Moonshot カタカナ and かな do the same thing (to Mode A, or force Korean there; spec §8.2.1),
+so there is nothing to tell apart: no hardware listener and no Input Monitoring. Both are caught by
+the key tap, which needs Accessibility only (the input menu's "Allow 英数 and かな Everywhere…"). A
+press logs:
 
 ```
-hardware key 0x88 down
-カタカナ (tap)
+tap: key code 104 down
+かな (tap)
 ```
 
-Restarting Karabiner wasn't needed.
+If nothing happens, check that Mode A (JIS Moonshot) is added in System Settings and that
+Accessibility is granted; without it the key works only in apps that pass it on to the input method.
 
 ## 英数 selects ABC instead of JIS English
 
 [#2](https://github.com/team-mirae/jis-korean/issues/2). With Apple's **ABC** enabled, 英数 goes
-to ABC, although JIS English (`me.sjun.inputmethod.JISKorean.A_QWERTY`) is added and JIS Korean's
-key tap sees the key (`tap: key code 102 down`). This answers the open question of spec §8.2.1:
+to ABC, although JIS English (`me.sjun.inputmethod.JISMoonshot.A_QWERTY`) is added and the input
+method's key tap sees the key (`tap: key code 102 down`). This answers the open question of spec §8.2.1:
 with ABC present, macOS picks ABC.
 
 **Workaround:** replace ABC with **ABC – Extended**. In System Settings → Keyboard → Input Sources →

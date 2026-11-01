@@ -16,6 +16,8 @@ pub struct JkEngine {
     counts: Counts,
     /// The last resolve call's answer (spec §8.3).
     resolved: String,
+    /// The last `jk_kana_*` answer.
+    kana: String,
     #[cfg(feature = "predict")]
     predictions: Vec<crate::predict::Prediction>,
     /// The learner's last export (spec §10.11).
@@ -61,6 +63,7 @@ pub extern "C" fn jk_new() -> *mut JkEngine {
         last: Output::default(),
         counts: Counts::default(),
         resolved: String::new(),
+        kana: String::new(),
         #[cfg(feature = "predict")]
         predictions: Vec::new(),
         #[cfg(feature = "predict")]
@@ -117,8 +120,16 @@ pub extern "C" fn jk_set_enter_commits(handle: *mut JkEngine, on: u32) {
     with(handle, (), |h| h.engine.set_enter_commits(on != 0))
 }
 
-/// The mode, by id (spec §3.6.1): 0 = Mode A (JIS), 1 = Mode B (US ANSI), 2 = Mode C (UK ISO).
-/// Returns 1 if it switched, or 0 for an id this build doesn't have, keeping the current mode.
+/// ⌥Space (docs/moonshot.md §4): 1 types a full-width space in Mode A and JIS Kana, `_` in the
+/// English modes. Off (0) by default: Alt+Space is Windows' window menu.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_set_option_space(handle: *mut JkEngine, on: u32) {
+    with(handle, (), |h| h.engine.set_option_space(on != 0))
+}
+
+/// The mode, by id (spec §3.6.1, docs/moonshot.md §2): 0 = Mode A (JIS Moonshot), 3, 7, 8 = the
+/// English modes, 11 = JIS Kana. Returns 1 if it switched, or 0 for an id this build doesn't have
+/// (retired ids 1, 2, 9, 10 included), keeping the current mode.
 #[unsafe(no_mangle)]
 pub extern "C" fn jk_set_mode(handle: *mut JkEngine, mode: u32) -> u32 {
     with(handle, 0, |h| match Mode::from_id(mode) {
@@ -127,6 +138,31 @@ pub extern "C" fn jk_set_mode(handle: *mut JkEngine, mode: u32) -> u32 {
             1
         }
         None => 0,
+    })
+}
+
+/// The engine's mode now, by id. The engine changes it itself (F6 and F7 to JIS Kana, the かな
+/// key back to Mode A): shells read it after `jk_key` and `jk_kana_key` and follow it.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_mode(handle: *mut JkEngine) -> u32 {
+    with(handle, 0, |h| h.engine.mode().id())
+}
+
+/// How the staged keys show (`JK_SCRIPT_*`): 0 auto (the top prediction), 1 Korean (forced),
+/// 2 hiragana, 3 katakana.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_script(handle: *mut JkEngine) -> u32 {
+    with(handle, 0, |h| h.engine.script().id())
+}
+
+/// The かな / 変換 key (docs/moonshot.md §4): from an English mode to Mode A; in Mode A, forces the
+/// staged keys' Korean reading; from JIS Kana to Mode A, forced Korean. Always consumed: returns 1,
+/// or [`JK_RESULT_ERROR`]. Apply the commit and preedit, then read `jk_mode`.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_kana_key(handle: *mut JkEngine) -> u32 {
+    with_or(handle, 1, JK_RESULT_ERROR, |h| {
+        h.last = h.engine.kana_key();
+        1
     })
 }
 
@@ -177,11 +213,11 @@ pub extern "C" fn jk_mode_code_len(mode: u32) -> usize {
 }
 
 /// Whether a mode is an English mode (spec §3.6.2): it types its letters and stock symbols, composes
-/// nothing and consumes no key, so a shell types its keys from [`jk_legend_in`]. 0 for the Korean
-/// modes and for an unknown id.
+/// nothing and consumes no key, so a shell types its keys from [`jk_legend_in`]. 0 for Mode A,
+/// JIS Kana (`A_KANA`) and an unknown id.
 #[unsafe(no_mangle)]
 pub extern "C" fn jk_mode_is_english(mode: u32) -> u32 {
-    Mode::from_id(mode).is_some_and(|m| !m.is_korean()) as u32
+    Mode::from_id(mode).is_some_and(Mode::is_english) as u32
 }
 
 #[unsafe(no_mangle)]
@@ -436,6 +472,24 @@ pub extern "C" fn jk_english_len(handle: *mut JkEngine) -> usize {
     with(handle, 0, |h| h.last.english.len())
 }
 
+/// The staged keys read as kana, in hiragana (docs/moonshot.md §5), whatever the script. Valid
+/// until the next call on this handle.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_kana_ptr(handle: *mut JkEngine) -> *const u8 {
+    with(handle, std::ptr::null(), |h| {
+        h.kana = h.engine.kana();
+        h.kana.as_ptr()
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_kana_len(handle: *mut JkEngine) -> usize {
+    with(handle, 0, |h| {
+        h.kana = h.engine.kana();
+        h.kana.len()
+    })
+}
+
 /// Discards everything unconfirmed without committing it.
 #[unsafe(no_mangle)]
 pub extern "C" fn jk_clear(handle: *mut JkEngine) {
@@ -607,6 +661,42 @@ mod predict_ffi {
         guard(std::ptr::null_mut(), || match (std::str::from_utf8(k), std::str::from_utf8(e)) {
             (Ok(k), Ok(e)) => Box::into_raw(Box::new(JkPredictor(Arc::new(base.0.with_avoided(k, e))))),
             _ => std::ptr::null_mut(),
+        })
+    }
+
+    /// A new predictor: `base` with Japanese words for the kana reading (docs/moonshot.md §5):
+    /// `predict/common-ja.txt`, or a training file's `vocabulary.japanese`, UTF-8 lines of `word` or
+    /// `word<TAB>count` and `#!particles` lines. `base` stays valid and unchanged. Null if `base` is
+    /// null or the text isn't UTF-8.
+    ///
+    /// # Safety
+    /// As [`jk_predictor_with_words`].
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn jk_predictor_with_japanese(base: *const JkPredictor, words: *const u8, words_len: usize) -> *mut JkPredictor {
+        // SAFETY: per the contract above.
+        let Some(base) = (unsafe { base.as_ref() }) else { return std::ptr::null_mut() };
+        // SAFETY: per the contract above.
+        let w = unsafe { text(words, words_len) }.unwrap_or(&[]);
+        guard(std::ptr::null_mut(), || match std::str::from_utf8(w) {
+            Ok(w) => Box::into_raw(Box::new(JkPredictor(Arc::new(base.0.with_japanese_words(w))))),
+            Err(_) => std::ptr::null_mut(),
+        })
+    }
+
+    /// A new predictor: `base` with Japanese words the user never means (a training file's
+    /// `avoid.japanese`), lines of `word` or `word<TAB>strong`. As [`jk_predictor_with_japanese`].
+    ///
+    /// # Safety
+    /// As [`jk_predictor_with_words`].
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn jk_predictor_with_avoided_japanese(base: *const JkPredictor, words: *const u8, words_len: usize) -> *mut JkPredictor {
+        // SAFETY: per the contract above.
+        let Some(base) = (unsafe { base.as_ref() }) else { return std::ptr::null_mut() };
+        // SAFETY: per the contract above.
+        let w = unsafe { text(words, words_len) }.unwrap_or(&[]);
+        guard(std::ptr::null_mut(), || match std::str::from_utf8(w) {
+            Ok(w) => Box::into_raw(Box::new(JkPredictor(Arc::new(base.0.with_avoided_japanese(w))))),
+            Err(_) => std::ptr::null_mut(),
         })
     }
 

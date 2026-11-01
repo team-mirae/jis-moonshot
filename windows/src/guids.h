@@ -1,38 +1,40 @@
-// JIS Korean identifiers. These GUIDs are permanent: they end up in users' registries and
-// language lists (InputMethodTips "0412:{CLSID}{PROFILE}"). Never change them.
+// JIS Moonshot identifiers. These GUIDs are permanent: they end up in users' registries and
+// language lists (InputMethodTips "0412:{CLSID}{PROFILE}"). Never change them. They are JIS
+// Moonshot's own, not JIS Korean's, so the two install side by side (docs/moonshot.md §7);
+// kLangBarItemInputMode and kPropInputScope are Windows' and stay as they are.
 #pragma once
 
 #include <guiddef.h>
 
 namespace jk {
 
-// The TIP's COM class. {D10651AD-51EA-4DBA-8BFF-1905261B26A1}
+// The TIP's COM class. {EC381A55-0AD1-42DF-BBAB-AF4F34F90C1C}
 inline constexpr GUID kClsidTextService = {
-    0xd10651ad, 0x51ea, 0x4dba, {0x8b, 0xff, 0x19, 0x05, 0x26, 0x1b, 0x26, 0xa1}};
+    0xec381a55, 0x0ad1, 0x42df, {0xbb, 0xab, 0xaf, 0x4f, 0x34, 0xf9, 0x0c, 0x1c}};
 
 // The one language profile, ko-KR. The mode (spec §3.6) is a setting in its menu, not a profile
-// per mode as on macOS (spec §8.4). {669E0E87-FA58-46F6-96E1-0890A0224404}
+// per mode as on macOS (spec §8.4). {42BB462F-CA66-4FD0-9289-951EAE5C4BB3}
 inline constexpr GUID kProfile = {
-    0x669e0e87, 0xfa58, 0x46f6, {0x96, 0xe1, 0x08, 0x90, 0xa0, 0x22, 0x44, 0x04}};
+    0x42bb462f, 0xca66, 0x4fd0, {0x92, 0x89, 0x95, 0x1e, 0xae, 0x5c, 0x4b, 0xb3}};
 
 // The input indicator's mode button (Windows 8+). The SDK headers don't declare it; the value is
 // Windows' own (as in Microsoft's SampleIME). {2C77A81E-41CC-4178-A3A7-5F8A987568E6}
 inline constexpr GUID kLangBarItemInputMode = {
     0x2c77a81e, 0x41cc, 0x4178, {0xa3, 0xa7, 0x5f, 0x8a, 0x98, 0x75, 0x68, 0xe6}};
 
-// Display attribute of unconfirmed text (underline). {9C43BCAF-FECF-4CFA-8E70-F10D48C7F946}
+// Display attribute of unconfirmed text (underline). {DAE8D0C3-482D-4624-976F-06C5BCD6C882}
 inline constexpr GUID kDisplayAttributeInput = {
-    0x9c43bcaf, 0xfecf, 0x4cfa, {0x8e, 0x70, 0xf1, 0x0d, 0x48, 0xc7, 0xf9, 0x46}};
+    0xdae8d0c3, 0x482d, 0x4624, {0x97, 0x6f, 0x06, 0xc5, 0xbc, 0xd6, 0xc8, 0x82}};
 
 // Display attribute of a reading shown in place of the typed one: a hanja candidate or a
-// prediction (thick underline). {49F0833E-36C7-4BEA-9D67-78A9382AED58}
+// prediction (thick underline). {11816B59-0283-4416-975C-78128F1D21DC}
 inline constexpr GUID kDisplayAttributeConverted = {
-    0x49f0833e, 0x36c7, 0x4bea, {0x9d, 0x67, 0x78, 0xa9, 0x38, 0x2a, 0xed, 0x58}};
+    0x11816b59, 0x0283, 0x4416, {0x97, 0x5c, 0x78, 0x12, 0x8f, 0x1d, 0x21, 0xdc}};
 
 // Global compartment (shared by every app in the session, never stored): nonzero while 한/영 has
-// switched JIS Korean to English. {51678EF8-4A49-4832-A994-AC88AB0F76A6}
+// switched JIS Moonshot to English. {0F89DFD1-CCEB-4DB1-B2E0-1DC728F09D2B}
 inline constexpr GUID kCompartmentEnglish = {
-    0x51678ef8, 0x4a49, 0x4832, {0xa9, 0x94, 0xac, 0x88, 0xab, 0x0f, 0x76, 0xa6}};
+    0x0f89dfd1, 0xcceb, 0x4db1, {0xb2, 0xe0, 0x1d, 0xc7, 0x28, 0xf0, 0x9d, 0x2b}};
 
 // The text property holding a field's input scopes (InputScope.h's GUID_PROP_INPUTSCOPE, which
 // no import library defines). {1713DD5A-68E7-4A5B-9AF6-592A595C778D}

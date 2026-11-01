@@ -28,43 +28,29 @@ pub enum Layout {
     Escaped,
 }
 
-/// A mode: one keyboard's key map (spec §3.6). Every mode shares the letter keys, which always
-/// type standard 2-set (the core principle); a mode only says what the other keys type.
+/// A mode: one keyboard's key map (spec §3.6, docs/moonshot.md §2). JIS Moonshot is JIS only: the
+/// predictive Mode A, the `A_` English modes, and kana typing (`A_KANA`).
 ///
 /// Each variant carries its id as its discriminant (spec §3.6.1). Ids have gaps and a build has
 /// only some modes, so nothing may assume they run from 0: look them up with [`Mode::from_id`] and
-/// list them with [`Mode::ALL`].
+/// list them with [`Mode::ALL`]. Retired ids (1 B, 2 C, 9 B_QWERTY, 10 CJ_QWERTY) are never reused.
 ///
 /// To add a mode (docs/modes.md has the full contract):
 /// 1. Add a variant here with its id (a free one in its range, spec §3.6.1), and add it to
 ///    [`Mode::ALL`] and [`Mode::from_id`].
-/// 2. Give it a [`Mode::code`], a [`Mode::name`] and its two tables in [`Mode::korean`] and [`Mode::stock`], each in
-///    a function of its own (`<keyboard>_korean`, `stock_<keyboard>`) below.
+/// 2. Give it a [`Mode::code`], a [`Mode::name`] and its tables in [`Mode::korean`] and [`Mode::stock`].
 /// 3. Run `cargo test`: `tests/modes.rs` checks every mode against the contract.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum Mode {
-    /// Mode A, the original layout, built for JIS keyboards.
+    /// Mode A, JIS Moonshot: 2-set on a JIS keyboard, read as Korean, English and kana at once.
     #[default]
     A = 0,
-    /// Mode B, for US ANSI keyboards (HHKB US, MacBook US): Mode A's number row and brackets,
-    /// and every other key as US ANSI types it.
-    B = 1,
-    /// Mode C, for UK ISO keyboards: Mode B's pattern on UK symbols, plus the ISO extra key
-    /// between left Shift and Z. Its symbol keys are optional ([`Mode::optional_keys`]).
-    C = 2,
     /// `A_QWERTY`, JIS English (spec §3.6.2): not 2-set. Standard JIS QWERTY with JIS symbols on
     /// any keyboard; every key goes to the app, and ⌥ + a letter offers its accented variants
-    /// (spec §3.6.3). Built with the `english` feature.
+    /// (spec §3.6.3). Built with the `english` feature (on by default).
     #[cfg(feature = "english")]
     AQwerty = 3,
-    /// `B_QWERTY`: JIS English's US ANSI sibling, US symbols (spec §3.6.2). `english` feature.
-    #[cfg(feature = "english")]
-    BQwerty = 9,
-    /// `CJ_QWERTY`: JIS English's UK ISO sibling, UK symbols; designed for ISO, and on a JIS board
-    /// ¥ and ろ type the ISO keys JIS lacks (spec §3.6.2). `english` feature.
-    #[cfg(feature = "english")]
-    CjQwerty = 10,
     /// `A_DVORAK`, JIS Dvorak (spec §3.6.4): JIS English with Dvorak's letters. Every symbol keeps its
     /// JIS key pair; the four a letter displaces go to Dvorak's punctuation slots. `english` feature.
     #[cfg(feature = "english")]
@@ -73,24 +59,18 @@ pub enum Mode {
     /// `english` feature.
     #[cfg(feature = "english")]
     AColemak = 8,
+    /// `A_KANA`, JIS Kana (docs/moonshot.md §2.1): kana typing on the JIS kana layout, shown as
+    /// hiragana or katakana. Its keys are recorded as Mode A's, so forcing Korean re-reads them.
+    AKana = 11,
 }
 
 impl Mode {
     /// Every mode this build has, in the order menus list them. Not indexed by id.
     #[cfg(not(feature = "english"))]
-    pub const ALL: &'static [Mode] = &[Mode::A, Mode::B, Mode::C];
+    pub const ALL: &'static [Mode] = &[Mode::A, Mode::AKana];
     /// Every mode this build has, in the order menus list them. Not indexed by id.
     #[cfg(feature = "english")]
-    pub const ALL: &'static [Mode] = &[
-        Mode::A,
-        Mode::B,
-        Mode::C,
-        Mode::AQwerty,
-        Mode::BQwerty,
-        Mode::CjQwerty,
-        Mode::ADvorak,
-        Mode::AColemak,
-    ];
+    pub const ALL: &'static [Mode] = &[Mode::A, Mode::AKana, Mode::AQwerty, Mode::ADvorak, Mode::AColemak];
 
     /// The stable id over the C ABI and in saved settings (spec §3.6.1). Never reuse or renumber
     /// one.
@@ -98,86 +78,77 @@ impl Mode {
         self as u32
     }
 
-    /// The mode with this id, or `None` for an id this build doesn't have (reserved, a mode left
-    /// out of the build, or no mode at all). Callers decide what to fall back to.
+    /// The mode with this id, or `None` for an id this build doesn't have (retired, reserved, a
+    /// mode left out of the build, or no mode at all). Callers decide what to fall back to.
     pub fn from_id(id: u32) -> Option<Mode> {
         match id {
             0 => Some(Mode::A),
-            1 => Some(Mode::B),
-            2 => Some(Mode::C),
             #[cfg(feature = "english")]
             3 => Some(Mode::AQwerty),
             #[cfg(feature = "english")]
             7 => Some(Mode::ADvorak),
             #[cfg(feature = "english")]
             8 => Some(Mode::AColemak),
-            #[cfg(feature = "english")]
-            9 => Some(Mode::BQwerty),
-            #[cfg(feature = "english")]
-            10 => Some(Mode::CjQwerty),
+            11 => Some(Mode::AKana),
             _ => None,
         }
     }
 
     /// The mode name (spec §3.6.1): what tools, settings and the public API use. Upper-case snake
-    /// case; the first three keep their one-letter names.
+    /// case; Mode A keeps its one-letter name.
     pub fn code(self) -> &'static str {
         match self {
             Mode::A => "A",
-            Mode::B => "B",
-            Mode::C => "C",
             #[cfg(feature = "english")]
             Mode::AQwerty => "A_QWERTY",
-            #[cfg(feature = "english")]
-            Mode::BQwerty => "B_QWERTY",
-            #[cfg(feature = "english")]
-            Mode::CjQwerty => "CJ_QWERTY",
             #[cfg(feature = "english")]
             Mode::ADvorak => "A_DVORAK",
             #[cfg(feature = "english")]
             Mode::AColemak => "A_COLEMAK",
+            Mode::AKana => "A_KANA",
         }
     }
 
-    /// Whether the mode types Korean (2-set). Everything about Korean, the core principle included,
-    /// is about these modes; JIS English isn't one (spec §3.6.2).
+    /// Whether the mode types Korean (2-set, predictive). Everything about Korean, the core
+    /// principle included, is about this mode; JIS English and JIS Kana aren't.
     pub fn is_korean(self) -> bool {
-        match self {
-            Mode::A | Mode::B | Mode::C => true,
-            #[cfg(feature = "english")]
-            Mode::AQwerty | Mode::BQwerty | Mode::CjQwerty | Mode::ADvorak | Mode::AColemak => false,
-        }
+        self == Mode::A
+    }
+
+    /// Whether the mode types kana (`A_KANA`).
+    pub fn is_kana(self) -> bool {
+        self == Mode::AKana
+    }
+
+    /// Whether the mode is an English one (spec §3.6.2): every key goes to the app.
+    pub fn is_english(self) -> bool {
+        !self.is_korean() && !self.is_kana()
+    }
+
+    /// How a kana mode turns keys into kana (`A_KANA`: the JIS kana layout). Mode A's kana reading
+    /// always uses the JIS layout.
+    pub fn kana_scheme(self) -> crate::kana::KanaScheme {
+        crate::kana::KanaScheme::Jis
     }
 
     /// The display name shells show (a settings menu, the playground).
     pub fn name(self) -> &'static str {
         match self {
-            Mode::A => "JIS Korean Original Layout",
-            Mode::B => "JIS Korean for US ANSI",
-            Mode::C => "JIS Korean for UK ISO",
+            Mode::A => "JIS Moonshot",
             #[cfg(feature = "english")]
             Mode::AQwerty => "JIS English",
-            #[cfg(feature = "english")]
-            Mode::BQwerty => "US English",
-            #[cfg(feature = "english")]
-            Mode::CjQwerty => "UK English",
             #[cfg(feature = "english")]
             Mode::ADvorak => "JIS Dvorak",
             #[cfg(feature = "english")]
             Mode::AColemak => "JIS Colemak",
+            Mode::AKana => "JIS Kana",
         }
     }
 
-    /// The symbol keys the Dedicated symbol keys setting turns off (spec §3.6): with it off they
-    /// type the stock keyboard's characters ([`Mode::stock`]). Empty for modes without
-    /// the setting.
+    /// The symbol keys the Dedicated symbol keys setting turns off (spec §3.6). No JIS mode has
+    /// any; kept for hosts built against it.
     pub fn optional_keys(self) -> &'static [Key] {
-        match self {
-            Mode::A | Mode::B => &[],
-            #[cfg(feature = "english")]
-            Mode::AQwerty | Mode::BQwerty | Mode::CjQwerty | Mode::ADvorak | Mode::AColemak => &[],
-            Mode::C => &[Key::BracketLeft, Key::BracketRight, Key::IntlBackslash],
-        }
+        &[]
     }
 
     /// What the non-letter keys type: (unshifted, shifted). `None` for keys the mode leaves out:
@@ -187,12 +158,11 @@ impl Mode {
             return self.stock(key).map(|(base, shifted)| (Out::Char(base), Out::Char(shifted)));
         }
         match self {
-            Mode::A => jis_korean(key),
-            Mode::B => ansi_korean(key),
-            Mode::C => iso_korean(key),
+            // JIS Kana records its keys as Mode A's (docs/moonshot.md §4).
+            Mode::A | Mode::AKana => jis_korean(key),
             // Not Korean: the JIS symbols as they are.
             #[cfg(feature = "english")]
-            Mode::AQwerty | Mode::BQwerty | Mode::CjQwerty | Mode::ADvorak | Mode::AColemak => {
+            Mode::AQwerty | Mode::ADvorak | Mode::AColemak => {
                 self.stock(key).map(|(base, shifted)| (Out::Char(base), Out::Char(shifted)))
             }
         }
@@ -203,15 +173,9 @@ impl Mode {
     /// It must cover every key [`Mode::korean`] maps.
     fn stock(self, key: Key) -> Option<(char, char)> {
         match self {
-            Mode::A => stock_jis(key),
-            Mode::B => stock_us(key),
-            Mode::C => stock_uk(key),
+            Mode::A | Mode::AKana => stock_jis(key),
             #[cfg(feature = "english")]
             Mode::AQwerty => stock_jis(key),
-            #[cfg(feature = "english")]
-            Mode::BQwerty => stock_us(key),
-            #[cfg(feature = "english")]
-            Mode::CjQwerty => stock_uk_on_jis(key),
             #[cfg(feature = "english")]
             Mode::ADvorak | Mode::AColemak => stock_jis(self.qwerty_key(key)),
         }
@@ -230,9 +194,9 @@ impl Mode {
     }
 
     /// The Latin letter `key` types in an English mode (lower case), or `None` for a key that types
-    /// something else there. Korean modes have none.
+    /// something else there. Korean and kana modes have none.
     pub fn letter(self, key: Key) -> Option<char> {
-        if self.is_korean() { None } else { self.qwerty_key(key).letter() }
+        if !self.is_english() { None } else { self.qwerty_key(key).letter() }
     }
 }
 
@@ -249,7 +213,7 @@ pub fn output_in(mode: Mode, layout: Layout, key: Key, shift: bool) -> Option<Ou
 /// What `key` types in `layout` in `mode`, with the Dedicated symbol keys setting `symbols`
 /// (spec §3.6; only modes with [`Mode::optional_keys`] read it).
 pub fn output_with(mode: Mode, symbols: bool, layout: Layout, key: Key, shift: bool) -> Option<Out> {
-    if !mode.is_korean() {
+    if mode.is_english() {
         // JIS English: the Latin letters, upper-case with Shift.
         if let Some(letter) = mode.letter(key) {
             return Some(Out::Char(if shift { letter.to_ascii_uppercase() } else { letter }));
@@ -339,33 +303,6 @@ fn jis_korean(key: Key) -> Option<(Out, Out)> {
     Some(pair)
 }
 
-/// Mode B's non-letter keys (spec §3.6): Mode A's number row, the brackets with 「 」 on Shift,
-/// and stock US ANSI everywhere else.
-fn ansi_korean(key: Key) -> Option<(Out, Out)> {
-    use Key::*;
-    use Out::Char as C;
-    match key {
-        Digit1 | Digit2 | Digit3 | Digit4 | Digit5 | Digit6 | Digit7 | Digit8 | Digit9 | Digit0 => jis_korean(key),
-        BracketLeft => Some((C('['), C('\u{300C}'))),
-        BracketRight => Some((C(']'), C('\u{300D}'))),
-        _ => stock_us(key).map(|(base, shifted)| (C(base), C(shifted))),
-    }
-}
-
-/// Mode C's non-letter keys (spec §3.6): Mode B's pattern on UK ISO, and the extra key between
-/// left Shift and Z for the two Korean punctuation marks UK ISO has no key for.
-fn iso_korean(key: Key) -> Option<(Out, Out)> {
-    use Key::*;
-    use Out::Char as C;
-    match key {
-        Digit1 | Digit2 | Digit3 | Digit4 | Digit5 | Digit6 | Digit7 | Digit8 | Digit9 | Digit0 => jis_korean(key),
-        BracketLeft => Some((C('['), C('\u{300C}'))),
-        BracketRight => Some((C(']'), C('\u{300D}'))),
-        IntlBackslash => Some((C('\u{00B7}'), C('\u{2014}'))),
-        _ => stock_uk(key).map(|(base, shifted)| (C(base), C(shifted))),
-    }
-}
-
 /// JIS Dvorak's keys (spec §3.6.4): Dvorak's letters, each key typing the JIS English key named.
 /// The JIS symbol keys a letter displaces go where Dvorak has punctuation: `, <` to W, `. >` to E,
 /// `; +` to Z, and `/ ?` to Q (Dvorak's `' "`, which JIS has on Shift+7 and Shift+2).
@@ -430,81 +367,6 @@ fn colemak(key: Key) -> Key {
         KeyN => KeyK,
         _ => key,
     }
-}
-
-/// The stock UK ISO characters (PC legends) on the non-letter keys: Mode C's stock keyboard and English
-/// UK ISO for a `CJ_` mode (spec §3.6.1): designed for ISO, also supports JIS. A JIS board has ¥
-/// and ろ, which ISO lacks, and lacks the ISO extra key and the key left of 1 (a JIS board's
-/// 半角/全角): ろ types the extra key's characters and ¥ those of the key left of 1, so every UK
-/// character is reachable on JIS too.
-#[cfg(feature = "english")]
-fn stock_uk_on_jis(key: Key) -> Option<(char, char)> {
-    match key {
-        Key::IntlRo => stock_uk(Key::IntlBackslash),
-        Key::IntlYen => stock_uk(Key::Backquote),
-        _ => stock_uk(key),
-    }
-}
-
-/// readings. `Backslash` is the ISO key left of Enter (# ~).
-fn stock_uk(key: Key) -> Option<(char, char)> {
-    use Key::*;
-    let pair = match key {
-        Backquote => ('`', '¬'),
-        Digit1 => ('1', '!'),
-        Digit2 => ('2', '"'),
-        Digit3 => ('3', '£'),
-        Digit4 => ('4', '$'),
-        Digit5 => ('5', '%'),
-        Digit6 => ('6', '^'),
-        Digit7 => ('7', '&'),
-        Digit8 => ('8', '*'),
-        Digit9 => ('9', '('),
-        Digit0 => ('0', ')'),
-        Minus => ('-', '_'),
-        Equal => ('=', '+'),
-        BracketLeft => ('[', '{'),
-        BracketRight => (']', '}'),
-        Semicolon => (';', ':'),
-        Quote => ('\'', '@'),
-        Backslash => ('#', '~'),
-        IntlBackslash => ('\\', '|'),
-        Comma => (',', '<'),
-        Period => ('.', '>'),
-        Slash => ('/', '?'),
-        _ => return None,
-    };
-    Some(pair)
-}
-
-/// The stock US ANSI characters on the non-letter keys: Mode B's stock keyboard and English readings.
-fn stock_us(key: Key) -> Option<(char, char)> {
-    use Key::*;
-    let pair = match key {
-        Backquote => ('`', '~'),
-        Digit1 => ('1', '!'),
-        Digit2 => ('2', '@'),
-        Digit3 => ('3', '#'),
-        Digit4 => ('4', '$'),
-        Digit5 => ('5', '%'),
-        Digit6 => ('6', '^'),
-        Digit7 => ('7', '&'),
-        Digit8 => ('8', '*'),
-        Digit9 => ('9', '('),
-        Digit0 => ('0', ')'),
-        Minus => ('-', '_'),
-        Equal => ('=', '+'),
-        BracketLeft => ('[', '{'),
-        BracketRight => (']', '}'),
-        Backslash => ('\\', '|'),
-        Semicolon => (';', ':'),
-        Quote => ('\'', '"'),
-        Comma => (',', '<'),
-        Period => ('.', '>'),
-        Slash => ('/', '?'),
-        _ => return None,
-    };
-    Some(pair)
 }
 
 /// The stock JIS characters on the non-letter keys: Mode A's stock keyboard and English readings.

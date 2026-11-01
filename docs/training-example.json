@@ -1,37 +1,116 @@
 {
-  "format": "jis-korean-training",
+  "format": "jis-moonshot-training",
   "version": 1,
   "source": {
     "tool": "hand-written example",
     "created": "2026-10-19",
     "description": "The shape of a training file; words from a style corpus about AI infrastructure."
   },
-  "weights": { "english": 0.8, "implied-l": 0 },
+  "weights": {
+    "english": 0.8,
+    "implied-l": 0,
+    "kana": 1.5
+  },
   "vocabulary": {
     "korean": [
-      { "word": "데이터센터", "confidence": "confirmed" },
-      { "word": "상향조정", "confidence": "tentative" },
-      { "word": "토큰량", "confidence": "tentative" },
-      { "word": "바둑", "count": 50 }
+      {
+        "word": "데이터센터",
+        "confidence": "confirmed"
+      },
+      {
+        "word": "상향조정",
+        "confidence": "tentative"
+      },
+      {
+        "word": "토큰량",
+        "confidence": "tentative"
+      },
+      {
+        "word": "바둑",
+        "count": 50
+      }
     ],
-    "english": [{ "word": "paradox", "count": 20 }]
+    "english": [
+      {
+        "word": "paradox",
+        "count": 20
+      }
+    ],
+    "japanese": [
+      {
+        "word": "ありがとう",
+        "confidence": "confirmed"
+      },
+      {
+        "word": "サーバー",
+        "count": 40
+      }
+    ]
   },
   "avoid": [
-    { "word": "god", "language": "english" },
-    { "word": "마리", "language": "korean", "strength": "strong" }
+    {
+      "word": "god",
+      "language": "english"
+    },
+    {
+      "word": "마리",
+      "language": "korean",
+      "strength": "strong"
+    }
   ],
   "examples": [
-    { "text": "기준입니다" },
-    { "text": "산이", "keys": "KeyT KeyK KeyS KeyL", "count": 2, "note": "typed lazily, no double press" },
-    { "text": "GPU랙" },
-    { "text": "paradox에" }
+    {
+      "text": "기준입니다"
+    },
+    {
+      "text": "산이",
+      "keys": "KeyT KeyK KeyS KeyL",
+      "count": 2,
+      "note": "typed lazily, no double press"
+    },
+    {
+      "text": "GPU랙"
+    },
+    {
+      "text": "paradox에"
+    },
+    {
+      "text": "きって",
+      "keys": "KeyG S-KeyZ KeyW",
+      "note": "kana, with its JIS kana keys"
+    }
   ],
   "typos": [
-    { "intended": "질문", "typed": "질분", "class": "Q", "count": 1 },
-    { "intended": "이른", "typed": "일은", "class": "K9", "count": 1, "note": "kept-final reading committed" }
+    {
+      "intended": "질문",
+      "typed": "질분",
+      "class": "Q",
+      "count": 1
+    },
+    {
+      "intended": "이른",
+      "typed": "일은",
+      "class": "K9",
+      "count": 1,
+      "note": "kept-final reading committed"
+    }
   ],
   "preferences": [
-    { "id": "implied-l", "question": "When you type the keys of 저녁, should 전력 also be offered?", "answer": "no", "weights": { "implied-l": 0 } },
-    { "id": "english", "question": "Prediction sometimes picks English wrongly for you; lean Korean?", "answer": "yes", "weights": { "english": 0.8 } }
+    {
+      "id": "implied-l",
+      "question": "When you type the keys of 저녁, should 전력 also be offered?",
+      "answer": "no",
+      "weights": {
+        "implied-l": 0
+      }
+    },
+    {
+      "id": "english",
+      "question": "Prediction sometimes picks English wrongly for you; lean Korean?",
+      "answer": "yes",
+      "weights": {
+        "english": 0.8
+      }
+    }
   ]
 }

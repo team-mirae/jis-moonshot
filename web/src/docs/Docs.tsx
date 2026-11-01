@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { EnginePage } from "./EnginePage";
 import { MacPage } from "./MacPage";
-import { MinecraftPage } from "./MinecraftPage";
 import { WebPage } from "./WebPage";
 import { WindowsPage } from "./WindowsPage";
 
@@ -9,7 +8,6 @@ import { WindowsPage } from "./WindowsPage";
 export const DOC_PAGES: { id: string; title: string; folder: string; summary: string; render(): ReactNode }[] = [
   { id: "engine", title: "Engine", folder: "engine/", summary: "Core logic, API, performance", render: () => <EnginePage /> },
   { id: "macos", title: "macOS", folder: "mac/", summary: "Input method and public API", render: () => <MacPage /> },
-  { id: "minecraft", title: "Minecraft", folder: "minecraft/", summary: "Fabric mod", render: () => <MinecraftPage /> },
   { id: "windows", title: "Windows", folder: "windows/", summary: "TSF text input processor", render: () => <WindowsPage /> },
   { id: "web", title: "Web", folder: "web/", summary: "Playground and its engine API", render: () => <WebPage /> },
 ];
@@ -73,7 +71,7 @@ export function Table({ head, rows, code = false }: { head: string[]; rows: Reac
 
 export function Source({ path, children }: { path: string; children?: ReactNode }) {
   return (
-    <a href={`https://github.com/team-mirae/jis-korean/blob/main/${path}`} target="_blank" rel="noreferrer">
+    <a href={`https://github.com/team-mirae/jis-moonshot/blob/main/${path}`} target="_blank" rel="noreferrer">
       {children ?? <code>{path}</code>}
     </a>
   );

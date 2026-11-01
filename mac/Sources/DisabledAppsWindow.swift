@@ -10,7 +10,7 @@ final class DisabledAppsWindow: NSObject {
     private lazy var panel: NSPanel = {
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 620, height: 360),
                             styleMask: [.titled, .closable, .resizable, .nonactivatingPanel], backing: .buffered, defer: true)
-        panel.title = "JIS Korean: Disabled Apps"
+        panel.title = "JIS Moonshot: Disabled Apps"
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true

@@ -1,4 +1,4 @@
-# Deploys the web playground and docs (web/) to Vercel, jis-korean.sjun.me, on every push to main
+# Deploys the web playground and docs (web/) to Vercel, jis-moonshot.sjun.me, on every push to main
 # that touches the site or the engine it runs. The tests (test.yml) run first and gate the deploy.
 #
 # The site is built here, not on Vercel: its build compiles the engine to wasm with Rust, which
@@ -29,7 +29,7 @@ permissions:
 env:
   # Not secrets: they name the Vercel team and project (web/.vercel/project.json).
   VERCEL_ORG_ID: team_CzVKrhjMVhZUWfSbyNlJbMSP
-  VERCEL_PROJECT_ID: prj_SKyw548zQeAU6uCaezDNTGPx1JZK
+  VERCEL_PROJECT_ID: prj_qBOig0nGMe0GYTu1sENv7Hg5VQE7
 
 jobs:
   test:
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://jis-korean.sjun.me
+      url: https://jis-moonshot.sjun.me
     defaults:
       run:
         working-directory: web

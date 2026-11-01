@@ -1,6 +1,6 @@
-# Builds the installer a user downloads: build/dist/JISKorean-<version>-setup.exe, one wizard with
-# the full / lite choice inside (installer/jiskorean.iss, Inno Setup 6).
-#   tools/package.ps1              build x64 + x86, full and lite (tools/build.ps1), then package
+# Builds the installer a user downloads: build/dist/JISMoonshot-<version>-setup.exe
+# (installer/jismoonshot.iss, Inno Setup 6). There is one build: predictions are always on.
+#   tools/package.ps1              build x64 + x86 (tools/build.ps1), then package
 #   tools/package.ps1 -SkipBuild   package what's in build/ already
 # Signing (off by default): set JK_SIGN_CERT to a .pfx file, and JK_SIGN_PASSWORD if it has one,
 # and the DLLs, the installer and its uninstaller are signed with signtool (Windows SDK).
@@ -12,15 +12,13 @@ $build = "$root\build"
 
 if (-not $SkipBuild) {
     & "$PSScriptRoot\build.ps1"
-    & "$PSScriptRoot\build.ps1" -Lite
 }
-$dlls = foreach ($dir in 'x64', 'x86', 'x64-lite', 'x86-lite') { "$build\$dir\jiskorean.dll" }
-foreach ($dll in $dlls) { if (-not (Test-Path $dll)) { throw "$dll is missing: run tools/build.ps1 (and -Lite)." } }
+$dlls = foreach ($dir in 'x64', 'x86') { "$build\$dir\jismoonshot.dll" }
+foreach ($dll in $dlls) { if (-not (Test-Path $dll)) { throw "$dll is missing: run tools/build.ps1." } }
 
 # The version, from the engine's Cargo.toml (as CMakeLists.txt reads it).
 $line = Select-String -Path "$root\..\engine\Cargo.toml" -Pattern '^version = "(.+)"' | Select-Object -First 1
 $version = $line.Matches[0].Groups[1].Value
-$fullMB = [math]::Round(((Get-Item $dlls[0]).Length - (Get-Item $dlls[2]).Length) / 1MB, 1)
 
 $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
 foreach ($dir in "$env:LOCALAPPDATA\Programs\Inno Setup 6", "${env:ProgramFiles(x86)}\Inno Setup 6", "$env:ProgramFiles\Inno Setup 6") {
@@ -28,7 +26,7 @@ foreach ($dir in "$env:LOCALAPPDATA\Programs\Inno Setup 6", "${env:ProgramFiles(
 }
 if (-not $iscc) { throw 'ISCC.exe not found: install Inno Setup 6 (winget install JRSoftware.InnoSetup).' }
 
-$argv = @("/DVersion=$version", "/DBuild=$build", "/DFullMB=$fullMB")
+$argv = @("/DVersion=$version", "/DBuild=$build")
 if ($env:JK_SIGN_CERT) {
     $signtool = (Get-Command signtool -ErrorAction SilentlyContinue).Source
     if (-not $signtool) {
@@ -46,6 +44,6 @@ if ($env:JK_SIGN_CERT) {
     $argv += @('/DSign', "/Sjk=`$q$signtool`$q $quoted `$f")
 }
 
-& $iscc @argv "$root\installer\jiskorean.iss"
+& $iscc @argv "$root\installer\jismoonshot.iss"
 if ($LASTEXITCODE) { throw "ISCC failed ($LASTEXITCODE)" }
-Write-Host "Built $build\dist\JISKorean-$version-setup.exe"
+Write-Host "Built $build\dist\JISMoonshot-$version-setup.exe"

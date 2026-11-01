@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crate::plan::{self, Metric, Press, Robot, Style, each_jamo, is_compat_jamo, is_hanja, is_syllable, keys_of, normalize};
 use crate::learn::Learner;
 use crate::predict::{Kind, Predictor, Ranker};
-use crate::{Dictionary, Engine, Key, Mods};
+use crate::{Dictionary, Engine, Mods};
 
 /// A word whose committed text wasn't the word.
 #[derive(Clone, Debug)]
@@ -157,8 +157,8 @@ fn type_word(
         let end = if kind(c) == 3 { i + 1 } else { chars[i..].iter().position(|&d| kind(d) != kind(c)).map_or(chars.len(), |n| i + n) };
         let run: String = chars[i..end].iter().collect();
         let presses = match kind(c) {
-            // Shift+Z is F10 (spec §6): a capital Z goes in as z, left to the predictions.
-            0 => keys_of(&run).into_iter().map(|p| if p.key == Key::KeyZ { Press::new(Key::KeyZ) } else { p }).collect(),
+            // Shift+Z is a letter key like any other now (docs/moonshot.md §1): Z typed as Z.
+            0 => keys_of(&run),
             1 => hangul_presses(&run, style),
             2 => each_jamo(&run).unwrap_or_default(),
             // A hanja: by the reading that brings it into the list (年 after digits is 년),

@@ -1,20 +1,25 @@
 # Modes: the contract for adding one
 
-A **mode** is one keyboard's key map (spec §3.6). JIS Korean has three Korean modes, five English
-modes (spec §3.6.2, §3.6.4) and three more reserved. The English modes are built only with the
-engine's `english` feature (`make ENGLISH=1` on macOS); every other build has Modes A, B and C.
+A **mode** is one keyboard's key map (spec §3.6). JIS Moonshot is **JIS only** (docs/moonshot.md
+§2): one Korean mode (Mode A, the predictive one), one kana mode (`A_KANA`) and three English modes
+(spec §3.6.2, §3.6.4). The English modes need the engine's `english` feature, which is on by default
+and in every shell build.
 
 | Id | Mode name | Display name | Keyboard | Types |
 |---|---|---|---|---|
-| 0 | `A` | JIS Korean Original Layout | JIS | Korean |
-| 1 | `B` | JIS Korean for US ANSI | US ANSI (HHKB US, MacBook US) | Korean |
-| 2 | `C` | JIS Korean for UK ISO | ISO (UK) | Korean |
+| 0 | `A` | JIS Moonshot | JIS | Korean, read as Korean, English and kana |
+| 1, 2 | `B`, `C` | (JIS Korean for US ANSI, for UK ISO) | | retired |
 | 3 | `A_QWERTY` | JIS English | any (JIS symbols) | English |
 | 4–6 | `CJ_QWERTZ`, `CJ_SWISS_QZ`, `CJ_AZERTY` | reserved | | |
 | 7 | `A_DVORAK` | JIS Dvorak | any (JIS symbols, Dvorak letters) | English |
 | 8 | `A_COLEMAK` | JIS Colemak | any (JIS symbols, Colemak letters) | English |
-| 9 | `B_QWERTY` | US English | any (US ANSI symbols) | English |
-| 10 | `CJ_QWERTY` | UK English | any (UK ISO symbols; ¥ and ろ type the ISO keys JIS lacks) | English |
+| 9, 10 | `B_QWERTY`, `CJ_QWERTY` | (US English, UK English) | | retired |
+| 11 | `A_KANA` | JIS Kana | JIS (kana legends) | kana (hiragana or katakana) |
+| 12 | `A_ROMAJI` | reserved | | romaji kana typing, not built |
+
+**Retired** ids (1, 2, 9, 10) are never reused: `jk_set_mode` refuses them, and a saved setting
+naming one falls back to Mode A. Modes B and C went because the kana reading needs the JIS kana
+legends, which no other keyboard has.
 
 ## Naming a new mode
 
@@ -23,7 +28,7 @@ may assume they run from 0 without gaps:
 
 | Ids | For |
 |---|---|
-| 0–14 | Mirae Research's official modes (`A_`, `B_`, `C_`). 0–10 are taken or reserved; 11–14 are held for future official modes. |
+| 0–14 | Official modes. 0–12 are taken, retired or reserved; 13–14 are held for future official modes. |
 | 15–30 | Contributed modes (`A_`, `B_`, `C_`), each accepted by a majority of the contributors. |
 | 31–99 | Custom layouts (any other prefix): any free id. Nothing coordinates them, so two forks can pick the same one. |
 | 10000–11000 | Development and preview builds: a temporary id while a mode is being made, with any well-formed mode name. When the mode is done it moves to a permanent id in its range (0–30 for an official mode) and the temporary id is dropped. Release builds never save one in settings. |
@@ -32,13 +37,13 @@ Every other id is invalid for now. A mode in progress here, or a contribution un
 preview id until it's accepted, so a fork never ships an official-looking id that may still change.
 
 It also takes a **mode name** in upper-case snake case (`SPLIT_ORTHO_LAYOUTDESIGNERNAME`, spec
-§3.6.1). Its first word is its namespace, the keyboard family it's for, as Modes A, B and C are:
+§3.6.1). Its first word is its namespace, the keyboard family it's for:
 
 - **`A_`** JIS, **`B_`** US ANSI (also minor adjustments on an ANSI board, such as Korean ANSI or a
   modified laptop keyboard), **`C_`** ISO (also ISO locales other than the UK), **`CJ_`** ISO that
   also supports JIS: ろ types the ISO extra key's characters and ¥ those of the key left of 1
-  (spec §3.6.1). European layouts are `CJ_`. On ids 0–14 they're
-  Mirae Research's official modes; on 15–30, modes contributed to this repository, which follow
+  (spec §3.6.1). European layouts are `CJ_`. JIS Moonshot itself uses `A_` only. On ids 0–14
+  they're official modes; on 15–30, modes contributed to this repository, which follow
   everything on this page as an official mode does: the full key and stock tables, the tests
   below, the spec section, the layout drawing and a badge, review, and a majority of the
   contributors in favour before merging.
@@ -50,46 +55,43 @@ It also takes a **mode name** in upper-case snake case (`SPLIT_ORTHO_LAYOUTDESIG
 No mode forbids any keyboard, but support covers only the family a mode is for: a `B_` mode that
 doesn't work on an ISO board isn't an issue this repository will fix.
 
-Mode names and ids are never renamed or reused once released. `A`, `B` and `C` keep their
-one-letter names; no new mode gets one.
+Mode names and ids are never renamed or reused once released. `A` keeps its one-letter name; no
+new mode gets one.
 
-You can fork JIS Korean and add a mode for your own typing or your own keyboard (a UK ISO board,
-a split board with its own symbol keys, a layout with more symbols on Shift). This page is what a
-mode must define and what it must keep.
+JIS Moonshot itself is a fork of JIS Korean. You can fork it again and add a mode for your own
+typing or your own keyboard (a split board with its own symbol keys, a layout with more symbols on
+Shift). This page is what a mode must define and what it must keep.
 
-## Mode C, ISO
+## JIS Kana, and the kana scheme
 
-Mode C is the ISO mode (UK, on PC legends). `engine/tests/modes.rs` fails if id 2 or the letter C
-goes to a mode that isn't the ISO one.
+`A_KANA` (id 11) types kana directly (docs/moonshot.md §2.1, §3): every key types its JIS kana
+legend, nothing is predicted, and the staged keys show as hiragana or katakana (its **script**,
+switched by F6 and F7). Its keys are recorded as Mode A's, so forcing Korean (かな / 変換) re-reads
+them.
 
-| | Mode C |
+| | JIS Kana |
 |---|---|
-| Engine id | `2` |
-| Letter, name | C, "JIS Korean for UK ISO" |
-| Its key | the ISO extra key between left Shift and Z: `IntlBackslash`; on macOS `kVK_ISO_Section`, or `kVK_ANSI_Grave` when the keyboard is ISO (`mac/Sources/KeyMap.swift`) |
-| macOS input source ID | `me.sjun.inputmethod.JISKorean.2SetISO` |
-| macOS Keyboard Viewer layout | `JISKoreanISO` |
-| Badge | `docs/logo/mode-iso.svg` (Caps Lock, Shift, the extra key hollow, Z) |
+| Engine id | `11` |
+| Mode name, display name | `A_KANA`, "JIS Kana" |
+| macOS input source ID | `me.sjun.inputmethod.JISMoonshot.A_KANA` (Japanese script) |
+| macOS Keyboard Viewer layout | `JISMoonshot` (Mode A's: it consumes every key it maps) |
+| Badge | `docs/logo/mode-a-kana.svg` (KA) |
 
-Its key map (spec §3.6) is Mode B's pattern on UK stock symbols, plus the extra key (`·`, and `—`
-with Shift). It's the first mode with an option: the **Dedicated symbol keys** setting
-(`Engine::set_dedicated_symbols`, `jk_set_dedicated_symbols`, on by default) turns off the keys in
-`Mode::optional_keys` ([, ] and the extra key), which then type the mode's stock (UK ISO)
-characters. The mode tests
-and the 2-set baseline run with it on and off. Only UK stock symbols are built; other ISO countries
-can be their own modes or forks.
-
-Still to check on real ISO hardware: macOS swaps the codes of the extra key and the key left of 1
-when it detects an ISO keyboard, and the macOS shell maps them back. That has been tried only with
-Karabiner sending the extra key from another keyboard (whose keyboard type isn't ISO), so the
-swapped case needs one ISO user or one ISO keyboard to confirm.
+The mapping from keys to kana is a **`KanaScheme`** (`engine/src/kana.rs`, chosen by
+`Mode::kana_scheme`). `KanaScheme::Jis` is the only one built. `KanaScheme::Romaji` is a named slot:
+a romaji scheme needs its own composer (`ka` → か, `kk` → っk, `nn` → ん), and the reserved mode
+`A_ROMAJI` (id 12) would select it. Everything else (scripts, F6/F7/F9/F10, commit rules) is written
+against the scheme, not the JIS table, so a romaji mode means a composer, a variant with id 12, and
+`Mode::kana_scheme` returning `Romaji` for it. Mode A's kana reading always uses the JIS scheme: it
+reads the same keystrokes Korean reads, and romaji keystrokes would read as English.
 
 ## What every mode keeps
 
-Every **Korean mode** (`Mode::is_korean`) shares these, and can't change them:
+Every **Korean mode** (`Mode::is_korean`; only Mode A now) shares these, and can't change them:
 
 - **Standard 2-set on the 26 letter keys**, Shift layer included (the core principle, spec §1).
-- **Shift+Z is F10**, and **F6–F10** work as spec §6 says.
+  Shift+Z is ㅋ, as on standard 2-set (it was F10 in JIS Korean).
+- **F6–F10** work as spec §6 and docs/moonshot.md §4 say.
 - **The automaton and everything after it** (spec §4 onward): the implied ㅇ, the double press,
   backspace by jamo, commit rules, hanja and predictions.
 - **Space, Enter, Backspace, Tab, Esc, the arrows and the modifiers** keep their spec §3.5 behavior.
@@ -111,32 +113,31 @@ All of it lives in `engine/src/layout.rs`, on the `Mode` enum:
 | Variant | `enum Mode`, `Mode::ALL`, `Mode::from_id` | Name it after its mode name in Rust's style (`A_QWERTY` → `AQwerty`), with its id as the discriminant (`AQwerty = 3`). Add it to `ALL` in menu order and to `from_id`'s match. |
 | Mode name | `Mode::code` | Its mode name, `A_QWERTY` (spec §3.6.1). |
 | Id | the discriminant | A free number in the mode's range (spec §3.6.1). Ids are saved in settings and passed over the C ABI (`jk_set_mode`), so never renumber or reuse one. |
-| Name | `Mode::name` | What a settings menu shows, e.g. "JIS Korean for UK ISO". Unique. |
+| Name | `Mode::name` | What a settings menu shows, e.g. "JIS Kana". Unique. |
 | Key table | `Mode::korean` → `<keyboard>_korean(key)` | What each non-letter key types: `(unshifted, shifted)`, each `Out::Jamo` (goes into the automaton) or `Out::Char` (goes in as-is). Return `None` for keys the mode leaves out: they commit and pass through to the app. |
 | Stock table | `Mode::stock` → `stock_<keyboard>(key)` | The characters the keyboard's own layout prints on those keys. It drives the English reading and the standard 2-set prediction, so a mode never suggests a symbol from another keyboard. It must cover every key the key table maps to a `Char`. |
-| Korean or not | `Mode::is_korean` | `true` for a 2-set mode. An English mode's key table is its stock table (`Mode::korean` returns the stock characters for it). |
-| Optional keys | `Mode::optional_keys` | The symbol keys the **Dedicated symbol keys** setting turns off, to type their stock characters. Empty for most modes; Mode C's are [, ] and the extra key. |
+| Korean, kana or English | `Mode::is_korean`, `Mode::is_kana`, `Mode::is_english` | `is_korean` for a 2-set mode, `is_kana` for a kana mode (with `Mode::kana_scheme`); anything else is English. An English mode's key table is its stock table (`Mode::korean` returns the stock characters for it). |
+| Optional keys | `Mode::optional_keys` | The symbol keys the **Dedicated symbol keys** setting turns off, to type their stock characters. Empty for every JIS mode (retired Mode C had [, ] and the extra key); kept for hosts. |
 | Moved keys | `Mode::qwerty_key` → `dvorak(key)`, `colemak(key)` | English modes that move letters: which JIS English key each physical key types as. Its letters and symbols both follow it (`Mode::letter`, `Mode::stock`); ⌘ and ⌥ don't. Other modes return the key as it is. |
 
 An English mode is `#[cfg(feature = "english")]` on its variant and on every match arm that names
 it, and goes in the `english` build's `Mode::ALL` only.
 
-Keep the key table's comments in the style of `jis_korean` and `ansi_korean`: one line on what
-the mode changes and why.
+Keep the key table's comments in the style of `jis_korean`: one line on what the mode changes and
+why.
 
-If the keyboard has a key the engine doesn't know yet (Mode B added `Backquote`), add it to the
+If the keyboard has a key the engine doesn't know yet (JIS Korean's Mode B added `Backquote`), add it to the
 `keys!` list in `engine/src/key.rs`, just before `Modifier`, and to `include/jis_korean.h` with the
 matching id. `tests/header.rs` fails until the two agree.
 
 ## What the tests check
 
-`cargo test` in `/engine` runs `tests/modes.rs` over every mode in `Mode::ALL`
-(`cargo test --features english` includes the English modes; CI runs both):
+`cargo test` in `/engine` runs `tests/modes.rs` over every mode in `Mode::ALL` (the default
+features include the English modes; `--no-default-features` leaves them out; CI runs both):
 
 - ids, names and mode names are unique and non-empty, ids round-trip through `Mode::from_id`, and
-  unknown ids are refused (`None`), not replaced;
+  unknown ids, the retired ones included, are refused (`None`), not replaced;
 - each mode name is upper-case snake case, with its id in its namespace's range (spec §3.6.1);
-- id 2 and the letter C belong to the ISO mode;
 - over the C ABI, `jk_mode_id_at` lists the modes and `jk_set_mode` refuses an unknown id;
 - in every Korean mode, the letter keys type standard 2-set, with its optional keys on and off; off, an optional key types its stock character and
   nothing else changes;
@@ -145,18 +146,20 @@ matching id. `tests/header.rs` fails until the two agree.
 
 `tests/baseline.rs` also types the whole 2-set baseline in every Korean mode.
 
-Add a Korean mode's own examples next to Mode B's and Mode C's in `tests/modes.rs` (what a few keys
-type, and what they read as in English), and one prediction example in
+Add a mode's own examples in `tests/modes.rs` (what a few keys type, and what they read as in
+English; kana typing and the kana reading are in `tests/moonshot.rs`), and one prediction example in
 `tests/predict.rs` if the stock symbols differ from an existing mode's. An English mode's go in
 `tests/english.rs`: its id and mode name, what it types, that keys pass through, and the ⌥ +
 letter variants of the letter it types.
 
 ## Docs
 
-- `docs/spec.md` §3.6: a row in the modes table and the mode's key table.
+- `docs/spec.md` §3.6 (and `docs/moonshot.md` while it leads the spec): a row in the modes table
+  and the mode's key table.
 - `docs/layout/jis-korean-layouts.html`: a section with the mode's board, built from its tables in
-  the page's script (`A`, `B_HHKB`, `B_MAC` show the pattern: Mode A's keys are reused, the
-  untouched keys use `stock(…)`). Re-render the PNGs (light and dark, 3×) as the README shows them.
+  the page's script (Mode A's keys are reused, the untouched keys use `stock(…)`). Re-render the
+  PNGs (light and dark, 3×). The drawing still shows JIS Korean's layouts (Shift+Z as F10, Modes B
+  and C).
 
 ## Shells
 
@@ -171,34 +174,31 @@ name. `jk_set_mode` returns 0, keeping the current mode, for an id the build doe
 On macOS each mode is its own input mode of the one input method (spec §8.2), the way Japanese has
 Kana and Romaji. That's deliberate: the mode follows the keyboard, and apps don't change which
 keyboard the user is typing on, so a per-app setting would mean nothing. As input sources, the
-modes can be seen and selected by tools JIS Korean doesn't integrate with (Hammerspoon,
-Karabiner), and JIS Korean's public API reports the mode to any program.
+modes can be seen and selected by tools JIS Moonshot doesn't integrate with (Hammerspoon,
+Karabiner), and JIS Moonshot's public API reports the mode to any program.
 
 To add a mode on macOS:
 
 1. **Input mode:** a `tsInputModeListKey` entry in `mac/Info.plist`, listed in
-   `tsVisibleInputModeOrderedArrayKey`. Its ID is `me.sjun.inputmethod.JISKorean.<mode name>`
-   (`.A_QWERTY`; the first three are `.2Set`, `.2SetANSI` and `.2SetISO`), and it never changes
+   `tsVisibleInputModeOrderedArrayKey`. Its ID is `me.sjun.inputmethod.JISMoonshot.<mode name>`
+   (`.A_KANA`, `.A_QWERTY`; Mode A's is `.2Set`), and it never changes
    once released: users' tools select it by that ID.
 2. **Its name** in `mac/Resources/*.lproj/InfoPlist.strings`, keyed by the ID.
-3. **`InputModes.all`** in `mac/Sources/InputModes.swift`: the engine id, letter, input source ID
-   and Keyboard Viewer layout name.
+3. **`InputModes.all`** in `mac/Sources/InputModes.swift`: the engine id, letter, input source ID,
+   Keyboard Viewer layout name and kind (`.korean`, `.kana` or `.english`).
 4. **Keyboard Viewer layout:** a `make-keylayout` rule in `mac/Makefile` (name, `JIS` or `ANSI`,
    and a unique negative id), its file in `KEYLAYOUTS`, and a `KLInfo_<name>` entry in
-   `mac/Resources/JISKoreanKeyboardLayouts-Info.plist`.
-5. **Keys:** any key code the keyboard adds, in `mac/Sources/KeyMap.swift` (Mode B added
-   `kVK_ANSI_Grave` → `Backquote`).
+   `mac/Resources/JISMoonshotKeyboardLayouts-Info.plist` (a kana mode can reuse Mode A's).
+5. **Keys:** any key code the keyboard adds, in `mac/Sources/KeyMap.swift`.
 6. **Badge:** draw it with `docs/logo/make_logo.py` and render it with `docs/logo/render.sh`, then
    add it to `ICONS` in `mac/Makefile` and name it in the mode's Info.plist entry
    (`docs/logo/README.md` has the design rules and steps).
 
 An English mode differs in three places. It isn't in the checked-in `mac/Info.plist`:
-`mac/tools/add-english-mode.sh` adds it to the built bundle under `make ENGLISH=1` (one `add` line:
-mode name, badge, Keyboard Viewer layout, and whether it's primary in the Roman script; only
-`A_QWERTY` is), along with its `KLInfo_` entry. In `InputModes.english` it has `korean: false`, so
-英数 and the Korean Key switch to and from it (spec §8.2.1). Its `make-keylayout` rule ends in
-`caps`, and its keylayout and badge go in the `ifeq ($(ENGLISH),1)` parts of `KEYLAYOUTS` and
-`ICONS`.
+`mac/tools/add-english-mode.sh` adds it to the built bundle on every `make` (one `add` line: mode
+name, badge, Keyboard Viewer layout, and whether it's primary in the Roman script; only `A_QWERTY`
+is), along with its `KLInfo_` entry. In `InputModes.english` it has `kind: .english`, so 英数 switches
+to it (spec §8.2.1). Its `make-keylayout` rule ends in `caps`.
 
 `make install` doesn't enable a new mode: users add it in System Settings. **A mode added to an
 input method that's already installed doesn't appear in System Settings until the user logs out and
@@ -209,20 +209,14 @@ Apple has confirmed this has no workaround (developer forums thread 775526, FB23
 
 ### Other shells
 
-Windows is built with the `english` feature, and macOS with `make ENGLISH=1`; the others have Modes A,
-B and C.
+Every shell is built with the `english` feature.
 
-- **Windows** lists every Korean mode its engine has in the language bar menu ("Mode B: JIS Korean
-  for US ANSI"), with `jk_mode_id_at` and `jk_mode_is_english`, so a new Korean mode appears there
-  with no shell change. The choice is saved as the `Mode` value under `HKCU\Software\JIS Korean`;
-  an id the build doesn't have falls back to Mode A. Mode C adds its Dedicated Symbol Keys item.
-  The English modes are listed apart, under English Layout (한/영): they're only the layout 한/영
-  types (spec §8.4), saved as `EnglishMode`, so a new English mode appears there too, after the
-  ones of the Korean mode's keyboard family (by namespace).
+- **Windows** lists Mode A and JIS Kana in the language bar menu (spec §8.4), with `jk_mode_id_at`
+  and `jk_mode_is_english`, so a new non-English mode appears there with no shell change. The
+  choice is saved as the `Mode` value under `HKCU\Software\JIS Moonshot`; an id the build doesn't
+  have falls back to Mode A. The English modes are listed apart, under English Layout: they're only
+  the layout ABC types (spec §8.4), saved as `EnglishMode`, so a new English mode appears there too.
 - **The web playground** lists its modes by hand: add one to `MODES` in `web/src/App.tsx` (and to
   the mode list in `web/src/docs/WebPage.tsx`).
-- **Minecraft** follows the input method's mode (`SystemMode`: macOS's `CurrentModeID`, Windows's
-  `Mode` value) and has no picker of its own. An id its engine doesn't have, such as an English
-  mode's, is refused by `jk_set_mode`, which keeps the mode it had.
 
 Each shell also needs the canonical codes of any keys only the new keyboard has.

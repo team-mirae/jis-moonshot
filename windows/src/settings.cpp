@@ -8,12 +8,12 @@
 namespace jk::settings {
 namespace {
 
-constexpr wchar_t kKey[] = L"Software\\JIS Korean";
+constexpr wchar_t kKey[] = L"Software\\JIS Moonshot";
 
 std::wstring AppKey(const std::wstring& exe) { return std::wstring(kKey) + L"\\Apps\\" + exe; }
 
 // Spec §10.11.1, by program file name: predictions start off where typing is commands, paths,
-// passwords or a game's chat.
+// passwords.
 struct DefaultOff {
     const wchar_t* exe;
     const wchar_t* reason;
@@ -23,7 +23,6 @@ constexpr wchar_t kRemote[] = L"file transfer, SSH or remote desktop";
 constexpr wchar_t kVm[] = L"containers and virtual machines";
 constexpr wchar_t kPasswords[] = L"a password manager";
 constexpr wchar_t kLauncher[] = L"File Explorer or a launcher";
-constexpr wchar_t kMinecraft[] = L"Minecraft: the JIS Korean mod is the dedicated integration";
 constexpr DefaultOff kDefaultOff[] = {
     {L"windowsterminal.exe", kTerminal}, {L"cmd.exe", kTerminal}, {L"conhost.exe", kTerminal},
     {L"openconsole.exe", kTerminal}, {L"powershell.exe", kTerminal}, {L"pwsh.exe", kTerminal},
@@ -39,10 +38,9 @@ constexpr DefaultOff kDefaultOff[] = {
     {L"keepass.exe", kPasswords}, {L"keepassxc.exe", kPasswords}, {L"1password.exe", kPasswords},
     {L"bitwarden.exe", kPasswords}, {L"explorer.exe", kLauncher}, {L"searchhost.exe", kLauncher},
     {L"powertoys.powerlauncher.exe", kLauncher}, {L"powertoys.cmdpal.ui.exe", kLauncher},
-    {L"minecraft.windows.exe", kMinecraft},
 };
 
-// Programs JIS Korean is off in by default: the local agents of Korean certificate programs, whose
+// Programs JIS Moonshot is off in by default: the local agents of Korean certificate programs, whose
 // password boxes don't mark themselves as password fields. Nobody types ordinary text in them, so
 // being off there costs nothing. Measured: running on the owner's PC (2026-10-21) with these
 // packages installed; which process shows the password window is inferred, not measured. Third-
@@ -76,6 +74,10 @@ unsigned long Version() {
     RegGetValueW(HKEY_CURRENT_USER, kKey, kVersion, RRF_RT_REG_DWORD, nullptr, &value, &size);
     return value;
 }
+
+bool ConsentAccepted() { return ReadDword(L"PredictiveAccepted", 0) >= kConsentVersion; }
+
+void AcceptConsent() { WriteDword(L"PredictiveAccepted", kConsentVersion); }
 
 unsigned long ReadDword(const wchar_t* name, unsigned long fallback) {
     for (HKEY root : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}) {

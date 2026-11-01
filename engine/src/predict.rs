@@ -7,7 +7,7 @@
 //! The engine supplies the readings ([`Readings`]); this module only scores and orders them.
 //! Scores are in bits per key: positive leans Korean. The core is a likelihood comparison of the
 //! same keystrokes under two key-trigram models (English spelling vs JIS Korean typing), trained by
-//! `minecraft/tools/build_ranker.py` into `engine/predict/ranker.bin`.
+//! `engine/tools/corpora/build_ranker.py` into `engine/predict/ranker.bin`.
 
 use std::collections::{HashMap, HashSet};
 
@@ -38,12 +38,17 @@ pub enum Kind {
     Mixed = 8,
     /// Korean with an implied ㄹ after a ㄴ final (전력 for 저녁 typed lazily: ㄴ + ㄹ sounds ㄹㄹ).
     ImpliedL = 9,
+    /// The keys on the JIS kana layout, in hiragana (docs/moonshot.md §5).
+    Kana = 10,
+    /// The kana reading in katakana, when that is the known word (コーヒー).
+    Katakana = 11,
 }
 
 impl Kind {
     fn language(self) -> Language {
         match self {
             Kind::English | Kind::EnglishCapitalized | Kind::EnglishUpper => Language::English,
+            Kind::Kana | Kind::Katakana => Language::Japanese,
             _ => Language::Korean,
         }
     }
@@ -53,6 +58,7 @@ impl Kind {
 pub enum Language {
     Korean,
     English,
+    Japanese,
 }
 
 /// The readings of the staged text, from the engine.
@@ -81,6 +87,10 @@ pub struct Readings {
     /// A Korean start then an acronym (한전KPS, 에너지ICT), at the first place lowercase keys meet
     /// two capitals.
     pub head: Option<Head>,
+    /// The keys on the JIS kana layout, composed, in hiragana (docs/moonshot.md §5).
+    pub kana: String,
+    /// Kana-only keys (symbol keys in Korean) inside the staged keys, not counting the last one.
+    pub kana_only: usize,
 }
 
 /// A staged word read as a Korean start, an acronym and maybe more Korean (한전KPS은).
@@ -211,10 +221,12 @@ pub enum Weight {
     Hanja = 6,
     /// An implied ㄹ after a ㄴ final (전력). 0 turns it off.
     ImpliedL = 7,
+    /// The kana reading (docs/moonshot.md §5). 0 turns it off.
+    Kana = 8,
 }
 
 impl Weight {
-    pub const ALL: [Weight; 8] = [
+    pub const ALL: [Weight; 9] = [
         Weight::Korean,
         Weight::English,
         Weight::Implied,
@@ -223,6 +235,7 @@ impl Weight {
         Weight::KeepFinals,
         Weight::Hanja,
         Weight::ImpliedL,
+        Weight::Kana,
     ];
 
     pub fn from_id(id: u32) -> Option<Weight> {
@@ -312,8 +325,11 @@ pub struct Candidate {
     pub split: Option<Split>,
 }
 
-/// At most this many predictions are offered.
+/// At most this many predictions are offered, not counting the kana reading, which takes one more
+/// slot (docs/moonshot.md §5).
 pub const MAX_PREDICTIONS: usize = 4;
+/// At most this many predictions with the kana reading.
+pub const MAX_WITH_KANA: usize = MAX_PREDICTIONS + 1;
 
 const SIZE: usize = 27;
 const START: usize = 26;
@@ -420,6 +436,28 @@ const AFTER_CONSONANT_ONLY: &[&str] = &["은", "을", "과", "으로", "으로�
 /// otherwise. Elsewhere the corpus odds stand (드리겠습니다 stays, not 들이겠습니다).
 const IMPLIED_AFTER_FLOOR: f64 = 1.5;
 
+/// The kana reading's score (docs/moonshot.md §5), in bits: it starts this far below the top
+/// reading, and the evidence moves it.
+const KANA_BELOW: f64 = 3.0;
+/// A whole known word of 4 kana or more, or a phrase entirely of known words and particles.
+const KANA_WHOLE: f64 = 5.0;
+/// Coverage by known words short of all of it: 90% is +1.8, none −3.6 (times this over 6).
+const KANA_COVERAGE: f64 = 6.0;
+/// Each kana-only key inside the keys (a symbol key in Korean), up to three.
+const KANA_ONLY_KEY: f64 = 1.5;
+/// Each small kana typed with Shift inside the keys, up to two.
+const KANA_SMALL: f64 = 3.0;
+/// Each bare jamo in the Korean reading: Korean is unlikely, up to six.
+const BARE_JAMO_FOR_KANA: f64 = 0.5;
+/// A loose ゛ or ゜, or a start no Japanese word has.
+const KANA_INVALID: f64 = 6.0;
+/// The Korean reading is a known Korean word.
+const KANA_KOREAN_WORD: f64 = 3.0;
+/// The previous word was Japanese.
+const KANA_STICKY: f64 = 2.0;
+/// The longest Japanese word the coverage looks for, in kana.
+const KANA_WORD_MAX: usize = 10;
+
 /// How far a word-initial Shift+vowel capital leans English when it doesn't settle it (bits).
 const CAPITAL_LEAN: f64 = 2.0;
 
@@ -455,6 +493,11 @@ pub struct Predictor {
     /// Words the user never means, each `true` if strong (never on top). English ones lowercase.
     avoided_korean: HashMap<String, bool>,
     avoided_english: HashMap<String, bool>,
+    /// Japanese words in kana, with counts (`predict/common-ja.txt`), and the particles and endings
+    /// that join them (`#!particles` lines), for the kana reading (docs/moonshot.md §5).
+    japanese_words: HashMap<String, u32>,
+    japanese_particles: HashSet<String>,
+    avoided_japanese: HashMap<String, bool>,
     /// The learned ranker's weights (spec §10.13); none: the rules rank (legacy).
     #[cfg(not(feature = "legacy-predict"))]
     learned: Option<std::sync::Arc<crate::learned::Model>>,
@@ -498,6 +541,9 @@ impl Predictor {
                 .collect(),
             avoided_korean: HashMap::new(),
             avoided_english: HashMap::new(),
+            japanese_words: HashMap::new(),
+            japanese_particles: HashSet::new(),
+            avoided_japanese: HashMap::new(),
             #[cfg(not(feature = "legacy-predict"))]
             learned: None,
         })
@@ -518,6 +564,171 @@ impl Predictor {
             let _ = model;
             Ok(self.clone())
         }
+    }
+
+    /// This predictor with Japanese words for the kana reading (`predict/common-ja.txt`, or a
+    /// training file's `vocabulary.japanese`): lines of `word` or `word<TAB>count` in hiragana or
+    /// katakana, and `#!particles` lines of particles and endings. Merged into what's there.
+    pub fn with_japanese_words(&self, text: &str) -> Predictor {
+        let mut next = self.clone();
+        for (word, count) in word_counts(text) {
+            let entry = next.japanese_words.entry(word).or_insert(0);
+            *entry = (*entry).max(count);
+        }
+        for line in text.lines().filter_map(|l| l.trim().strip_prefix("#!particles ")) {
+            next.japanese_particles.extend(line.split_whitespace().map(|p| crate::kana::hiragana(p)));
+        }
+        next
+    }
+
+    /// This predictor with Japanese words the user never means (a training file's
+    /// `avoid.japanese`): lines of `word` or `word<TAB>strong`, in kana.
+    pub fn with_avoided_japanese(&self, text: &str) -> Predictor {
+        let mut next = self.clone();
+        for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+            let (word, strength) = line.split_once('\t').unwrap_or((line, ""));
+            let word = crate::kana::hiragana(word.trim());
+            let strong = next.avoided_japanese.get(&word).copied().unwrap_or(false) || strength.trim() == "strong";
+            next.avoided_japanese.insert(word, strong);
+        }
+        next
+    }
+
+    /// Whether a kana word is in the Japanese lexicon, in hiragana or katakana.
+    fn japanese_count(&self, word: &str) -> Option<u32> {
+        self.japanese_words.get(word).copied().or_else(|| self.japanese_words.get(&crate::kana::katakana(word)).copied())
+    }
+
+    /// The share of `kana` (hiragana) covered by known words and particles, by a longest-match
+    /// segmentation (Japanese has no spaces, so a staged segment is often a whole phrase), and the
+    /// kana written that way: a word the lexicon knows only in katakana is in katakana
+    /// (あなたのぎたー → あなたのギター).
+    fn kana_coverage(&self, kana: &str) -> (f64, String) {
+        let chars: Vec<char> = kana.chars().collect();
+        let n = chars.len();
+        if n == 0 {
+            return (0.0, String::new());
+        }
+        // best[i]: the most kana covered in chars[..i], and the word that ends there (its length).
+        let mut best = vec![(0usize, 0usize); n + 1];
+        for i in 0..n {
+            // Kana i left uncovered (length 0 means one kana as typed).
+            if best[i].0 > best[i + 1].0 {
+                best[i + 1] = (best[i].0, 0);
+            }
+            for len in 1..=KANA_WORD_MAX.min(n - i) {
+                let word: String = chars[i..i + len].iter().collect();
+                let known = (len >= 2 && self.japanese_count(&word).is_some()) || self.japanese_particles.contains(&word);
+                if known && best[i].0 + len > best[i + len].0 {
+                    best[i + len] = (best[i].0 + len, len);
+                }
+            }
+        }
+        // Back through the segmentation: known words, and the kana between them as typed.
+        let mut pieces = Vec::new();
+        let mut end = n;
+        while end > 0 {
+            let len = best[end].1.max(1);
+            let word: String = chars[end - len..end].iter().collect();
+            let katakana = crate::kana::katakana(&word);
+            let only_katakana = best[end].1 > 0
+                && !self.japanese_words.contains_key(&word)
+                && self.japanese_words.contains_key(&katakana);
+            pieces.push(if only_katakana { katakana } else { word });
+            end -= len;
+        }
+        pieces.reverse();
+        (best[n].0 as f64 / n as f64, pieces.concat())
+    }
+
+    /// The kana reading, scored against `others` (the other readings, ranked): docs/moonshot.md §5.
+    fn kana_prediction(&self, readings: &Readings, others: &[Prediction], context: Context) -> Option<Prediction> {
+        let w = context.weights;
+        // No Japanese lexicon loaded (`with_japanese_words`): no kana reading, as in JIS Korean.
+        if readings.kana.is_empty() || w.get(Weight::Kana) == 0.0 || self.japanese_words.is_empty() {
+            return None;
+        }
+        let mut texts = vec![readings.kana.clone()];
+        texts.extend(crate::kana::sokuon_variants(&readings.kana, 3));
+        let mut best: Option<(f64, String)> = None;
+        for (i, text) in texts.iter().enumerate() {
+            let n = text.chars().count();
+            let mut e = 0.0;
+            let exact = if n >= 2 { self.japanese_count(text) } else { None };
+            let whole = match (exact, n) {
+                (Some(_), 2) => 2.0,
+                (Some(_), 3) => 3.5,
+                (Some(_), _) => KANA_WHOLE,
+                (None, _) => f64::NEG_INFINITY,
+            };
+            // A phrase made entirely of known words and particles counts as a known word.
+            let (coverage, _) = self.kana_coverage(text);
+            let covered = match n {
+                _ if n < 3 => f64::NEG_INFINITY,
+                _ if coverage >= 1.0 => KANA_WHOLE,
+                _ => KANA_COVERAGE * (coverage - 0.6),
+            };
+            let words = whole.max(covered);
+            if words.is_finite() {
+                e += words;
+            }
+            // A variant the keys didn't type: a little below the reading itself.
+            if i > 0 {
+                e -= ALTERNATIVE;
+            }
+            e += KANA_ONLY_KEY * readings.kana_only.min(3) as f64;
+            // A small kana typed with Shift after the first key (っ ゃ ゅ ょ ぁ…): Korean never
+            // shifts Z, and Shift+digits rarely sit inside a word.
+            let small = readings.kana.chars().skip(1).filter(|&c| "ぁぃぅぇぉゃゅょっ".contains(c)).count();
+            let misplaced = crate::kana::misplaced_small(text);
+            e += KANA_SMALL * small.saturating_sub(misplaced).min(2) as f64;
+            e -= KANA_INVALID * misplaced as f64;
+            e += BARE_JAMO_FOR_KANA * readings.korean.chars().filter(|&c| is_jamo(c)).count().min(6) as f64;
+            e -= KANA_INVALID * crate::kana::loose_marks(text) as f64;
+            if crate::kana::bad_start(text) {
+                e -= KANA_INVALID;
+            }
+            if self.korean_words.contains_key(readings.korean.as_str()) {
+                e -= KANA_KOREAN_WORD;
+            }
+            match context.previous {
+                Some(Language::Japanese) => e += KANA_STICKY,
+                Some(_) => e -= STICKY,
+                None => {}
+            }
+            if let Some(strong) = self.avoided_japanese.get(text) {
+                e -= if *strong { 99.0 } else { AVOIDED };
+            }
+            if best.as_ref().is_none_or(|(b, _)| e > *b) {
+                best = Some((e, text.clone()));
+            }
+        }
+        let (e, text) = best?;
+        let reference = others.first().map_or(0.0, |p| p.score);
+        let score = reference - KANA_BELOW + e + w.bits(Weight::Kana);
+        // Katakana where that's the word the lexicon knows: the whole (コーヒー), or words inside a
+        // phrase (あなたのギターになりたい).
+        let katakana = crate::kana::katakana(&text);
+        let (text, kind) = if !self.japanese_words.contains_key(&text) && self.japanese_words.contains_key(&katakana) {
+            (katakana, Kind::Katakana)
+        } else {
+            (self.kana_coverage(&text).1, Kind::Kana)
+        };
+        Some(Prediction { text, kind, score })
+    }
+
+    /// Merges the kana reading into ranked predictions: by score, in a slot of its own, never
+    /// replacing another reading, and never a copy of one.
+    fn with_kana(&self, mut out: Vec<Prediction>, readings: &Readings, context: Context) -> Vec<Prediction> {
+        let Some(kana) = self.kana_prediction(readings, &out, context) else { return out };
+        if !kana.score.is_finite() || out.iter().any(|p| p.text == kana.text) {
+            return out;
+        }
+        let at = out.iter().position(|p| p.score < kana.score).unwrap_or(out.len());
+        // A hanja reading is never on top: the kana one can't sit under it there either.
+        out.insert(at, kana);
+        out.truncate(MAX_WITH_KANA);
+        out
     }
 
     /// A Korean word's count in the lexicon (hand-written words count [`HAND_COUNT`]).
@@ -628,9 +839,11 @@ impl Predictor {
         if let Some(model) = &self.learned
             && context.ranker == Ranker::Rules
         {
-            return crate::learned::rank(self, model, readings, context, dictionary);
+            let ranked = crate::learned::rank(self, model, readings, context, dictionary);
+            return self.with_kana(ranked, readings, context);
         }
-        self.predict_by_rules(readings, context, dictionary)
+        let ranked = self.predict_by_rules(readings, context, dictionary);
+        self.with_kana(ranked, readings, context)
     }
 
     /// [`Predictor::predict`] by the rules only (the legacy ranker), whatever model is loaded.
@@ -899,7 +1112,10 @@ impl Predictor {
             }
         };
         let jamo_keys = crate::plan::each_jamo(alternative)?;
-        let (best, best_keys) = crate::plan::cheapest_route(alternative)?;
+        // A bare vowel has no JIS Moonshot route (F6 no longer drops the implied ㅇ): its each-jamo
+        // keys are the only way, as for 마리.
+        let (best, best_keys) = crate::plan::cheapest_route(alternative)
+            .unwrap_or_else(|| (crate::plan::effort(&jamo_keys), jamo_keys.clone()));
         let alt = if jamo_keys == keys {
             chose_jamo(crate::plan::effort(&jamo_keys), best)
         } else {
@@ -1196,7 +1412,7 @@ impl Predictor {
         match context.previous {
             Some(Language::Korean) => margin += STICKY,
             Some(Language::English) => margin -= STICKY,
-            None => {}
+            Some(Language::Japanese) | None => {}
         }
         // One vowel key is a syllable on an implied ㅇ (ㅗ → 오), and a lone lowercase letter
         // is hardly ever an English word: Korean keeps it, or the first key of every word

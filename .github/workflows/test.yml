@@ -32,7 +32,6 @@ jobs:
       - run: cargo test --release --test baseline
       - run: cargo test --release --no-default-features --test baseline
       - run: cargo test --release --features legacy-predict --test baseline
-      - run: cargo test --release --features english --test baseline
 
   engine:
     name: Engine tests
@@ -51,10 +50,8 @@ jobs:
         run: cargo test --release
       - name: Legacy build (predictions ranked by the rules alone, spec §10.13)
         run: cargo test --release --features legacy-predict
-      - name: Lite build
+      - name: Lite build (no predictions, no English modes: the engine still builds without them)
         run: cargo test --release --no-default-features
-      - name: With JIS English (spec §3.6.2)
-        run: cargo test --release --features english
 
   windows:
     name: Windows shell (TSF)
@@ -70,12 +67,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      # Builds jiskorean.dll for x64 and x86 and runs the shell tests (tests/main.cpp). Typing
+      # Builds jismoonshot.dll for x64 and x86 and runs the shell tests (tests/main.cpp). Typing
       # through the installed TIP (tools/type-test.ps1) needs a desktop session: run it by hand.
       - name: Full build
         run: ./tools/build.ps1
-      - name: Lite build
-        run: ./tools/build.ps1 -Lite
       # The installer, from the builds above (unsigned). Runs beside the engine jobs, not before them.
       - name: Installer
         run: |

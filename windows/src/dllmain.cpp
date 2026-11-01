@@ -1,4 +1,4 @@
-// JIS Korean TSF text input processor (in-proc COM server): DLL exports and the class factory.
+// JIS Moonshot TSF text input processor (in-proc COM server): DLL exports and the class factory.
 #include <windows.h>
 
 #include <new>

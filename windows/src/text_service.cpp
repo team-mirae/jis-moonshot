@@ -20,7 +20,6 @@ using Microsoft::WRL::ComPtr;
 namespace jk {
 namespace {
 
-constexpr unsigned kVkHangul = 0x15;  // 한/영 (VK_HANGUL); Right Alt under Korean keyboard type 1
 constexpr unsigned kVkTab = 0x09;
 
 // In a host that refuses a composition, or ends it right after each update, the unconfirmed text
@@ -32,46 +31,50 @@ constexpr bool kKeepTextWithoutComposition = true;
 constexpr ULONGLONG kOwnTermination = 100;
 
 #ifdef JK_PREDICT
-// spec §10.5, in JK_WEIGHT_* order (as macOS's Weight.<Scenario>).
-constexpr const wchar_t* kWeightNames[] = {L"Korean", L"English", L"Implied", L"Mixed",
-                                           L"TwoSet", L"KeepFinals", L"Hanja", L"ImpliedL"};
+// spec §10.5, in JK_WEIGHT_* order (as macOS's Weight.<Scenario>); Kana is docs/moonshot.md §5.
+constexpr const wchar_t* kWeightNames[] = {L"Korean", L"English", L"Implied", L"Mixed",  L"TwoSet",
+                                           L"KeepFinals", L"Hanja", L"ImpliedL", L"Kana"};
 #endif
 
 // The settings menu (lang_bar.h).
 enum MenuId : UINT {
     kMenuEnglish = 1,
-    kMenuDedicatedSymbols,
-    kMenuPredictions,
+    kMenuAccept,  // "Accept Predictive Typing…", the only item until it's accepted
     kMenuAppPredictions,
     kMenuLearning,
     kMenuResetLearned,
     kMenuTrainingFolder,
     kMenuAppOff,
     kMenuEnterCommits,
-    kMenuEnglishDefault,  // ABC's layout: the Korean mode's keyboard's English
     kMenuEnglishWindows,  // ABC's layout: Windows' own (keys pass through)
     kMenuModeFirst = 100,     // + the mode's index in the engine's list (jk_mode_id_at)
     kMenuEnglishFirst = 300,  // + the index of an English mode, as ABC's layout
 };
 
-// Mode C (spec §3.6), the mode whose symbol keys are optional (Dedicated symbol keys).
-constexpr unsigned kModeC = 2;
+// ABC's layouts (docs/moonshot.md §2): the JIS English modes. The retired B_QWERTY and CJ_QWERTY
+// (9, 10) aren't among them; A_QWERTY is the default.
+constexpr std::uint32_t kEnglishLayouts[] = {JK_MODE_A_QWERTY, JK_MODE_A_DVORAK, JK_MODE_A_COLEMAK};
 
-// A DWORD setting that isn't there (no mode id is this large: spec §3.6.1).
-constexpr unsigned long kNotSet = 0xFFFFFFFE;
-
-// A mode's mode name (spec §3.6.1), "A", "A_QWERTY"; empty for an unknown id.
-std::string ModeCode(std::uint32_t id) {
-    return std::string(reinterpret_cast<const char*>(jk_mode_code_ptr(id)), jk_mode_code_len(id));
-}
-
-// The mode whose mode name is `code`, or 0xFFFFFFFF (Windows' layout) if this build lacks it.
-std::uint32_t ModeByCode(const std::string& code) {
-    for (std::uint32_t i = 0; i < jk_mode_count(); ++i) {
-        if (ModeCode(jk_mode_id_at(i)) == code) return jk_mode_id_at(i);
+bool IsEnglishLayout(std::uint32_t id) {
+    for (std::uint32_t layout : kEnglishLayouts) {
+        if (id == layout) return jk_mode_is_english(id) != 0;
     }
-    return 0xFFFFFFFF;
+    return false;
 }
+
+// The predictive-typing notice (docs/moonshot.md §6), as macOS's (mac/Sources/Consent.swift).
+constexpr wchar_t kConsentNotice[] =
+    L"JIS Moonshot reads every key you type as Korean, English and Japanese kana at once, and "
+    L"ranks those readings to show the likeliest one. That is predictive typing, and JIS "
+    L"Moonshot doesn't work without it.\n\n"
+    L"\x2022 What it reads: the keys of the text you haven't committed yet, to rank its readings.\n"
+    L"\x2022 Where: only on this PC. Nothing is sent anywhere.\n"
+    L"\x2022 Learning from your choices is separate and off until you turn it on in the indicator "
+    L"menu.\n"
+    L"\x2022 Terminals, password managers and similar programs start with predictions off "
+    L"(Predictions in <program> in the indicator menu). There, keys type forced Korean.\n\n"
+    L"Until you accept, JIS Moonshot passes every key to the app untouched.\n\n"
+    L"Accept predictive typing?";
 
 std::wstring Utf16(const std::uint8_t* data, size_t length) {
     if (!data || !length) return {};
@@ -239,7 +242,13 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* thread_mgr, TfClientId client
 
     lang_bar_ = new (std::nothrow) LangBarButton(
         [this](ITfMenu* menu) { InitMenu(menu); }, [this](UINT id) { OnMenu(id); },
-        [this] { WriteEnglish(open_); });
+        [this] {
+            if (Accepted()) {
+                WriteEnglish(open_);
+            } else {
+                AskConsent();
+            }
+        });
     ComPtr<ITfLangBarItemMgr> items;
     if (lang_bar_ && SUCCEEDED(thread_mgr_.As(&items))) items->AddItem(lang_bar_);
 
@@ -431,7 +440,7 @@ bool TextService::PrivateField(ITfContext* context) {
 
 bool TextService::MayBePrivate(std::uint32_t key) const {
     // Where the answer changes nothing it isn't asked (a read session per key): modifiers, a
-    // program JIS Korean is off in, and ABC passing keys to Windows' layout (#9).
+    // program JIS Moonshot is off in, and ABC passing keys to Windows' layout (#9).
     return key != JK_KEY_MODIFIER && !app_off_ && (open_ || english_mode_ != kPassThrough);
 }
 
@@ -442,7 +451,7 @@ bool TextService::Private(const wchar_t* why) {
 }
 
 bool TextService::TypesEnglish(std::uint32_t key) const {
-    // ABC, outside password fields and programs JIS Korean is off in (those pass everything).
+    // ABC, outside password fields and programs JIS Moonshot is off in (those pass everything).
     return !open_ && !private_ && !app_off_ && key != JK_KEY_MODIFIER && key != JK_KEY_OTHER;
 }
 
@@ -478,8 +487,10 @@ STDMETHODIMP TextService::OnTestKeyDown(ITfContext* context, WPARAM wparam, LPAR
     // for eaten keys, takes the result from here.
     const unsigned vk = static_cast<unsigned>(wparam);
     *eaten = FALSE;
-    if (vk == kVkHangul) {
-        *eaten = TRUE;  // handled in OnKeyDown
+    // Predictive typing not accepted yet (docs/moonshot.md §6): every key passes through untouched.
+    if (!Accepted()) return S_OK;
+    if (SwitchKeyOf(vk, static_cast<std::uintptr_t>(lparam)) != SwitchKey::kNone) {
+        *eaten = TRUE;  // 한/영, 無変換, 変換: handled in OnKeyDown
         return S_OK;
     }
     // The same key-down tested again (a message loop that peeks before it takes, an app calling
@@ -522,6 +533,7 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* context, WPARAM wparam, LPARAM l
                                     BOOL* eaten) {
     const unsigned vk = static_cast<unsigned>(wparam);
     *eaten = FALSE;
+    if (!Accepted()) return S_OK;  // as in OnTestKeyDown
     // The same key, already handled by OnTestKeyDown. Its lParam comes without the repeat count
     // here (measured), so compare the scan code and extended flag. Apps going through the IMM
     // layer call OnKeyDown even for keys OnTestKeyDown didn't eat (measured: Enter).
@@ -534,11 +546,9 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* context, WPARAM wparam, LPARAM l
     }
     tested_ = {};
     context = Target(context);
-    if (vk == kVkHangul) {
-        // 한/영, as the Microsoft IME: commit, then switch every app (the session's state). It
-        // needs no context: it only writes the session's compartment.
-        if (open_ && Composing()) Flush(context);
-        WriteEnglish(open_);
+    if (const SwitchKey switch_key = SwitchKeyOf(vk, static_cast<std::uintptr_t>(lparam));
+        switch_key != SwitchKey::kNone) {
+        HandleSwitchKey(context, switch_key, (lparam & (LPARAM{1} << 30)) != 0);
         *eaten = TRUE;
     } else if (!context) {
         return NoContext(vk);
@@ -576,6 +586,7 @@ void TextService::HandleKey(ITfContext* context, unsigned vk, std::uint32_t key,
         chosen_.reset();
         shown_.reset();
         Apply(context);
+        FollowEngineMode();
         SaveLearned();
         return;
     }
@@ -585,9 +596,85 @@ void TextService::HandleKey(ITfContext* context, unsigned vk, std::uint32_t key,
 #endif
     *eaten = jk_key(engine_, key, mods) != 0;
     Apply(context);
+    // F6 and F7 switch the engine to JIS Kana itself (docs/moonshot.md §4).
+    FollowEngineMode();
 #ifdef JK_PREDICT
     SaveLearned();
 #endif
+}
+
+void TextService::HandleSwitchKey(ITfContext* context, SwitchKey key, bool repeat) {
+    if (key == SwitchKey::kHangul) {
+        // 한/영, as the Microsoft IME: commit, then switch every app (the session's state). It
+        // needs no context: it only writes the session's compartment.
+        if (open_ && Composing()) Flush(context);
+        WriteEnglish(open_);
+        return;
+    }
+    if (repeat) return;  // held down: one switch, as on macOS
+    if (key == SwitchKey::kNonConvert) {
+        // 無変換 → ABC, committing what shows first, as 한/영 does. Already in ABC: nothing.
+        if (!open_) return;
+        if (Composing()) Flush(context);
+        WriteEnglish(true);
+        return;
+    }
+    // 変換 from ABC: back to 한글, in Mode A (docs/moonshot.md §4).
+    if (!open_) {
+        if (mode_ != JK_MODE_A) {
+            SetMode(JK_MODE_A);
+            settings::WriteDword(L"Mode", JK_MODE_A);
+        }
+        WriteEnglish(false);
+        return;
+    }
+    // In Mode A or JIS Kana: the engine's かな key. Mode A forces the staged keys' Korean reading
+    // (nothing staged: nothing); JIS Kana goes back to Mode A, the staged keys forced Korean.
+    // Where keys pass through (a password field, a program it's off in) it does nothing.
+    if (private_ || app_off_ || !context) return;
+    EnsureData();
+    Settle();
+    CheckOrphan();
+#ifdef JK_PREDICT
+    chosen_.reset();
+#endif
+    jk_kana_key(engine_);
+    Apply(context);
+    FollowEngineMode();
+}
+
+void TextService::FollowEngineMode() {
+    // The engine kept what's staged: no flush, only the setting (every app's mode, spec §8.4)
+    // and the indicator follow.
+    const unsigned mode = jk_mode(engine_);
+    if (mode == mode_) return;
+    log::Write(L"engine switched to mode %u", mode);
+    mode_ = mode;
+    settings::WriteDword(L"Mode", mode);
+    if (lang_bar_) lang_bar_->SetState(mode_, open_, english_mode_);
+}
+
+bool TextService::Accepted() {
+    // Until accepted it's read at every key, so accepting in Setup or in another program applies
+    // at once; ApplySettings reads it again (a value deleted by hand).
+    if (!accepted_) accepted_ = settings::ConsentAccepted();
+    return accepted_;
+}
+
+void TextService::AskConsent() {
+    if (asking_ || Accepted()) return;
+    asking_ = true;
+    const int answer = MessageBoxW(nullptr, kConsentNotice, L"JIS Moonshot: Accept Predictive Typing",
+                                   MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST);
+    asking_ = false;
+    if (answer == IDYES) {
+        settings::AcceptConsent();
+        accepted_ = true;
+        log::Write(L"predictive typing accepted (notice %lu)", settings::kConsentVersion);
+        ApplySettings();
+    } else {
+        log::Write(L"predictive typing not accepted yet");
+    }
 }
 
 STDMETHODIMP TextService::OnTestKeyUp(ITfContext*, WPARAM wparam, LPARAM, BOOL* eaten) {
@@ -774,19 +861,20 @@ void TextService::ApplySettings(bool force) {
     const unsigned long version = settings::Version();
     if (!force && applied_version_ == version) return;
     applied_version_ = version;
+    accepted_ = settings::ConsentAccepted();
     app_off_ = settings::AppOff(settings::ExeName());
     // The mode follows the keyboard, not the app: one setting for every app (spec §8.4).
-    SetMode(static_cast<unsigned>(settings::ReadDword(L"Mode", 0)));
-    // ABC's layout (spec §8.4): the setting if it's an English mode this build has, or Windows'
-    // own; else (unset, or a mode this build lacks) the Korean mode's keyboard's English.
-    const unsigned long english = settings::ReadDword(L"EnglishMode", kNotSet);
-    english_mode_ = english == kPassThrough || jk_mode_is_english(english) ? english : DefaultEnglish();
+    SetMode(static_cast<unsigned>(settings::ReadDword(L"Mode", JK_MODE_A)));
+    // ABC's layout (docs/moonshot.md §7): JIS English, Dvorak or Colemak, or Windows' own; anything
+    // else (unset, a retired English mode) is JIS English.
+    const unsigned long english = settings::ReadDword(L"EnglishMode", JK_MODE_A_QWERTY);
+    english_mode_ = english == kPassThrough || IsEnglishLayout(english) ? english : JK_MODE_A_QWERTY;
     if (lang_bar_) lang_bar_->SetState(mode_, open_, english_mode_);
-    jk_set_dedicated_symbols(engine_, settings::ReadDword(L"DedicatedSymbols", 1) ? 1 : 0);
     jk_set_enter_commits(engine_, settings::ReadDword(L"EnterCommits", 0) ? 1 : 0);
 #ifdef JK_PREDICT
-    const bool on = settings::ReadDword(L"Predictions", 1) != 0 &&
-                    settings::AppPredicting(settings::ExeName());
+    // Predictions are always on (docs/moonshot.md §6); a program can still be excluded (terminals,
+    // password managers: a safety measure, not a switch).
+    const bool on = settings::AppPredicting(settings::ExeName());
     // Before the first key the predictor may still be loading (EnsureData sets it then).
     predicting_ = on && data_ready_ && training::SetPredictor(engine_);
     if (!predicting_) jk_set_predictor(engine_, nullptr);
@@ -808,23 +896,6 @@ void TextService::ApplySettings(bool force) {
     }
     jk_set_learning(engine_, settings::ReadDword(L"LearnFromChoices", 0) ? 1 : 0);
 #endif
-}
-
-std::uint32_t TextService::DefaultEnglish() const {
-    // The same keyboard's QWERTY English (spec §3.6.2): JIS English on JIS, US English on US
-    // ANSI, UK English on ISO.
-    const std::string korean = ModeCode(mode_);
-    const char* english = korean == "B" ? "B_QWERTY" : korean == "C" ? "CJ_QWERTY" : "A_QWERTY";
-    return ModeByCode(english);
-}
-
-bool TextService::SameKeyboard(std::uint32_t english) const {
-    // A mode name's namespace is its keyboard family (spec §3.6.1): A_ JIS, B_ US ANSI, C_ and
-    // CJ_ ISO, the families of Modes A, B and C.
-    const std::string korean = ModeCode(mode_), code = ModeCode(english);
-    if (korean.empty() || code.empty()) return false;
-    if (code.rfind(korean + "_", 0) == 0) return true;
-    return korean == "C" && code.rfind("CJ_", 0) == 0;
 }
 
 bool TextService::TypeEnglish(ITfContext* context, std::uint32_t key, std::uint32_t mods) {
@@ -852,10 +923,10 @@ bool TextService::TypeEnglish(ITfContext* context, std::uint32_t key, std::uint3
 
 void TextService::SetMode(unsigned mode) {
     if (mode == mode_) return;
-    // An id this build doesn't have (a mode set by a newer version) is refused, and an English
-    // mode isn't a Korean mode (it's ABC's layout, below): Mode A then.
+    // An id the engine refuses (the retired 1, 2, 9 and 10, or a mode set by a newer version) and an
+    // English mode (ABC's layout, not a typing mode here) give Mode A (docs/moonshot.md §2).
     if (jk_mode_is_english(mode) || !jk_set_mode(engine_, mode)) {
-        mode = 0;
+        mode = JK_MODE_A;
         jk_set_mode(engine_, mode);
     }
     mode_ = mode;
@@ -872,61 +943,49 @@ void TextService::InitMenu(ITfMenu* menu) {
     auto separator = [menu] {
         menu->AddMenuItem(0, TF_LBMENUF_SEPARATOR, nullptr, nullptr, L"", 0, nullptr);
     };
-    add(kMenuEnglish, L"ABC: English (한/영)", !open_);
+    // Until predictive typing is accepted (docs/moonshot.md §6), as macOS's input menu.
+    if (!Accepted()) {
+        add(kMenuAccept, L"Accept Predictive Typing\x2026", false);
+        return;
+    }
+    add(kMenuEnglish, L"ABC: English (無変換, 한/영)", !open_);
     add(kMenuAppOff, L"Off in " + settings::ExeName() + L" (Keys Pass Through There)", app_off_);
     separator();
-    // Every Korean mode this build has, in the engine's order and by its names (spec §3.6.1): ids
-    // have gaps, so they're listed with jk_mode_id_at. "Mode A: JIS Korean Original Layout"...
+    // The typing modes (docs/moonshot.md §2): Mode A and JIS Kana, by the engine's names. Ids have
+    // gaps, so they're listed with jk_mode_id_at.
     auto label = [](std::uint32_t id) {
         return Utf16(jk_mode_name_ptr(id), jk_mode_name_len(id)) + L" (" +
                Utf16(jk_mode_code_ptr(id), jk_mode_code_len(id)) + L")";
     };
     for (std::uint32_t index = 0; index < jk_mode_count(); ++index) {
         const std::uint32_t id = jk_mode_id_at(index);
-        if (jk_mode_is_english(id)) continue;
-        const std::wstring code = Utf16(jk_mode_code_ptr(id), jk_mode_code_len(id));
+        if (id != JK_MODE_A && id != JK_MODE_A_KANA) continue;
         const std::wstring name = Utf16(jk_mode_name_ptr(id), jk_mode_name_len(id));
-        add(kMenuModeFirst + index, L"Mode " + code + L": " + name, mode_ == id);
+        add(kMenuModeFirst + index,
+            id == JK_MODE_A ? L"Mode A: " + name + L" (変換)" : name + L" (F6 Hiragana, F7 Katakana)",
+            mode_ == id);
     }
-    // Mode C's symbol keys are optional (spec §3.6), as in macOS's input menu while it's active.
-    if (mode_ == kModeC) {
-        add(kMenuDedicatedSymbols, L"Dedicated Symbol Keys", settings::ReadDword(L"DedicatedSymbols", 1) != 0);
-    }
-    // What ABC (한/영) types (spec §8.4): by default the Korean mode's keyboard's English; any
-    // English mode on request, this keyboard's first; or Windows' own layout.
+    // What ABC (無変換, 한/영) types (docs/moonshot.md §7): JIS English by default, JIS Dvorak or
+    // JIS Colemak on request, or Windows' own layout.
     ITfMenu* english = nullptr;
-    const std::wstring english_title = L"English Layout (한/영)";
+    const std::wstring english_title = L"English Layout (無変換, 한/영)";
     if (SUCCEEDED(menu->AddMenuItem(0, TF_LBMENUF_SUBMENU, nullptr, nullptr, english_title.c_str(),
                                     static_cast<ULONG>(english_title.size()), &english)) && english) {
-        const bool unset = settings::ReadDword(L"EnglishMode", kNotSet) == kNotSet;
         auto item = [english](UINT id, const std::wstring& text, bool checked) {
             english->AddMenuItem(id, checked ? TF_LBMENUF_CHECKED : 0, nullptr, nullptr, text.c_str(),
                                  static_cast<ULONG>(text.size()), nullptr);
         };
-        auto line = [english] { english->AddMenuItem(0, TF_LBMENUF_SEPARATOR, nullptr, nullptr, L"", 0, nullptr); };
-        const std::uint32_t fallback = DefaultEnglish();
-        item(kMenuEnglishDefault,
-             L"Default for This Keyboard: " +
-                 (fallback == kPassThrough ? std::wstring(L"Windows' Layout") : label(fallback)),
-             unset);
-        line();
-        for (const bool same : {true, false}) {
-            bool any = false;
-            for (std::uint32_t index = 0; index < jk_mode_count(); ++index) {
-                const std::uint32_t id = jk_mode_id_at(index);
-                if (!jk_mode_is_english(id) || SameKeyboard(id) != same) continue;
-                item(kMenuEnglishFirst + index, label(id), !unset && english_mode_ == id);
-                any = true;
-            }
-            if (any) line();
+        for (std::uint32_t index = 0; index < jk_mode_count(); ++index) {
+            const std::uint32_t id = jk_mode_id_at(index);
+            if (IsEnglishLayout(id)) item(kMenuEnglishFirst + index, label(id), english_mode_ == id);
         }
-        item(kMenuEnglishWindows, L"Windows' Keyboard Layout (Keys Pass Through)",
-             !unset && english_mode_ == kPassThrough);
+        english->AddMenuItem(0, TF_LBMENUF_SEPARATOR, nullptr, nullptr, L"", 0, nullptr);
+        item(kMenuEnglishWindows, L"Windows' Keyboard Layout (Keys Pass Through)", english_mode_ == kPassThrough);
         english->Release();
     }
     separator();
 #ifdef JK_PREDICT
-    add(kMenuPredictions, L"Predictions", settings::ReadDword(L"Predictions", 1) != 0);
+    // Predictions are always on (docs/moonshot.md §6): per program, they can be excluded.
     const std::wstring& exe = settings::ExeName();
     std::wstring app = L"Predictions in " + exe;
     if (const wchar_t* why = settings::DefaultOffReason(exe)) {
@@ -940,8 +999,9 @@ void TextService::InitMenu(ITfMenu* menu) {
     const std::wstring title = L"Learned Weights";
     if (SUCCEEDED(menu->AddMenuItem(0, TF_LBMENUF_SUBMENU, nullptr, nullptr, title.c_str(),
                                     static_cast<ULONG>(title.size()), &learned)) && learned) {
-        const wchar_t* labels[] = {L"Korean", L"English", L"Implied ㅇ", L"English + particle",
-                                   L"Plain 2-set", L"Finals kept", L"Hanja", L"Implied ㄹ after ㄴ"};
+        const wchar_t* labels[] = {L"Korean",      L"English",     L"Implied ㅇ", L"English + particle",
+                                   L"Plain 2-set", L"Finals kept", L"Hanja",      L"Implied ㄹ after ㄴ",
+                                   L"Kana"};
         for (std::uint32_t id = 0; id < std::size(labels); ++id) {
             wchar_t line[64];
             swprintf_s(line, L"%s  ×%.2f", labels[id], jk_learned_weight(engine_, id));
@@ -975,6 +1035,9 @@ void TextService::OnMenu(UINT id) {
         return;
     }
     switch (id) {
+        case kMenuAccept:
+            AskConsent();
+            return;
         case kMenuEnglish:
             WriteEnglish(open_);
             return;
@@ -982,22 +1045,13 @@ void TextService::OnMenu(UINT id) {
             if (ITfContext* pending = Target(nullptr); !app_off_ && pending) Flush(pending);
             settings::SetAppOff(settings::ExeName(), !app_off_);
             break;
-        case kMenuEnglishDefault:
-            settings::Delete(L"EnglishMode");
-            break;
         case kMenuEnglishWindows:
             settings::WriteDword(L"EnglishMode", kPassThrough);
-            break;
-        case kMenuDedicatedSymbols:
-            settings::WriteDword(L"DedicatedSymbols", settings::ReadDword(L"DedicatedSymbols", 1) ? 0 : 1);
             break;
         case kMenuEnterCommits:
             settings::WriteDword(L"EnterCommits", settings::ReadDword(L"EnterCommits", 0) ? 0 : 1);
             break;
 #ifdef JK_PREDICT
-        case kMenuPredictions:
-            settings::WriteDword(L"Predictions", settings::ReadDword(L"Predictions", 1) ? 0 : 1);
-            break;
         case kMenuAppPredictions: {
             const std::wstring& exe = settings::ExeName();
             settings::SetAppPredicting(exe, !settings::AppPredicting(exe));

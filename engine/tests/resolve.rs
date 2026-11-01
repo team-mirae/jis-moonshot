@@ -16,17 +16,16 @@ fn has(found: &[Vec<String>], keys: &str) -> bool {
 
 #[test]
 fn a_key_alone_types_its_character_in_the_mode() {
-    let (a, b) = (in_mode(Mode::A), in_mode(Mode::B));
+    let a = in_mode(Mode::A);
     assert_eq!(key_input(&a, "KeyG").as_deref(), Some("ㅎ"));
     assert_eq!(key_input(&a, "S-KeyQ").as_deref(), Some("ㅃ"));
     assert_eq!(key_input(&a, "Equal").as_deref(), Some("("));
-    assert_eq!(key_input(&b, "Equal").as_deref(), Some("="));
-    assert_eq!(key_input(&b, "S-BracketLeft").as_deref(), Some("「"));
-    // Not characters: F-keys, Space, Shift+Z (F10), unknown keys.
-    for press in ["F6", "Space", "S-KeyZ", "Bogus", "", "S-"] {
+    // Shift+Z is no longer F10 (docs/moonshot.md §1): ㅋ, as on standard 2-set.
+    assert_eq!(key_input(&a, "S-KeyZ").as_deref(), Some("ㅋ"));
+    // Not characters: F-keys, Space, unknown keys.
+    for press in ["F6", "Space", "Bogus", "", "S-"] {
         assert_eq!(key_input(&a, press), None, "{press}");
     }
-    assert_eq!(key_input(&b, "IntlYen"), None);
 }
 
 #[test]
@@ -38,7 +37,7 @@ fn a_key_after_context_shows_the_whole_field() {
     assert_eq!(key_input_after(&e, "한", "Space").as_deref(), Some("한 "));
     assert_eq!(key_input_after(&e, "한", "F10").as_deref(), Some("gks"));
     assert_eq!(key_input_after(&e, "한", "Nope"), None);
-    assert_eq!(key_input_after(&in_mode(Mode::B), "한", "F8").as_deref(), Some("한")); // reserved
+    assert_eq!(key_input_after(&in_mode(Mode::A), "한", "F8").as_deref(), Some("한")); // reserved
 }
 
 #[test]
@@ -62,18 +61,17 @@ fn keys_for_a_word_within_the_range() {
 }
 
 #[test]
-fn keys_depend_on_the_mode() {
-    // " is Shift+@ in Mode A, Shift+' on US ANSI in Mode B.
+fn keys_follow_the_mode() {
+    // " is Shift+@ in Mode A.
     assert!(has(&keys_for_output(&in_mode(Mode::A), "\"", 1, 1), "S-BracketLeft"));
-    assert!(has(&keys_for_output(&in_mode(Mode::B), "\"", 1, 1), "S-Quote"));
-    assert!(!has(&keys_for_output(&in_mode(Mode::B), "\"", 1, 1), "S-BracketLeft"));
 }
 
 #[test]
 fn every_combination_types_the_text() {
-    // ! is the − key in Mode A; Mode B keeps US ANSI's symbols, where ? is Shift+/.
-    for (e, symbol) in [(in_mode(Mode::A), "가!"), (in_mode(Mode::B), "가?")] {
-        for text in ["까", "와", "읽", "한 ", "ㅠㅠ", "1", symbol] {
+    // ! is the − key in Mode A. (Bare vowels like ㅠㅠ aren't here: F6 no longer drops the implied
+    // ㅇ, docs/moonshot.md §4.)
+    for (e, symbol) in [(in_mode(Mode::A), "가!")] {
+        for text in ["까", "와", "읽", "한 ", "1", symbol] {
             let found = keys_for_output(&e, text, 1, 4);
             assert!(!found.is_empty(), "{text}");
             for route in found {
@@ -85,13 +83,14 @@ fn every_combination_types_the_text() {
 }
 
 #[test]
-fn hanja_through_f7() {
+fn hanja_through_shift_f7() {
     let mut e = Engine::new();
     let tsv = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/dict/hanja.tsv")).unwrap();
     e.set_dictionary(std::sync::Arc::new(Dictionary::parse(&tsv)));
-    // 학교 (G K R R Y), then F7: its top hanja.
+    // 학교 (G K R R Y), then Shift+F7 (the hanja list moved from F7, docs/moonshot.md §4): its top
+    // hanja.
     let found = keys_for_output(&e, "學校", 6, 6);
-    assert!(has(&found, "KeyG KeyK KeyR KeyR KeyY F7"), "{found:?}");
+    assert!(has(&found, "KeyG KeyK KeyR KeyR KeyY S-F7"), "{found:?}");
 }
 
 #[test]

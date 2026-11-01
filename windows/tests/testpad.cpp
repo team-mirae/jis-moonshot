@@ -11,7 +11,7 @@
 // a character as Unicode
 // (VK_PACKET), and @off / @on / @focus=<target> / @wait=<ms> are commands (TypeKeys).
 //
-// With --keys it selects the JIS Korean profile for itself (with --profile), injects the keys with
+// With --keys it selects the JIS Moonshot profile for itself (with --profile), injects the keys with
 // SendInput by scan code (S- holds Shift, Hangul is 한/영), writes the target's text as UTF-8 to
 // --out and exits. It's the foreground window meanwhile: don't touch the keyboard. The virtual keys
 // whose WM_KEYDOWN reached the target (keys the TIP didn't eat, or VK_PROCESSKEY E5 for ones it
@@ -31,8 +31,8 @@
 
 namespace {
 
-constexpr GUID kClsid = {0xd10651ad, 0x51ea, 0x4dba, {0x8b, 0xff, 0x19, 0x05, 0x26, 0x1b, 0x26, 0xa1}};
-constexpr GUID kProfile = {0x669e0e87, 0xfa58, 0x46f6, {0x96, 0xe1, 0x08, 0x90, 0xa0, 0x22, 0x44, 0x04}};
+constexpr GUID kClsid = {0xec381a55, 0x0ad1, 0x42df, {0xbb, 0xab, 0xaf, 0x4f, 0x34, 0xf9, 0x0c, 0x1c}};
+constexpr GUID kProfile = {0x42bb462f, 0xca66, 0x4fd0, {0x92, 0x89, 0x95, 0x1e, 0xae, 0x5c, 0x4b, 0xb3}};
 constexpr UINT kDone = WM_APP + 1;
 constexpr UINT kCommand = WM_APP + 2;   // lParam: const std::wstring* (TypeKeys' @ commands)
 constexpr UINT kComplete = WM_APP + 3;  // the cancel target ends the IME composition
@@ -68,7 +68,7 @@ HWND Target() {
 struct Key {
     WORD scan;
     bool extended;
-    WORD vk;  // for keys sent by virtual key (Hangul)
+    WORD vk;  // for keys sent by virtual key (Hangul, NonConvert, Convert)
 };
 
 bool Lookup(const std::wstring& name, Key* key) {
@@ -94,6 +94,8 @@ bool Lookup(const std::wstring& name, Key* key) {
         {L"ArrowUp", {0x48, true}}, {L"ArrowDown", {0x50, true}},
         {L"ArrowLeft", {0x4B, true}}, {L"ArrowRight", {0x4D, true}},
         {L"Hangul", {0, false, 0x15}},
+        // JIS 無変換 / 変換, by virtual key (VK_NONCONVERT / VK_CONVERT), as 한/영 is sent.
+        {L"NonConvert", {0, false, 0x1D}}, {L"Convert", {0, false, 0x1C}},
     };
     for (const Named& n : kKeys) {
         if (name == n.name) {
@@ -179,7 +181,7 @@ void TypeKeys(HWND window) {
 
 // Starts on 한글: the session-wide 한/영 state (text_service.h) back to Korean.
 void ResetToKorean() {
-    constexpr GUID kEnglish = {0x51678ef8, 0x4a49, 0x4832, {0xa9, 0x94, 0xac, 0x88, 0xab, 0x0f, 0x76, 0xa6}};
+    constexpr GUID kEnglish = {0x0f89dfd1, 0xcceb, 0x4db1, {0xb2, 0xe0, 0x1d, 0xc7, 0x28, 0xf0, 0x9d, 0x2b}};
     ITfThreadMgr* threads = nullptr;
     if (FAILED(CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&threads)))) return;
     TfClientId id = TF_CLIENTID_NULL;
@@ -216,7 +218,7 @@ void SelectProfile() {
     ActivateProfile(kClsid, kProfile);
 }
 
-// The Microsoft Korean IME, to switch JIS Korean off mid-composition (@off).
+// The Microsoft Korean IME, to switch JIS Moonshot off mid-composition (@off).
 void SelectMicrosoftIme() {
     constexpr GUID kMsClsid = {0xa028ae76, 0x01b1, 0x46c2, {0x99, 0xc4, 0xac, 0xd9, 0x85, 0x8a, 0xe0, 0x2f}};
     constexpr GUID kMsProfile = {0xb5fe1f02, 0xd5f2, 0x4445, {0x9c, 0x03, 0xc5, 0x68, 0xf2, 0x3c, 0x99, 0xa1}};
@@ -352,9 +354,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     wc.hInstance = instance;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
-    wc.lpszClassName = L"JISKoreanTestpad";
+    wc.lpszClassName = L"JISMoonshotTestpad";
     RegisterClassExW(&wc);
-    HWND window = CreateWindowExW(0, wc.lpszClassName, L"JIS Korean testpad", WS_OVERLAPPEDWINDOW,
+    HWND window = CreateWindowExW(0, wc.lpszClassName, L"JIS Moonshot testpad", WS_OVERLAPPEDWINDOW,
                                   CW_USEDEFAULT, CW_USEDEFAULT, 640, 560, nullptr, nullptr,
                                   instance, nullptr);
     g_edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
@@ -382,7 +384,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     plain.lpfnWndProc = DefWindowProcW;
     plain.hInstance = instance;
     plain.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    plain.lpszClassName = L"JISKoreanNoContext";
+    plain.lpszClassName = L"JISMoonshotNoContext";
     RegisterClassExW(&plain);
     g_nocontext = CreateWindowExW(WS_EX_CLIENTEDGE, plain.lpszClassName, L"", WS_CHILD | WS_VISIBLE,
                                   0, 0, 0, 0, window, nullptr, instance, nullptr);

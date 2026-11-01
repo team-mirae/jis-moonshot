@@ -214,6 +214,11 @@ void LangBarButton::SetState(unsigned mode, bool open, unsigned english) {
     if (sink_) sink_->OnUpdate(TF_LBI_ICON | TF_LBI_TOOLTIP | TF_LBI_TEXT);
 }
 
+const wchar_t* LangBarButton::Label() const {
+    if (!open_) return L"ABC";
+    return mode_ == JK_MODE_A_KANA ? L"かな" : L"한글";
+}
+
 void LangBarButton::Detach() {
     init_menu_ = nullptr;
     on_menu_ = nullptr;
@@ -249,7 +254,7 @@ STDMETHODIMP LangBarButton::GetInfo(TF_LANGBARITEMINFO* info) {
     info->guidItem = kLangBarItemInputMode;
     info->dwStyle = TF_LBI_STYLE_BTN_BUTTON | TF_LBI_STYLE_SHOWNINTRAY;
     info->ulSort = 0;
-    wcscpy_s(info->szDescription, L"JIS Korean");
+    wcscpy_s(info->szDescription, L"JIS Moonshot");
     return S_OK;
 }
 
@@ -263,23 +268,23 @@ STDMETHODIMP LangBarButton::Show(BOOL) { return E_NOTIMPL; }
 
 STDMETHODIMP LangBarButton::GetTooltipString(BSTR* tooltip) {
     if (!tooltip) return E_INVALIDARG;
-    // "JIS Korean, Mode B: JIS Korean for US ANSI", from the engine's mode code and name (spec
-    // §3.6.1); both are empty for an id the engine doesn't know.
+    // "JIS Moonshot, Mode A: JIS Moonshot", from the engine's mode code and name (spec §3.6.1);
+    // both are empty for an id the engine doesn't know.
     auto wide = [](const std::uint8_t* p, size_t n) {
         std::wstring w(n, L'\0');
         w.resize(static_cast<size_t>(MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<const char*>(p),
                                                          static_cast<int>(n), w.data(), static_cast<int>(n))));
         return w;
     };
-    std::wstring text = L"JIS Korean";
+    std::wstring text = L"JIS Moonshot";
     const std::wstring code = wide(jk_mode_code_ptr(mode_), jk_mode_code_len(mode_));
     if (!code.empty()) text += L", Mode " + code + L": " + wide(jk_mode_name_ptr(mode_), jk_mode_name_len(mode_));
     if (open_) {
-        text += L": 한글";
+        text += std::wstring(L": ") + Label();  // 한글, or かな in JIS Kana
     } else {
         // ABC: the English layout it types (spec §8.4), or Windows' own.
         const std::wstring english = wide(jk_mode_name_ptr(english_), jk_mode_name_len(english_));
-        text += L": ABC (한/영), " + (english.empty() ? std::wstring(L"Windows' keyboard layout") : english);
+        text += L": ABC (無変換, 한/영), " + (english.empty() ? std::wstring(L"Windows' keyboard layout") : english);
     }
     *tooltip = SysAllocString(text.c_str());
     return *tooltip ? S_OK : E_OUTOFMEMORY;
@@ -313,13 +318,13 @@ STDMETHODIMP LangBarButton::OnMenuSelect(UINT id) {
 
 STDMETHODIMP LangBarButton::GetIcon(HICON* icon) {
     if (!icon) return E_INVALIDARG;
-    *icon = TextIcon(open_ ? L"한글" : L"ABC", GetSystemMetrics(SM_CXSMICON));
+    *icon = TextIcon(Label(), GetSystemMetrics(SM_CXSMICON));
     return *icon ? S_OK : E_FAIL;
 }
 
 STDMETHODIMP LangBarButton::GetText(BSTR* text) {
     if (!text) return E_INVALIDARG;
-    *text = SysAllocString(open_ ? L"한글" : L"ABC");
+    *text = SysAllocString(Label());
     return *text ? S_OK : E_OUTOFMEMORY;
 }
 

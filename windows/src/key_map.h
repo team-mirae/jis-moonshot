@@ -13,7 +13,8 @@ namespace jk {
 namespace vk {
 inline constexpr unsigned kBack = 0x08, kTab = 0x09, kReturn = 0x0D, kShift = 0x10,
                           kControl = 0x11, kMenu = 0x12, kCapital = 0x14, kKana = 0x15,
-                          kKanji = 0x19, kEscape = 0x1B, kSpace = 0x20, kLeft = 0x25,
+                          kKanji = 0x19, kConvert = 0x1C, kNonConvert = 0x1D,
+                          kEscape = 0x1B, kSpace = 0x20, kLeft = 0x25,
                           kUp = 0x26, kRight = 0x27, kDown = 0x28, kLWin = 0x5B, kRWin = 0x5C,
                           kF6 = 0x75, kF7 = 0x76, kF8 = 0x77, kF9 = 0x78, kF10 = 0x79,
                           kLShift = 0xA0, kRShift = 0xA1, kLControl = 0xA2, kRControl = 0xA3,
@@ -28,6 +29,13 @@ std::uint32_t EngineKey(unsigned vk, unsigned scan, bool extended);
 // no scan code (scan 0) gets the scan code `scan_of(vk)` (MapVirtualKeyW in the shell), so it
 // still types its letter instead of committing as an unknown key; VK_PACKET never does (#9, #4).
 std::uint32_t KeyOf(unsigned vk, std::uintptr_t lparam, unsigned (*scan_of)(unsigned vk));
+
+// The keys that switch JIS Moonshot (docs/moonshot.md §4, §7): 한/영 (VK_HANGUL) toggles ABC and
+// 한글, 無変換 (VK_NONCONVERT) goes to ABC, 変換 (VK_CONVERT) back to 한글 or, there, is the
+// engine's かな key. 無変換 and 変換 are also known by their JIS scan codes (0x7B, 0x79), in case
+// the Korean layout Windows loaded gives them another virtual key (not measured). Never engine keys.
+enum class SwitchKey { kNone, kHangul, kNonConvert, kConvert };
+SwitchKey SwitchKeyOf(unsigned vk, std::uintptr_t lparam);
 
 // Whether a key-down test (wparam, lParam, GetMessageTime, GetTickCount64) is the same key-down as
 // an earlier one with no key-up of it in between, tested again (#5). A first press (lParam bit 30

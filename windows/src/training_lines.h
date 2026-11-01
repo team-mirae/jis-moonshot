@@ -11,6 +11,9 @@ namespace jk::training {
 // The word lists accept whole Hangul syllables (가-힣) or ASCII letters only, as on macOS.
 bool KoreanWord(const std::wstring& w);
 bool EnglishWord(const std::wstring& w);
+// Kana words for the kana reading (vocabulary.japanese, avoid with "language": "japanese"):
+// hiragana (ぁ-ゖ), katakana (ァ-ヺ) and ー only, as on macOS.
+bool KanaWord(const std::wstring& w);
 
 // A JSON number as an int in [lo, hi]; `fallback` for NaN or infinity. Clamped before the cast:
 // casting an out-of-range double (1e300) to int is undefined.

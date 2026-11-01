@@ -213,6 +213,8 @@ fn scenario_bits(w: &Weights, kind: Kind, origin: Origin, readings: &Readings, t
         }
         Kind::Mixed if origin == Origin::Pieces => 0.0,
         Kind::Mixed => bits(Weight::Mixed),
+        // Never featurized: the kana reading is merged after ranking (docs/moonshot.md §5).
+        Kind::Kana | Kind::Katakana => bits(Weight::Kana),
     }
 }
 
@@ -355,7 +357,8 @@ impl Keys {
             previous: match context.previous {
                 Some(Language::Korean) => "korean",
                 Some(Language::English) => "english",
-                None => "none",
+                // Not trained on kana: as if there were no previous word.
+                Some(Language::Japanese) | None => "none",
             },
             counter,
             kept: readings.kept.len(),

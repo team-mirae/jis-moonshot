@@ -47,6 +47,7 @@ pub fn scenario(kind: Kind) -> Weight {
         Kind::KoreanKeepFinals => Weight::KeepFinals,
         Kind::Hanja => Weight::Hanja,
         Kind::ImpliedL => Weight::ImpliedL,
+        Kind::Kana | Kind::Katakana => Weight::Kana,
     }
 }
 

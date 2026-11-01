@@ -1,4 +1,4 @@
-/* JIS Korean engine C ABI. Matches engine/src/ffi.rs; the key ids are checked by
+/* JIS Moonshot engine C ABI (the header keeps JIS Korean's name). Matches engine/src/ffi.rs; the key ids are checked by
  * engine/tests/header.rs.
  *
  * Usage: create one engine per input context, call jk_key for each key press, then insert
@@ -113,10 +113,37 @@ void jk_flush(JkEngine *engine);
 /* The IME was switched back to. Nothing to reset since the F8 escape was retired (spec §6.1). */
 void jk_activate(JkEngine *engine);
 void jk_set_enter_commits(JkEngine *engine, uint32_t on);
-/* The mode, by id (spec §3.6.1): 0 = Mode A (JIS, the default), 1 = Mode B (US ANSI),
- * 2 = Mode C (UK ISO). Returns 1 if it switched, 0 for an id this build doesn't have (the mode
- * stays as it was). */
+/* ⌥Space: 1 types a full-width space (U+3000) in Mode A and JIS Kana, committing first, and `_` in
+ * the English modes. Off by default (Alt+Space is Windows' window menu): macOS turns it on. */
+void jk_set_option_space(JkEngine *engine, uint32_t on);
+/* The mode, by id (spec §3.6.1, docs/moonshot.md §2). Returns 1 if it switched, 0 for an id this
+ * build doesn't have (the retired 1, 2, 9, 10 included; the mode stays as it was). */
+enum {
+    JK_MODE_A = 0,         /* JIS Moonshot: Korean, English and kana readings */
+    JK_MODE_A_QWERTY = 3,  /* JIS English */
+    JK_MODE_A_DVORAK = 7,
+    JK_MODE_A_COLEMAK = 8,
+    JK_MODE_A_KANA = 11,   /* JIS Kana: kana typing */
+};
 uint32_t jk_set_mode(JkEngine *engine, uint32_t mode);
+/* The engine's mode now. F6 / F7 switch it to JIS Kana and jk_kana_key back to Mode A: read it
+ * after jk_key and jk_kana_key, and follow it (select the matching input source). */
+uint32_t jk_mode(JkEngine *engine);
+/* How the staged keys show (docs/moonshot.md §4). */
+enum {
+    JK_SCRIPT_AUTO = 0,     /* the top prediction */
+    JK_SCRIPT_KOREAN = 1,   /* forced Korean */
+    JK_SCRIPT_HIRAGANA = 2,
+    JK_SCRIPT_KATAKANA = 3,
+};
+uint32_t jk_script(JkEngine *engine);
+/* The かな / 変換 key: from an English mode to Mode A; in Mode A, force the staged keys' Korean
+ * reading; from JIS Kana to Mode A, forced Korean. Always consumed (1, or JK_RESULT_ERROR). Apply
+ * the commit and preedit, then read jk_mode. */
+uint32_t jk_kana_key(JkEngine *engine);
+/* The staged keys read as kana, in hiragana, whatever the script. */
+const uint8_t *jk_kana_ptr(JkEngine *engine);
+size_t jk_kana_len(JkEngine *engine);
 /* Dedicated symbol keys (spec §3.6), on (1) by default. Off (0), Mode C's [ ] and ISO extra key
  * type their UK ISO characters ([ { ] } \ |). Modes without optional symbol keys ignore it. */
 void jk_set_dedicated_symbols(JkEngine *engine, uint32_t on);
@@ -130,8 +157,8 @@ size_t jk_mode_name_len(uint32_t mode);
 /* A mode's mode name ("A", "A_QWERTY"; spec §3.6.1). Empty for an unknown id. */
 const uint8_t *jk_mode_code_ptr(uint32_t mode);
 size_t jk_mode_code_len(uint32_t mode);
-/* 1 for an English mode (spec §3.6.2: it consumes no key; its keys type jk_legend_in), 0 for a
- * Korean mode or an unknown id. */
+/* 1 for an English mode (spec §3.6.2: it consumes no key; its keys type jk_legend_in), 0 for Mode
+ * A, JIS Kana or an unknown id. */
 uint32_t jk_mode_is_english(uint32_t mode);
 uint32_t jk_is_escaped(JkEngine *engine);
 
@@ -209,7 +236,11 @@ enum {
     JK_PREDICTION_BARE_VOWELS = 7,
     JK_PREDICTION_MIXED = 8,
     JK_PREDICTION_IMPLIED_L = 9, /* an implied ㄹ after a ㄴ final: 전력 for 저녁 */
+    JK_PREDICTION_KANA = 10,     /* the keys on the JIS kana layout, hiragana */
+    JK_PREDICTION_KATAKANA = 11, /* the kana reading in katakana (a known katakana word) */
 };
+/* With the kana reading, up to this many predictions. */
+#define JK_MAX_PREDICTIONS 5
 JkPredictor *jk_predictor_new(const uint8_t *model, size_t model_len, const uint8_t *english_words,
                               size_t english_len, const uint8_t *korean_words, size_t korean_len,
                               const uint8_t *english_nouns, size_t nouns_len); /* nouns may be NULL */
@@ -240,6 +271,7 @@ enum {
     JK_WEIGHT_KEEP_FINALS = 5,
     JK_WEIGHT_HANJA = 6,
     JK_WEIGHT_IMPLIED_L = 7, /* 0 turns it off */
+    JK_WEIGHT_KANA = 8,      /* the kana reading; 0 turns it off */
 };
 void jk_set_prediction_weight(JkEngine *engine, uint32_t which, double value);
 /* How the implied-ㅇ alternatives (ㅠㅠ vs 유유, 말이 vs 마리) are ranked (spec §10.7): the rules, or
@@ -269,6 +301,11 @@ JkPredictor *jk_predictor_with_words(const JkPredictor *base, const uint8_t *kor
 /* A predictor with words the user never means (lines of `word` or `word<TAB>strong`; the base stays): */
 JkPredictor *jk_predictor_with_avoided(const JkPredictor *base, const uint8_t *korean, size_t korean_len,
                                        const uint8_t *english, size_t english_len);
+/* Japanese words for the kana reading (predict/common-ja.txt, or a training file's
+ * vocabulary.japanese): lines of `word` or `word<TAB>count` and `#!particles` lines. */
+JkPredictor *jk_predictor_with_japanese(const JkPredictor *base, const uint8_t *words, size_t words_len);
+/* Japanese words the user never means (avoid.japanese): lines of `word` or `word<TAB>strong`. */
+JkPredictor *jk_predictor_with_avoided_japanese(const JkPredictor *base, const uint8_t *words, size_t words_len);
 /* Learns from an example: keys as KeyboardEvent.code names, "S-" for Shift (null/empty: the cheapest
  * keys for the text). Returns its place among the predictions (0 = top), -1 not listed, -2 bad input. */
 int32_t jk_learn_example(JkEngine *engine, const uint8_t *text, size_t text_len, const uint8_t *keys,

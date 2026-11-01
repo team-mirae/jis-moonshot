@@ -72,11 +72,11 @@ void Preload() {
 #ifdef JK_PREDICT
     static std::once_flag once;
     std::call_once(once, [] {
-        // With predictions on in this program the dictionary is part of predicting (hanja
-        // readings, the learned ranker). Otherwise it's parsed at the first F7 (most programs
-        // never see one): 50 MB of text, about 100 ms, not in every process.
+        // Predictions are always on (docs/moonshot.md §6), and the dictionary is part of
+        // predicting (hanja readings, the learned ranker). In a program excluded from predictions
+        // it's parsed at the first F7 instead: 50 MB of text, about 100 ms, not in every process.
         RunInBackground([] {
-            if (settings::ReadDword(L"Predictions", 1) && settings::AppPredicting(settings::ExeName())) {
+            if (settings::AppPredicting(settings::ExeName())) {
                 SharedPredictor();
                 SharedDictionary();
             }
@@ -121,6 +121,16 @@ const JkPredictor* SharedPredictor() {
             }
         }
 #endif
+        // The kana reading's lexicon (docs/moonshot.md §5): without it, no kana reading.
+        const Bytes japanese = Resource(IDR_COMMON_JA);
+        if (g_predictor && japanese.data) {
+            if (JkPredictor* kana = jk_predictor_with_japanese(g_predictor, japanese.data, japanese.size)) {
+                jk_predictor_free(g_predictor);
+                g_predictor = kana;
+            } else {
+                log::Write(L"Japanese lexicon unavailable: no kana reading");
+            }
+        }
         if (!g_predictor) log::Write(L"predictor unavailable");
         log::Write(L"predictor loaded in %llu ms", GetTickCount64() - start);
     });

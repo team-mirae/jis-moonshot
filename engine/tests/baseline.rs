@@ -4,8 +4,9 @@
 //!
 //! "Conventional" means each syllable starts with its consonant key (ㅇ included), compound vowels
 //! and double finals are typed as two keys, and double consonants and ㅒ ㅖ take Shift. Typing this
-//! way never leaves a bare vowel, so the spec's three exceptions (the implied ㅇ, Shift+vowel,
-//! Shift+Z) never come into play.
+//! way never leaves a bare vowel, so the spec's exceptions (the implied ㅇ, Shift+vowel) never come
+//! into play. Shift+Z was a third (it was F10); in JIS Moonshot it's ㅋ, as on standard 2-set
+//! (docs/moonshot.md §1), and is held to that here.
 //!
 //! The 2-set tables below are written out here, independent of the engine's own tables, so a
 //! change to the engine can't quietly change what these tests expect. A failure here is a spec
@@ -107,11 +108,10 @@ fn every_syllable() -> impl Iterator<Item = char> {
 enum Style {
     /// KS X 5002 as taught: Shift only for ㄲ ㄸ ㅃ ㅆ ㅉ ㅒ ㅖ.
     Conventional,
-    /// Shift held anyway on the consonant keys where 2-set ignores it (Shift+A is still ㅁ): all but
-    /// Q W E R T, where Shift types the double, and Z, where Shift+Z is F10 (a spec exception).
+    /// Shift held anyway on the consonant keys where 2-set ignores it (Shift+A is still ㅁ, Shift+Z
+    /// still ㅋ): all but Q W E R T, where Shift types the double.
     ShiftHeldOnConsonants,
-    /// JIS Korean's shortcuts: 1–5 for ㅃ ㅉ ㄸ ㄲ ㅆ, 6–0 for ㅟ ㅝ ㅚ ㅢ ㅘ (spec §3.1). Mode A
-    /// and Mode B share the number row.
+    /// JIS Korean's shortcuts: 1–5 for ㅃ ㅉ ㄸ ㄲ ㅆ, 6–0 for ㅟ ㅝ ㅚ ㅢ ㅘ (spec §3.1).
     DedicatedKeys,
 }
 
@@ -138,7 +138,7 @@ fn jamo_presses(jamo: char, style: Style) -> Vec<Press> {
         return [jamo_presses(a, style), jamo_presses(b, style)].concat();
     }
     let (code, shift) = key_of(jamo);
-    let shift_ignored = INITIALS.contains(jamo) && !["KeyQ", "KeyW", "KeyE", "KeyR", "KeyT", "KeyZ"].contains(&code);
+    let shift_ignored = INITIALS.contains(jamo) && !["KeyQ", "KeyW", "KeyE", "KeyR", "KeyT"].contains(&code);
     let shift = shift || (matches!(style, Style::ShiftHeldOnConsonants) && shift_ignored);
     vec![(code, shift)]
 }

@@ -1,9 +1,11 @@
 # web
 
-Live at **https://jis-korean.sjun.me** (Vercel project `jis-korean`).
+Browser playground for JIS Moonshot, and its docs pages. It runs the real engine (`/engine`,
+compiled to wasm32), so it behaves like the desktop input methods: Mode A (Korean, English and kana
+readings) and JIS Kana, with predictions always on.
 
-Browser playground for JIS Korean. It runs the real engine (`/engine`, compiled to wasm32), so
-it behaves exactly like the desktop input methods.
+It's deployed to https://jis-moonshot.sjun.me by `.github/workflows/deploy-web.yml` on every push
+to `main`. Locally:
 
 ```sh
 npm install
@@ -14,18 +16,6 @@ npm run build   # production build in dist/
 Needs Node 24 (24.22.1 or later) or 26.12.1+ (the patched lines; `.nvmrc` pins 24.22.1, `package.json`'s
 `engines` asks for it) and the Rust `wasm32-unknown-unknown` target
 (`rustup target add wasm32-unknown-unknown`).
-
-## Deploy
-
-Every push to `main` that touches `web/` or `engine/` deploys the site
-(`.github/workflows/deploy-web.yml`), after the engine tests pass. Vercel's build machines have no
-Rust, so the site is built first and uploaded prebuilt; by hand, from `web/`:
-
-```sh
-vercel pull --yes --environment=production
-vercel build --prod          # runs npm run build: engine → wasm, then Vite
-vercel deploy --prebuilt --prod
-```
 
 ## Key-press counts
 

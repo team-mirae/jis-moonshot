@@ -1,17 +1,16 @@
 #!/bin/sh
 # Adds the English modes (spec §3.6.2, §8.2.1) to a built bundle's Info.plist and Keyboard Viewer
-# layout list: JIS English (A_QWERTY), US English (B_QWERTY), UK English (CJ_QWERTY), JIS Dvorak
-# (A_DVORAK) and JIS Colemak (A_COLEMAK). Run by
-# `make ENGLISH=1`; the checked-in Info.plist has the Korean modes only.
-# Usage: add-english-mode.sh <JISKorean.app/Contents>
+# layout list: JIS English (A_QWERTY), JIS Dvorak (A_DVORAK) and JIS Colemak (A_COLEMAK). Run by
+# `make`; the checked-in Info.plist has Mode A and JIS Kana only.
+# Usage: add-english-mode.sh <JISMoonshot.app/Contents>
 set -eu
 plist="$1/Info.plist"
-layouts="$1/Resources/JISKoreanKeyboardLayouts-Info.plist"
+layouts="$1/Resources/JISMoonshotKeyboardLayouts-Info.plist"
 pb=/usr/libexec/PlistBuddy
 
 # name, badge, Keyboard Viewer layout, primary in the Roman script (only one mode can be)
 add() {
-    id="me.sjun.inputmethod.JISKorean.$1"
+    id="me.sjun.inputmethod.JISMoonshot.$1"
     mode=":ComponentInputModeDict:tsInputModeListKey:$id"
     # English, so System Settings lists it under English; Roman script, as Japanese input methods
     # declare their Romaji modes.
@@ -31,9 +30,7 @@ add() {
         "$layouts"
 }
 
-add A_QWERTY mode-a-qwerty JISEnglish true
-add B_QWERTY mode-b-qwerty USEnglish false
-add CJ_QWERTY mode-cj-qwerty UKEnglish false
-add A_DVORAK mode-a-dvorak JISDvorak false
-add A_COLEMAK mode-a-colemak JISColemak false
+add A_QWERTY mode-a-qwerty JISMoonshotEnglish true
+add A_DVORAK mode-a-dvorak JISMoonshotDvorak false
+add A_COLEMAK mode-a-colemak JISMoonshotColemak false
 $pb -c "Add :tsInputMethodCharacterRepertoireKey: string Latn" "$plist"

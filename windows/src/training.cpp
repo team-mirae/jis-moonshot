@@ -26,12 +26,14 @@ constexpr wchar_t kKoreanWords[] = L"TrainingWords.Korean";
 constexpr wchar_t kEnglishWords[] = L"TrainingWords.English";
 constexpr wchar_t kKoreanAvoid[] = L"TrainingAvoid.Korean";
 constexpr wchar_t kEnglishAvoid[] = L"TrainingAvoid.English";
+constexpr wchar_t kJapaneseWords[] = L"TrainingWords.Japanese";
+constexpr wchar_t kJapaneseAvoid[] = L"TrainingAvoid.Japanese";
 
 std::wstring Folder() {
     PWSTR path = nullptr;
     std::wstring folder;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &path))) {
-        folder = std::wstring(path) + L"\\JIS Korean";
+        folder = std::wstring(path) + L"\\JIS Moonshot";
     }
     CoTaskMemFree(path);
     return folder;
@@ -75,13 +77,17 @@ bool SetPredictor(JkEngine* engine) {
     const std::wstring english = settings::ReadString(kEnglishWords).value_or(L"");
     const std::wstring avoidKorean = settings::ReadString(kKoreanAvoid).value_or(L"");
     const std::wstring avoidEnglish = settings::ReadString(kEnglishAvoid).value_or(L"");
-    if (korean.empty() && english.empty() && avoidKorean.empty() && avoidEnglish.empty()) {
+    const std::wstring japanese = settings::ReadString(kJapaneseWords).value_or(L"");
+    const std::wstring avoidJapanese = settings::ReadString(kJapaneseAvoid).value_or(L"");
+    if (korean.empty() && english.empty() && avoidKorean.empty() && avoidEnglish.empty() &&
+        japanese.empty() && avoidJapanese.empty()) {
         // The shared predictor lives as long as the DLL.
         const JkPredictor* shared = SharedPredictor();
         jk_set_predictor(engine, shared);
         return shared != nullptr;
     }
-    const std::wstring key = korean + L'\0' + english + L'\0' + avoidKorean + L'\0' + avoidEnglish;
+    const std::wstring key = korean + L'\0' + english + L'\0' + avoidKorean + L'\0' + avoidEnglish +
+                             L'\0' + japanese + L'\0' + avoidJapanese;
     // Set on the engine (which clones its reference) under the lock: another thread rebuilding
     // the personal predictor frees the old one, and mustn't do it in between.
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -102,6 +108,18 @@ bool SetPredictor(JkEngine* engine) {
                 built = avoided;
             }
         }
+        // Japanese words and avoided words for the kana reading (docs/moonshot.md §5).
+        auto add = [&built](const std::wstring& text,
+                            JkPredictor* (*with)(const JkPredictor*, const std::uint8_t*, size_t)) {
+            if (!built || text.empty()) return;
+            const std::string bytes = Narrow(text);
+            if (JkPredictor* next = with(built, reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size())) {
+                jk_predictor_free(built);
+                built = next;
+            }
+        };
+        add(japanese, jk_predictor_with_japanese);
+        add(avoidJapanese, jk_predictor_with_avoided_japanese);
         if (personal) jk_predictor_free(personal);  // engines keep their own reference
         personal = built;
         words = key;
@@ -128,6 +146,8 @@ void ApplyIfChanged(JkEngine* engine) {
             settings::Delete(kEnglishWords);
             settings::Delete(kKoreanAvoid);
             settings::Delete(kEnglishAvoid);
+            settings::Delete(kJapaneseWords);
+            settings::Delete(kJapaneseAvoid);
         }
         return;
     }
@@ -153,15 +173,17 @@ void ApplyIfChanged(JkEngine* engine) {
     const std::optional<json::Value> json = json::Parse(text);
     const json::Value* format = json ? json->Get("format") : nullptr;
     const json::Value* version = json ? json->Get("version") : nullptr;
-    if (!format || !format->String() || *format->String() != "jis-korean-training" || !version ||
-        version->Number() != 1.0) {
+    // JIS Moonshot's own format name, or JIS Korean's: the contract is the same, version 1.
+    const bool known = format && format->String() &&
+                       (*format->String() == "jis-moonshot-training" || *format->String() == "jis-korean-training");
+    if (!known || !version || version->Number() != 1.0) {
         log::Write(L"training.json isn't a version 1 training file; ignored");
         return;
     }
     static const std::map<std::string, const wchar_t*> kWeights = {
         {"korean", L"Korean"}, {"english", L"English"},   {"implied", L"Implied"},
         {"mixed", L"Mixed"},   {"two-set", L"TwoSet"},    {"keep-finals", L"KeepFinals"},
-        {"hanja", L"Hanja"},   {"implied-l", L"ImpliedL"},
+        {"hanja", L"Hanja"},   {"implied-l", L"ImpliedL"},  {"kana", L"Kana"},
     };
     if (const json::Value* weights = json->Get("weights"); weights && weights->type == json::Value::Type::kObject) {
         for (const auto& [name, value] : weights->object) {
@@ -173,9 +195,11 @@ void ApplyIfChanged(JkEngine* engine) {
     const json::Value* vocabulary = json->Get("vocabulary");
     settings::WriteString(kKoreanWords, Lines(vocabulary ? vocabulary->Get("korean") : nullptr, KoreanWord));
     settings::WriteString(kEnglishWords, Lines(vocabulary ? vocabulary->Get("english") : nullptr, EnglishWord));
+    settings::WriteString(kJapaneseWords, Lines(vocabulary ? vocabulary->Get("japanese") : nullptr, KanaWord));
     const json::Value* avoid = json->Get("avoid");
     settings::WriteString(kKoreanAvoid, AvoidLines(avoid, "korean", KoreanWord));
     settings::WriteString(kEnglishAvoid, AvoidLines(avoid, "english", EnglishWord));
+    settings::WriteString(kJapaneseAvoid, AvoidLines(avoid, "japanese", KanaWord));
     const json::Value* examples = json->Get("examples");
     if (examples && examples->type == json::Value::Type::kArray && !examples->array.empty()) {
         settings::WriteDword(L"LearnFromChoices", 1);

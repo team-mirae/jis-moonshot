@@ -3,13 +3,13 @@ import { App } from "./App";
 import { Docs, DOC_PAGES } from "./docs/Docs";
 import { loadEngine, type Engine } from "./engine";
 
-export const REPO = "https://github.com/team-mirae/jis-korean";
+export const REPO = "https://github.com/team-mirae/jis-moonshot";
 
-/** Each platform's release page, released separately (update the tags with each release). */
+/** One release per version (tag `v<version>`) carries every platform: the macOS zip and the
+ * Windows setup.exe. Both link to the latest release. */
 const DOWNLOADS = [
-  { label: "Windows", tag: "v0.3.0-windows" },
-  { label: "macOS", tag: "v0.3.0-macos" },
-  { label: "Minecraft", tag: "v0.3.0-minecraft" },
+  { label: "Windows", file: "setup.exe" },
+  { label: "macOS", file: "zip" },
 ];
 
 /** Where the page is: `#/` the playground, `#/docs/<page>` a docs page. */
@@ -55,10 +55,11 @@ function DownloadMenu() {
     <details className="download" ref={menu}>
       <summary>Download</summary>
       <ul>
-        {DOWNLOADS.map(({ label, tag }) => (
-          <li key={tag}>
+        {DOWNLOADS.map(({ label, file }) => (
+          <li key={label}>
             <a
-              href={`${REPO}/releases/tag/${tag}`}
+              href={`${REPO}/releases/latest`}
+              title={`The latest release's ${file}`}
               target="_blank"
               rel="noreferrer"
               onClick={() => menu.current?.removeAttribute("open")}
@@ -99,7 +100,7 @@ export function Site() {
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="#/">
-            JIS Korean
+            JIS Moonshot
           </a>
           <nav aria-label="Site">
             <a href="#/" aria-current={inDocs ? undefined : "page"}>
@@ -111,7 +112,7 @@ export function Site() {
           </nav>
           <span className="spacer" />
           <DownloadMenu />
-          <a className="repo" href={REPO} target="_blank" rel="noreferrer" aria-label="JIS Korean on GitHub">
+          <a className="repo" href={REPO} target="_blank" rel="noreferrer" aria-label="JIS Moonshot on GitHub">
             <GitHubMark /> <span className="repo-label">GitHub</span>
           </a>
         </div>

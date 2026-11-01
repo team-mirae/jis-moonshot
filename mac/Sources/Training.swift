@@ -3,13 +3,13 @@ import CryptoKit
 
 #if PREDICT
 /// The training contract (docs/training-contract.md, spec §10.12) on macOS: a training file at
-/// `~/Library/Application Support/JIS Korean/training.json` is read when JIS Korean activates and
+/// `~/Library/Application Support/JIS Moonshot/training.json` is read when JIS Moonshot activates and
 /// the file has changed since last time. Its weights become the `Weight.<Scenario>` preferences
 /// (set by hand), its words and avoided words are kept in the preferences and added to the shared
 /// predictor, and its examples are learned from (turning "Learn from My Choices" on, since only then do they count).
 enum Training {
     static let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("JIS Korean", isDirectory: true)
+        .appendingPathComponent("JIS Moonshot", isDirectory: true)
     static let file = folder.appendingPathComponent("training.json")
 
     private static let appliedDateKey = "TrainingFileDate"
@@ -20,9 +20,11 @@ enum Training {
     private static let englishWordsKey = "TrainingWords.English"
     private static let koreanAvoidKey = "TrainingAvoid.Korean"
     private static let englishAvoidKey = "TrainingAvoid.English"
+    private static let japaneseWordsKey = "TrainingWords.Japanese"
+    private static let japaneseAvoidKey = "TrainingAvoid.Japanese"
     private static let weightKeys = [
         "korean": "Korean", "english": "English", "implied": "Implied", "mixed": "Mixed", "two-set": "TwoSet",
-        "keep-finals": "KeepFinals", "hanja": "Hanja", "implied-l": "ImpliedL",
+        "keep-finals": "KeepFinals", "hanja": "Hanja", "implied-l": "ImpliedL", "kana": "Kana",
     ]
     private static let confidenceCount = ["tentative": 10, "likely": 20, "confirmed": 50]
 
@@ -37,10 +39,12 @@ enum Training {
         let english = defaults.string(forKey: englishWordsKey) ?? ""
         let avoidKorean = defaults.string(forKey: koreanAvoidKey) ?? ""
         let avoidEnglish = defaults.string(forKey: englishAvoidKey) ?? ""
-        if korean.isEmpty && english.isEmpty && avoidKorean.isEmpty && avoidEnglish.isEmpty {
+        let japanese = defaults.string(forKey: japaneseWordsKey) ?? ""
+        let avoidJapanese = defaults.string(forKey: japaneseAvoidKey) ?? ""
+        if korean.isEmpty && english.isEmpty && avoidKorean.isEmpty && avoidEnglish.isEmpty && japanese.isEmpty && avoidJapanese.isEmpty {
             return sharedPredictor
         }
-        let words = [korean, english, avoidKorean, avoidEnglish].joined(separator: "\u{0}")
+        let words = [korean, english, avoidKorean, avoidEnglish, japanese, avoidJapanese].joined(separator: "\u{0}")
         if let personal, personal.words == words {
             return personal.predictor
         }
@@ -49,9 +53,17 @@ enum Training {
         let ak = Array(avoidKorean.utf8), ae = Array(avoidEnglish.utf8)
         // Only when there's something to avoid: each predictor is a full copy (about 5 MB).
         let avoids = !(avoidKorean.isEmpty && avoidEnglish.isEmpty)
-        let built = avoids ? withWords.flatMap { jk_predictor_with_avoided($0, ak, ak.count, ae, ae.count) } ?? withWords : withWords
+        var built = avoids ? withWords.flatMap { jk_predictor_with_avoided($0, ak, ak.count, ae, ae.count) } ?? withWords : withWords
         if built != withWords, let withWords {
             jk_predictor_free(withWords)
+        }
+        // Japanese words and avoided words for the kana reading (docs/moonshot.md §5).
+        for (text, add) in [(japanese, jk_predictor_with_japanese), (avoidJapanese, jk_predictor_with_avoided_japanese)] where !text.isEmpty {
+            let bytes = Array(text.utf8)
+            if let current = built, let next = add(current, bytes, bytes.count) {
+                jk_predictor_free(current)
+                built = next
+            }
         }
         if let old = personal?.predictor {
             jk_predictor_free(old) // engines keep their own reference
@@ -62,7 +74,7 @@ enum Training {
 
     /// Whether a training file's examples are being learned (in the background).
     private static var learning = false
-    private static let queue = DispatchQueue(label: "me.sjun.inputmethod.JISKorean.training", qos: .utility)
+    private static let queue = DispatchQueue(label: "me.sjun.inputmethod.JISMoonshot.training", qos: .utility)
 
     /// Applies the training file if it changed since it was last applied (or forgets its words if
     /// it's gone). Its weights and words apply at once; its examples are learned in the background,
@@ -81,6 +93,8 @@ enum Training {
                 defaults.removeObject(forKey: englishWordsKey)
                 defaults.removeObject(forKey: koreanAvoidKey)
                 defaults.removeObject(forKey: englishAvoidKey)
+                defaults.removeObject(forKey: japaneseWordsKey)
+                defaults.removeObject(forKey: japaneseAvoidKey)
             }
             return
         }
@@ -98,9 +112,9 @@ enum Training {
             return
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              json["format"] as? String == "jis-korean-training", json["version"] as? Int == 1
+              ["jis-korean-training", "jis-moonshot-training"].contains(json["format"] as? String ?? ""), json["version"] as? Int == 1
         else {
-            NSLog("JIS Korean: %@ isn't a version 1 training file; ignored", file.path)
+            NSLog("JIS Moonshot: %@ isn't a version 1 training file; ignored", file.path)
             markApplied()
             return
         }
@@ -120,6 +134,8 @@ enum Training {
         }
         defaults.set(lines(vocabulary["korean"], "^[가-힣]+$"), forKey: koreanWordsKey)
         defaults.set(lines(vocabulary["english"], "^[A-Za-z]+$"), forKey: englishWordsKey)
+        // Kana words: hiragana, katakana and ー.
+        defaults.set(lines(vocabulary["japanese"], "^[ぁ-ゖァ-ヺー]+$"), forKey: japaneseWordsKey)
         func avoided(_ language: String, _ pattern: String) -> String {
             (json["avoid"] as? [[String: Any]] ?? []).compactMap { entry in
                 guard entry["language"] as? String == language, let word = entry["word"] as? String,
@@ -130,13 +146,14 @@ enum Training {
         }
         defaults.set(avoided("korean", "^[가-힣]+$"), forKey: koreanAvoidKey)
         defaults.set(avoided("english", "^[A-Za-z]+$"), forKey: englishAvoidKey)
+        defaults.set(avoided("japanese", "^[ぁ-ゖァ-ヺー]+$"), forKey: japaneseAvoidKey)
         let examples: [(text: [UInt8], keys: [UInt8], count: Int)] = (json["examples"] as? [[String: Any]] ?? []).prefix(2000).compactMap { example in
             guard let text = example["text"] as? String else { return nil }
             return (Array(text.utf8), Array((example["keys"] as? String ?? "").utf8), min(max(example["count"] as? Int ?? 1, 1), 20))
         }
         guard !examples.isEmpty else {
             markApplied()
-            NSLog("JIS Korean: applied %@", file.path)
+            NSLog("JIS Moonshot: applied %@", file.path)
             return
         }
         defaults.set(true, forKey: "LearnFromChoices")
@@ -172,7 +189,7 @@ enum Training {
                     UserDefaults.standard.set(learned, forKey: learnedDefault)
                 }
                 markApplied()
-                NSLog("JIS Korean: applied %@ (%d examples)", file.path, examples.count)
+                NSLog("JIS Moonshot: applied %@ (%d examples)", file.path, examples.count)
                 JKInputController.trainingApplied()
             }
         }

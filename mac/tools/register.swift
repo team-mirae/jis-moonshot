@@ -6,15 +6,15 @@
 // removing and re-adding them in System Settings would: re-registering alone doesn't reach apps that
 // are already running, and they can be left unable to start it
 // (docs/troubleshooting/macos-input-method-not-launching.md). Only what was enabled comes back:
-// Mode B (.2SetANSI) stays off until the user adds it.
-// Usage: swift register.swift <JISKorean.app>
+// a mode the user removed stays off.
+// Usage: swift register.swift <JISMoonshot.app>
 import Carbon
 import Foundation
 
 guard CommandLine.arguments.count > 1 else { fatalError("usage: register.swift <app>") }
 let path = CommandLine.arguments[1]
 let url = URL(fileURLWithPath: path) as CFURL
-let bundleID = Bundle(path: path)?.bundleIdentifier ?? "me.sjun.inputmethod.JISKorean"
+let bundleID = Bundle(path: path)?.bundleIdentifier ?? "me.sjun.inputmethod.JISMoonshot"
 
 func layoutListed() -> Bool {
     let query = [
@@ -108,10 +108,30 @@ if wasEnabled, !sources.isEmpty {
             print("Re-enabled the input source, but couldn't select \(tried) again (\(select)): select it in the input menu.")
         } else {
             print("Re-enabling the input source failed (disable \(off), enable \(on), select \(select)):")
-            print("remove JIS Korean in System Settings → Keyboard → Input Sources and add it back.")
+            print("remove JIS Moonshot in System Settings → Keyboard → Input Sources and add it back.")
         }
     } else {
         print("Re-enabled the input source\(wasSelected ? " and selected it again" : "").")
     }
+}
+// A first install (docs/moonshot.md §7): JIS Moonshot, JIS Kana and JIS English, so F6 / F7 and 英数
+// have a mode to go to without a trip to System Settings.
+if !wasEnabled {
+    // .KanaKey: the かな proxy, so macOS's own かな reaches Mode A (docs/moonshot.md §7).
+    let firstModes = [defaultModeID, bundleID + ".A_KANA", bundleID + ".A_QWERTY", bundleID + ".KanaKey"]
+    var enabled: [String] = []
+    for _ in 0..<10 where enabled.count < firstModes.count {
+        enabled = []
+        for source in inputMethodSources(enabledOnly: false) where firstModes.contains(id(source) ?? "") {
+            if TISEnableInputSource(source) == noErr { enabled.append(id(source) ?? "?") }
+        }
+        settle(0.5)
+    }
+    // TISEnableInputSource can answer noErr and still leave a newly registered input method off
+    // (seen on macOS 27): report what's really enabled.
+    let really = Set(inputMethodSources(enabledOnly: true).compactMap(id)).intersection(firstModes)
+    print(really.isEmpty
+        ? "macOS didn't enable the input modes: add JIS Moonshot (Korean), JIS Kana and JIS Moonshot (かな key) (Japanese), and JIS English in System Settings → Keyboard → Input Sources. If they aren't listed, log out and back in once."
+        : "Enabled \(really.sorted().joined(separator: ", ")).")
 }
 print(layoutListed() ? "Registered (with its Keyboard Viewer layout)." : "Registered (the Keyboard Viewer layout will appear after logging out and in).")

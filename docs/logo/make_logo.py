@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: MIT
 # Copyright 2026 Mirae Research & Min Jun Sung. See docs/logo/README.md.
-"""Draws the JIS Korean logo and the input mode badges as single-color SVGs.
+"""Draws the JIS Moonshot logo and the input mode badges as single-color SVGs.
+
+JIS Moonshot's disc: the left half is the taegeuk (its S cut), cut off at the vertical midpoint; the
+right half is a solid half disc. A transparent gap as wide as the S separates them (MID_GAP).
 
 Everything is one color; shapes are separated only by transparent borders: the S-curve between the
 taegeuk's halves, and a border around each key, which also cuts through the taegeuk and through any
@@ -12,8 +15,8 @@ an S of two half-radius arcs. Key proportions are real keyboard units.
 
 Lettered badges need shapely (`pip install shapely`), which computes their shapes.
 
-Usage: python3 make_logo.py   (writes taegeuk.svg, mode-a.svg, mode-b.svg, mode-iso.svg and
-mode-a-qwerty.svg, mode-b-qwerty.svg and mode-cj-qwerty.svg here)
+Usage: python3 make_logo.py   (writes moonshot.svg, mode-a.svg, mode-a-kana.svg, mode-a-qwerty.svg,
+mode-a-dvorak.svg and mode-a-colemak.svg here)
 """
 
 import math
@@ -21,6 +24,7 @@ from pathlib import Path
 
 INK = "#000000"
 S_GAP = 6  # the transparent S between the halves
+MID_GAP = 6  # the transparent gap at the vertical midpoint, between the taegeuk half and the solid half
 BORDER = 6  # the transparent border around each key (half outside, half inside its edge)
 CORNER = 7  # key corner radius (the border takes half its width off, leaving about 4)
 EDGE = 98  # keys stop here, so their borders stay inside the 100-unit canvas
@@ -66,7 +70,9 @@ def badge(title, disc, keys, hollow=()):
     """
     cx, cy, r = disc
     full = '<rect width="100" height="100" fill="#fff"/>'
-    s_cut = f'<path d="{s_curve(cx, cy, r)}" fill="none" stroke="#000" stroke-width="{S_GAP}"/>'
+    # The S cuts the left half only; the gap at the midpoint cuts the disc in two.
+    s_cut = (f'<path d="{s_curve(cx, cy, r)}" fill="none" stroke="#000" stroke-width="{S_GAP}" clip-path="url(#left)"/>'
+             f'<rect x="{num(cx - MID_GAP / 2)}" y="0" width="{num(MID_GAP)}" height="100" fill="#000"/>')
     borders = "".join(f'<path d="{k}" fill="none" stroke="#000" stroke-width="{BORDER}"/>' for k in keys)
     # A hollow key keeps a ring as thick as the border; its inside is cut away.
     borders += "".join(
@@ -77,6 +83,7 @@ def badge(title, disc, keys, hollow=()):
             "<!-- SPDX-License-Identifier: MIT. Copyright 2026 Mirae Research & Min Jun Sung. "
             "Drawn by docs/logo/make_logo.py; see docs/logo/README.md. -->"
             f"<title>{title}</title>"
+            + f'<clipPath id="left"><rect x="0" y="0" width="{num(cx)}" height="100"/></clipPath>'
             + mask.format("s", full + s_cut)
             + mask.format("borders", full + borders)
             + f'<g fill="{INK}" mask="url(#borders)">'
@@ -348,8 +355,10 @@ def lettered(title, disc, letters):
         inks.append(ink)
     ink = unary_union(inks)
     border = ink.buffer(BORDER / 2, join_style="round", quad_segs=16)
-    s_band = stroke(s_curve(cx, cy, r), S_GAP, cap="flat", join="round")
-    shape = Point(cx, cy).buffer(r, quad_segs=64).difference(s_band).difference(border)
+    # The S on the left half only, and the gap at the midpoint (JIS Moonshot's disc).
+    s_band = stroke(s_curve(cx, cy, r), S_GAP, cap="flat", join="round").intersection(box(0, 0, cx, 100))
+    mid = box(cx - MID_GAP / 2, 0, cx + MID_GAP / 2, 100)
+    shape = Point(cx, cy).buffer(r, quad_segs=64).difference(s_band).difference(mid).difference(border)
     # The disc shows inside a letter only where it comes in from outside (U's opening): a piece
     # sealed inside the text, within its box, reads as a stray shape and goes, as do pieces too
     # small or too thin to read.
@@ -370,44 +379,21 @@ def main():
     out = Path(__file__).parent
 
     # The logo alone.
-    (out / "taegeuk.svg").write_text(badge("Taegeuk", (50, 50, 48), []))
+    (out / "moonshot.svg").write_text(badge("JIS Moonshot", (50, 50, 48), []))
+    # The README's logo on a dark background (GitHub's dark theme): the same drawing in white.
+    (out / "moonshot-dark.svg").write_text(badge("JIS Moonshot", (50, 50, 48), []).replace(f'fill="{INK}"', 'fill="#ffffff"'))
 
-    # Mode A, JIS: the ISO-style Enter (1.5 units on the upper row, 1.25 on the lower, two rows).
+    # Mode A, JIS Moonshot: the ISO-style Enter of a JIS board (1.5 units on the upper row, 1.25 on
+    # the lower, two rows).
     u = 29
     x, y = EDGE - 1.5 * u, EDGE - 2 * u
     enter = rounded([(x, y), (EDGE, y), (EDGE, EDGE), (x + 0.25 * u, EDGE), (x + 0.25 * u, y + u), (x, y + u)])
-    (out / "mode-a.svg").write_text(badge("JIS Korean, Mode A (JIS)", (41, 41, 39), [enter]))
+    (out / "mode-a.svg").write_text(badge("JIS Moonshot, Mode A", (41, 41, 39), [enter]))
 
-    # Mode B, US ANSI: backslash (1.5 units) above a one-row Enter (2.25 units), clearly apart.
-    u, gap = 27, 5
-    backslash = rect(EDGE - 1.5 * u, EDGE - 2 * u - gap, 1.5 * u, u)
-    enter = rect(EDGE - 2.25 * u, EDGE - u, 2.25 * u, u)
-    (out / "mode-b.svg").write_text(badge("JIS Korean, Mode B (US ANSI)", (41, 41, 39), [backslash, enter]))
-
-    # Future ISO mode: Caps Lock over a short left Shift, the ISO extra key (hollow) and Z.
-    u, gap, left = 24, 4, 2
-    caps = (left, EDGE - 2 * u - gap, 1.75 * u, u)
-    shift = (left, EDGE - u, 1.25 * u, u)
-    extra = (left + 1.25 * u + gap, EDGE - u, u, u)
-    z = (left + 2.25 * u + 2 * gap, EDGE - u, u, u)
-    keys = [rect(*k) for k in (caps, shift, extra, z)]
-    (out / "mode-iso.svg").write_text(badge("JIS Korean, future ISO mode", (59, 41, 39), keys, hollow=[extra]))
-
-    # A_QWERTY, JIS English: the taegeuk with ABC over its lower right.
-    (out / "mode-a-qwerty.svg").write_text(
-        lettered("JIS English (A_QWERTY)", (41, 41, 39), letters("ABC", *letter_box("ABC"))))
-
-    # B_QWERTY and CJ_QWERTY, US and UK English: the same badge, with their country code.
-    (out / "mode-b-qwerty.svg").write_text(
-        lettered("US English (B_QWERTY)", (41, 41, 39), letters("US", *letter_box("US"))))
-    (out / "mode-cj-qwerty.svg").write_text(
-        lettered("UK English (CJ_QWERTY)", (41, 41, 39), letters("GB", *letter_box("GB"))))
-
-    # The reserved English-layout modes (spec §3.6.1, ids 4-8): drawn ahead of their layouts.
-    for name, title, text in [("mode-cj-qwertz", "CJ_QWERTZ", "QZ"), ("mode-cj-swiss-qz", "CJ_SWISS_QZ", "CH"),
-                              ("mode-cj-azerty", "CJ_AZERTY", "AY"), ("mode-a-dvorak", "A_DVORAK", "DV"),
-                              ("mode-a-colemak", "A_COLEMAK", "CMK")]:
-        (out / f"{name}.svg").write_text(lettered(f"{title} (reserved)", (41, 41, 39), letters(text, *letter_box(text))))
+    # Lettered badges over the lower right: JIS Kana (KA), JIS English (ABC), JIS Dvorak, JIS Colemak.
+    for name, title, text in [("mode-a-kana", "JIS Kana (A_KANA)", "KA"), ("mode-a-qwerty", "JIS English (A_QWERTY)", "ABC"),
+                              ("mode-a-dvorak", "JIS Dvorak (A_DVORAK)", "DV"), ("mode-a-colemak", "JIS Colemak (A_COLEMAK)", "CMK")]:
+        (out / f"{name}.svg").write_text(lettered(title, (41, 41, 39), letters(text, *letter_box(text))))
 
 
 if __name__ == "__main__":

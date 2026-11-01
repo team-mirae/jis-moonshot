@@ -40,7 +40,7 @@ size_t Append(wchar_t* line, size_t size, size_t used, const wchar_t* format, va
 void Write(const wchar_t* format, ...) {
     if (!settings::ReadDword(L"DiagnosticLog", 0)) return;
     wchar_t path[MAX_PATH];
-    if (!ExpandEnvironmentStringsW(L"%ProgramData%\\JIS Korean\\jiskorean.log", path, MAX_PATH)) {
+    if (!ExpandEnvironmentStringsW(L"%ProgramData%\\JIS Moonshot\\jismoonshot.log", path, MAX_PATH)) {
         return;
     }
     SYSTEMTIME t;

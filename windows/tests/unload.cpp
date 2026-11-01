@@ -1,9 +1,9 @@
-// jk_unloadtest: loads jiskorean.dll, activates the text service on this thread (which preloads
+// jk_unloadtest: loads jismoonshot.dll, activates the text service on this thread (which preloads
 // the shared data on the thread pool), deactivates and releases it, and unloads the DLL, again and
 // again. The process's private memory must not grow with each round (DLL_PROCESS_DETACH frees the
 // shared data), and nothing may crash while the preload runs during the unload.
 //
-//   jk_unloadtest [path\to\jiskorean.dll] [rounds]
+//   jk_unloadtest [path\to\jismoonshot.dll] [rounds]
 #include <windows.h>
 #include <msctf.h>
 #include <psapi.h>
@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr GUID kClsid = {0xd10651ad, 0x51ea, 0x4dba, {0x8b, 0xff, 0x19, 0x05, 0x26, 0x1b, 0x26, 0xa1}};
+constexpr GUID kClsid = {0xec381a55, 0x0ad1, 0x42df, {0xbb, 0xab, 0xaf, 0x4f, 0x34, 0xf9, 0x0c, 0x1c}};
 
 SIZE_T PrivateBytes() {
     PROCESS_MEMORY_COUNTERS_EX counters = {sizeof(counters)};
@@ -60,7 +60,7 @@ int wmain(int argc, wchar_t** argv) {
     wchar_t self[MAX_PATH];
     GetModuleFileNameW(nullptr, self, MAX_PATH);
     std::wstring path = self;
-    path = path.substr(0, path.find_last_of(L'\\') + 1) + L"jiskorean.dll";
+    path = path.substr(0, path.find_last_of(L'\\') + 1) + L"jismoonshot.dll";
     if (argc > 1) path = argv[1];
     const int rounds = argc > 2 ? _wtoi(argv[2]) : 8;
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

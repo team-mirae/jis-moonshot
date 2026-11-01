@@ -33,8 +33,6 @@ jobs:
             build-mode: none
           - language: c-cpp
             build-mode: none
-          - language: java-kotlin
-            build-mode: none
           - language: javascript-typescript
             build-mode: none
           - language: python
@@ -56,7 +54,7 @@ jobs:
         with:
           workspaces: engine
       - if: matrix.build-mode == 'manual'
-        run: make -C mac ENGLISH=1 build/full-english/libjis_korean.a
+        run: make -C mac build/full/libjis_korean.a
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}

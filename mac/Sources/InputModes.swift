@@ -2,8 +2,9 @@ import Carbon
 import InputMethodKit
 import Cocoa
 
-/// JIS Korean's modes (spec §3.6) as macOS input modes: one input source per engine mode, the way
-/// Japanese has Kana and Romaji (spec §8.2).
+/// JIS Moonshot's modes (spec §3.6, docs/moonshot.md §2) as macOS input modes: one input source per
+/// engine mode, the way Japanese has Kana and Romaji (spec §8.2): Mode A (Korean, English and kana
+/// readings), JIS Kana (kana typing) and the English modes.
 ///
 /// Why input sources and not a setting: the mode follows the keyboard, and apps don't change which
 /// keyboard the user is typing on, so per-app switching would mean nothing. As input sources the
@@ -13,41 +14,48 @@ enum InputModes {
     struct Mode {
         /// The engine's mode id (`jk_set_mode`), stable across releases.
         let id: UInt32
-        /// The mode name (spec §3.6.1), "A", "B", "A_QWERTY": what the spec and the public API call it.
+        /// The mode name (spec §3.6.1), "A", "A_KANA", "A_QWERTY": what the spec and the public API call it.
         let letter: String
         /// The input source ID (Info.plist ComponentInputModeDict). Never rename one: users' tools
         /// select it by this ID.
         let sourceID: String
         /// The Keyboard Viewer layout bundled for it (spec §8.1).
         let keyboardViewerLayout: String
-        /// Whether it types Korean. JIS English doesn't (spec §3.6.2).
-        var korean = true
+        /// What it types: Korean (Mode A, which reads English and kana too), kana (JIS Kana) or
+        /// English (spec §3.6.2).
+        var kind = Kind.korean
+
+        enum Kind { case korean, kana, english }
+
+        /// Mode A: the predictive mode, かな's target.
+        var korean: Bool { kind == .korean }
+        /// JIS Kana.
+        var kana: Bool { kind == .kana }
+        /// An English mode: 英数's target.
+        var english: Bool { kind == .english }
     }
 
     static let all = [
-        Mode(id: 0, letter: "A", sourceID: "me.sjun.inputmethod.JISKorean.2Set", keyboardViewerLayout: "JISKorean"),
-        Mode(id: 1, letter: "B", sourceID: "me.sjun.inputmethod.JISKorean.2SetANSI", keyboardViewerLayout: "JISKoreanANSI"),
-        Mode(id: 2, letter: "C", sourceID: "me.sjun.inputmethod.JISKorean.2SetISO", keyboardViewerLayout: "JISKoreanISO"),
+        Mode(id: 0, letter: "A", sourceID: "me.sjun.inputmethod.JISMoonshot.2Set", keyboardViewerLayout: "JISMoonshot"),
+        // Kana typing consumes every key it maps: Mode A's layout only types what it passes on.
+        Mode(id: 11, letter: "A_KANA", sourceID: "me.sjun.inputmethod.JISMoonshot.A_KANA",
+             keyboardViewerLayout: "JISMoonshot", kind: .kana),
     ] + english
 
-    #if ENGLISH
-    /// The English input modes (spec §3.6.2, §3.6.4), built with `make ENGLISH=1`: JIS English, its
-    /// US ANSI and UK ISO siblings, and JIS Dvorak and JIS Colemak.
+    /// The English input modes (spec §3.6.2, §3.6.4): JIS English, JIS Dvorak and JIS Colemak.
     static let english = [
-        Mode(id: 3, letter: "A_QWERTY", sourceID: "me.sjun.inputmethod.JISKorean.A_QWERTY",
-             keyboardViewerLayout: "JISEnglish", korean: false),
-        Mode(id: 9, letter: "B_QWERTY", sourceID: "me.sjun.inputmethod.JISKorean.B_QWERTY",
-             keyboardViewerLayout: "USEnglish", korean: false),
-        Mode(id: 10, letter: "CJ_QWERTY", sourceID: "me.sjun.inputmethod.JISKorean.CJ_QWERTY",
-             keyboardViewerLayout: "UKEnglish", korean: false),
-        Mode(id: 7, letter: "A_DVORAK", sourceID: "me.sjun.inputmethod.JISKorean.A_DVORAK",
-             keyboardViewerLayout: "JISDvorak", korean: false),
-        Mode(id: 8, letter: "A_COLEMAK", sourceID: "me.sjun.inputmethod.JISKorean.A_COLEMAK",
-             keyboardViewerLayout: "JISColemak", korean: false),
+        Mode(id: 3, letter: "A_QWERTY", sourceID: "me.sjun.inputmethod.JISMoonshot.A_QWERTY",
+             keyboardViewerLayout: "JISMoonshotEnglish", kind: .english),
+        Mode(id: 7, letter: "A_DVORAK", sourceID: "me.sjun.inputmethod.JISMoonshot.A_DVORAK",
+             keyboardViewerLayout: "JISMoonshotDvorak", kind: .english),
+        Mode(id: 8, letter: "A_COLEMAK", sourceID: "me.sjun.inputmethod.JISMoonshot.A_COLEMAK",
+             keyboardViewerLayout: "JISMoonshotColemak", kind: .english),
     ]
-    #else
-    static let english: [Mode] = []
-    #endif
+
+    /// The mode with this engine id (the engine changes its own mode: F6, F7, かな).
+    static func mode(id: UInt32) -> Mode? {
+        all.first { $0.id == id }
+    }
 
     /// The Korean mode used last, which the Korean Key goes back to from an English mode (spec
     /// §8.2.1).
@@ -63,7 +71,7 @@ enum InputModes {
     /// in System Settings, else the first English mode that is. Nil: none is.
     static var englishTarget: Mode? {
         let last = UserDefaults.standard.string(forKey: lastEnglishKey).flatMap(mode(sourceID:))
-        return ([last].compactMap { $0 } + english).first { !$0.korean && isEnabled($0) }
+        return ([last].compactMap { $0 } + english).first { $0.english && isEnabled($0) }
     }
 
     /// The Korean mode the Korean Key goes to (spec §8.2.1): the one used last, or if it isn't added
@@ -72,10 +80,10 @@ enum InputModes {
         ([lastKorean] + all.filter(\.korean)).first(where: isEnabled)
     }
 
-    /// The Korean mode カタカナ goes to (spec §8.2.1): a key only JIS keyboards have goes to the JIS
-    /// mode, JIS Korean (Mode A), if it's added; else where the Korean Key goes.
-    static var katakanaTarget: Mode? {
-        isEnabled(defaultMode) ? defaultMode : koreanTarget
+    /// The mode かな (and カタカナ, and the Korean Key) goes to from an English mode or another input
+    /// source (docs/moonshot.md §4): Mode A, if it's added.
+    static var kanaTarget: Mode? {
+        isEnabled(defaultMode) ? defaultMode : nil
     }
 
     /// The English mode 英数 goes to (spec §8.2.1): a key only JIS keyboards have goes to a JIS
@@ -86,10 +94,10 @@ enum InputModes {
         let jis = english.filter { $0.letter.hasPrefix("A_") }
         let ordered = [last].compactMap { $0 }.filter { $0.letter.hasPrefix("A_") }
             + jis.filter { $0.letter == "A_QWERTY" } + jis
-        return ordered.first { !$0.korean && isEnabled($0) } ?? englishTarget
+        return ordered.first { $0.english && isEnabled($0) } ?? englishTarget
     }
 
-    /// Which of JIS Korean's modes are added in System Settings, by input source ID: one query for all.
+    /// Which of JIS Moonshot's modes are added in System Settings, by input source ID: one query for all.
     static func enabledSourceIDs() -> Set<String> {
         guard let bundle = Bundle.main.bundleIdentifier else { return [] }
         let query = [kTISPropertyBundleID as String: bundle] as CFDictionary
@@ -101,7 +109,7 @@ enum InputModes {
         })
     }
 
-    /// Notes that JIS Korean is about to select `mode`: until macOS reports it, selectedNow() still
+    /// Notes that JIS Moonshot is about to select `mode`: until macOS reports it, selectedNow() still
     /// names the source being left, and `selected()` answers with the target instead. Call it when
     /// the switch happens, not when the selection is sent: a notice of an earlier selection that
     /// arrives in between would otherwise put the mode back.
@@ -137,7 +145,7 @@ enum InputModes {
         return status
     }
 
-    /// A selection JIS Korean asked macOS for (`select`) that macOS hasn't reported yet. A field
+    /// A selection JIS Moonshot asked macOS for (`select`) that macOS hasn't reported yet. A field
     /// activated in this window (Chrome activates its fields out of order) would otherwise read the
     /// source being left and put every field back on it.
     private static var pending: (target: Mode, from: String?, until: Date)?
@@ -171,16 +179,21 @@ enum InputModes {
         ?? UserDefaults.standard.string(forKey: PublicAPI.currentSourceKey).flatMap(mode(sourceID:))
         ?? defaultMode
 
+    /// The かな proxy's input source (docs/moonshot.md §7): the primary Japanese-script mode, so
+    /// macOS's own かな selects it. It stands for Mode A everywhere but `setValue`, which reroutes it.
+    static let kanaProxySourceID = "me.sjun.inputmethod.JISMoonshot.KanaKey"
+
     static func mode(sourceID: String) -> Mode? {
-        all.first { $0.sourceID == sourceID }
+        if sourceID == kanaProxySourceID { return defaultMode }
+        return all.first { $0.sourceID == sourceID }
     }
 
-    /// A mode named by its letter ("B"), engine id ("1") or input source ID.
+    /// A mode named by its letter ("A_KANA"), engine id ("11") or input source ID.
     static func mode(named name: String) -> Mode? {
         all.first { $0.letter.caseInsensitiveCompare(name) == .orderedSame || String($0.id) == name || $0.sourceID == name }
     }
 
-    /// The engine's name for a mode ("JIS Korean for US ANSI").
+    /// The engine's name for a mode ("JIS Kana").
     static func name(_ mode: Mode) -> String {
         guard let pointer = jk_mode_name_ptr(mode.id) else { return mode.letter }
         return String(decoding: UnsafeBufferPointer(start: pointer, count: jk_mode_name_len(mode.id)), as: UTF8.self)
@@ -197,31 +210,33 @@ enum InputModes {
     static func becameCurrent(_ mode: Mode) {
         let changed = mode.sourceID != current.sourceID || UserDefaults.standard.string(forKey: PublicAPI.currentModeKey) != mode.letter
         current = mode
-        UserDefaults.standard.set(mode.sourceID, forKey: mode.korean ? lastKoreanKey : lastEnglishKey)
+        if !mode.kana {
+            UserDefaults.standard.set(mode.sourceID, forKey: mode.korean ? lastKoreanKey : lastEnglishKey)
+        }
         if changed {
             PublicAPI.publish(mode)
         }
     }
 }
 
-/// JIS Korean's public API for other programs (spec §8.2, §8.3, mac/README.md): read the current
+/// JIS Moonshot's public API for other programs (spec §8.2, §8.3, mac/README.md): read the current
 /// mode, hear when it changes, ask for a change, and resolve keys and text. Changing the mode only
 /// works when the user has turned on "Let Other Apps Change the Mode" in the input menu, with the
 /// other settings; everything else only reads.
 ///
-/// - Read: `defaults read me.sjun.inputmethod.JISKorean CurrentMode` → the mode name (A, B, C, or an
+/// - Read: `defaults read me.sjun.inputmethod.JISMoonshot CurrentMode` → the mode name (A, A_KANA, or an
 ///   English mode's, A_QWERTY…; also `CurrentModeID`, `CurrentModeInputSourceID`, `CurrentModeName`),
-///   or `JISKorean.app/Contents/MacOS/JISKorean mode`.
-/// - Changes: the distributed notification `me.sjun.inputmethod.JISKorean.ModeDidChange`, with
+///   or `JISMoonshot.app/Contents/MacOS/JISMoonshot mode`.
+/// - Changes: the distributed notification `me.sjun.inputmethod.JISMoonshot.ModeDidChange`, with
 ///   `mode`, `id`, `inputSourceID` and `name` in its user info.
-/// - Change: post `me.sjun.inputmethod.JISKorean.SetMode` with `mode` (A, B, an engine id or an input
-///   source ID) in its user info, or run `JISKorean mode B`. JIS Korean answers with ModeDidChange,
+/// - Change: post `me.sjun.inputmethod.JISMoonshot.SetMode` with `mode` (A, A_KANA, an engine id or an
+///   input source ID) in its user info, or run `JISMoonshot mode A_KANA`. JIS Moonshot answers with ModeDidChange,
 ///   or with `…ModeChangeRefused` and a `reason`.
 /// - Resolve: `…ResolveKeyCodeInput` (`keyCode`, optional `context`) and `…ResolveKeyCodeFromOutput`
 ///   (`text`, `minKeypressCount`, `maxKeypressCount`), each with a `requestID`, answered by the same
-///   name + `Result`; or `JISKorean resolveKeyCodeInput …` / `resolveKeyCodeFromOutput …`.
+///   name + `Result`; or `JISMoonshot resolveKeyCodeInput …` / `resolveKeyCodeFromOutput …`.
 enum PublicAPI {
-    static let prefix = "me.sjun.inputmethod.JISKorean."
+    static let prefix = "me.sjun.inputmethod.JISMoonshot."
     static let modeDidChange = Notification.Name(prefix + "ModeDidChange")
     static let setMode = Notification.Name(prefix + "SetMode")
     static let modeChangeRefused = Notification.Name(prefix + "ModeChangeRefused")
@@ -287,10 +302,10 @@ enum PublicAPI {
 
     private static func handleSetMode(_ requested: String?) {
         guard allowed else {
-            return refuse("Other apps may not change the mode: turn on “Let Other Apps Change the Mode” in the JIS Korean input menu.", requested)
+            return refuse("Other apps may not change the mode: turn on “Let Other Apps Change the Mode” in the JIS Moonshot input menu.", requested)
         }
         guard let requested, let mode = InputModes.mode(named: requested) else {
-            return refuse("Unknown mode. Use a mode name (A, B, C, A_QWERTY…), an engine mode id, or an input source ID.", requested)
+            return refuse("Unknown mode. Use a mode name (A, A_KANA, A_QWERTY…), an engine mode id, or an input source ID.", requested)
         }
         guard InputModes.isEnabled(mode) else {
             return refuse("\(InputModes.name(mode)) isn't added in System Settings → Keyboard → Input Sources.", requested)
@@ -340,7 +355,7 @@ enum PublicAPI {
         String(decoding: UnsafeBufferPointer(start: jk_resolved_ptr(engine), count: jk_resolved_len(engine)), as: UTF8.self)
     }
 
-    private static let notActive = "JIS Korean hasn't been active in any app since it started: select it and click into a text field."
+    private static let notActive = "JIS Moonshot hasn't been active in any app since it started: select it and click into a text field."
 
     /// resolveKeyCodeInput(keyCode[, context]) → `result`: the character the key types alone, or
     /// what the field shows after the context and the key. No `result` when there's none.
@@ -442,13 +457,13 @@ enum PublicAPI {
         return String(decoding: data, as: UTF8.self)
     }
 
-    /// `JISKorean mode [mode name, id or input source ID]`, `JISKorean resolveKeyCodeInput <keyCode> [context]`,
-    /// `JISKorean resolveKeyCodeFromOutput <text> [min] [max]`. Returns the exit status.
+    /// `JISMoonshot mode [mode name, id or input source ID]`, `JISMoonshot resolveKeyCodeInput <keyCode> [context]`,
+    /// `JISMoonshot resolveKeyCodeFromOutput <text> [min] [max]`. Returns the exit status.
     static func runCommand(_ arguments: [String]) -> Int32 {
         let usage = """
-            usage: JISKorean mode [A|B|C|A_QWERTY|…|id]
-                   JISKorean resolveKeyCodeInput <keyCode> [context]
-                   JISKorean resolveKeyCodeFromOutput <text> [minKeypressCount] [maxKeypressCount]
+            usage: JISMoonshot mode [A|A_KANA|A_QWERTY|…|id]
+                   JISMoonshot resolveKeyCodeInput <keyCode> [context]
+                   JISMoonshot resolveKeyCodeFromOutput <text> [minKeypressCount] [maxKeypressCount]
             """
         switch arguments.first {
         case "resolveKeyCodeInput" where (2...3).contains(arguments.count):
@@ -499,7 +514,7 @@ enum PublicAPI {
     }
 
     private static func notRunning() -> Int32 {
-        print("No answer: JIS Korean isn't running. Select it once in the input menu, then try again.")
+        print("No answer: JIS Moonshot isn't running. Select it once in the input menu, then try again.")
         return 1
     }
 }

@@ -1,10 +1,16 @@
-// The JIS Korean text service: one COM object per thread that has TSF, holding one engine. All
-// behavior is in the engine (docs/spec.md): this class moves key events in, and text out as a
-// TSF composition, and shows the hanja / prediction list. Mirrors mac/Sources/InputController.swift.
+// The JIS Moonshot text service: one COM object per thread that has TSF, holding one engine. All
+// behavior is in the engine (docs/moonshot.md, docs/spec.md): this class moves key events in, and
+// text out as a TSF composition, and shows the hanja / prediction list. Mirrors
+// mac/Sources/InputController.swift.
 //
-// 한/영 (VK_HANGUL) switches JIS Korean off and on, as the Microsoft IME does: while off, every
-// key goes to the app untouched. The state is one per session (a TSF global compartment), never
-// stored: it starts on Korean after a restart.
+// 한/영 (VK_HANGUL) switches JIS Moonshot to ABC and back, as the Microsoft IME does: in ABC every
+// key types the English layout's character, or goes to the app untouched. 無変換 (VK_NONCONVERT)
+// goes to ABC, 変換 (VK_CONVERT) back to Mode A, or is the engine's かな key there
+// (docs/moonshot.md §4, §7). The state is one per session (a TSF global compartment), never
+// stored: it starts on 한글 after a restart.
+//
+// Until predictive typing is accepted (docs/moonshot.md §6, settings::ConsentAccepted) every key
+// passes through untouched and the indicator's menu only offers to accept it.
 #pragma once
 
 #include <msctf.h>
@@ -18,6 +24,7 @@
 
 #include "candidate_window.h"
 #include "jis_korean.h"
+#include "key_map.h"
 #include "lang_bar.h"
 
 namespace jk {
@@ -80,15 +87,19 @@ private:
     // Whether a key-down goes through the engine. Decided the same way in OnTestKeyDown and
     // OnKeyDown; keys the engine then doesn't consume go on to the app after its commit.
     bool Wants(unsigned vk, std::uint32_t key, std::uint32_t mods) const;
-    // ABC (한/영): types the key's character in the English layout (english_mode_), from the
+    // ABC (無変換, 한/영): types the key's character in the English layout (english_mode_), from the
     // engine's table (jk_legend_in), as macOS's keyboard layout generated from it does. False:
     // the key goes to the app (shortcuts, Space, Enter, F-keys, Windows' layout).
     bool TypeEnglish(ITfContext* context, std::uint32_t key, std::uint32_t mods);
     bool TypesEnglish(std::uint32_t key) const;  // in ABC, this key goes to TypeEnglish
-    // The English layout for the Korean mode's keyboard: A → JIS English, B → US English,
-    // C → UK English (spec §8.4); Windows' layout if this build has none.
-    std::uint32_t DefaultEnglish() const;
-    bool SameKeyboard(std::uint32_t english) const;  // its namespace is the Korean mode's family
+    // 한/영, 無変換 and 変換 (docs/moonshot.md §4, §7). `repeat`: the key's auto-repeat.
+    void HandleSwitchKey(ITfContext* context, SwitchKey key, bool repeat);
+    // After jk_key / jk_kana_key: the engine may have switched its own mode (F6 / F7 to JIS Kana,
+    // 変換 back to Mode A). The setting and the indicator follow, without a flush.
+    void FollowEngineMode();
+    // Whether predictive typing was accepted (docs/moonshot.md §6): read again until it is.
+    bool Accepted();
+    void AskConsent();  // the notice, in a message box; Accept stores it
     // A password or PIN field (input scope), or one the app turned the keyboard off for.
     bool PrivateField(ITfContext* context);
     bool Private(const wchar_t* why);  // logs why a field is private, returns true
@@ -114,7 +125,7 @@ private:
     void Activated();  // settings, then a changed training file (spec §10.12)
     void EnsureData();  // the predictor, before the first key
     void EnsureDictionary();  // the hanja dictionary: at the first F7, or with predictions
-    void SetMode(unsigned mode);  // by engine id (spec §3.6.1); an id this build doesn't have: Mode A
+    void SetMode(unsigned mode);  // by engine id; one the engine refuses (1, 2, 9, 10): Mode A
 
 #ifdef JK_PREDICT
     // ↓ / Tab and ↑ move through the predictions, Escape leaves the list, Enter commits the
@@ -185,13 +196,16 @@ private:
         bool pending = false;
     } tested_;
     unsigned mode_ = 0xFF;  // none yet: the first ApplySettings sets it
-    bool open_ = true;  // false: 한/영 switched to English
-    // ABC's layout: an English mode id (spec §3.6.2), or kPassThrough for Windows' own layout.
+    bool open_ = true;  // false: 한/영 or 無変換 switched to English (ABC)
+    bool accepted_ = false;  // predictive typing accepted (Accepted)
+    bool asking_ = false;    // the consent notice is open
+    // ABC's layout: an English mode id (A_QWERTY, A_DVORAK, A_COLEMAK), or kPassThrough for
+    // Windows' own layout.
     static constexpr std::uint32_t kPassThrough = 0xFFFFFFFF;
-    std::uint32_t english_mode_ = kPassThrough;
+    std::uint32_t english_mode_ = JK_MODE_A_QWERTY;
     bool predicting_ = false;
     bool private_ = false;     // the focused field is a password field: keys pass through
-    bool app_off_ = false;     // JIS Korean is off in this program (settings::AppOff)
+    bool app_off_ = false;     // JIS Moonshot is off in this program (settings::AppOff)
     std::wstring last_scopes_;  // for the log
     bool data_ready_ = false;  // the shared predictor may be set on the engine
     bool dictionary_set_ = false;  // the shared dictionary is set on the engine

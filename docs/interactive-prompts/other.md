@@ -4,9 +4,10 @@ You come here from [start.md](start.md). [rules.md](rules.md) still applies.
 
 ## Trying it first
 
-Nothing to install: the web playground at **[jis-korean.sjun.me](https://jis-korean.sjun.me)**
-runs the same engine in the browser. Suggest it to anyone unsure, then come back to start.md for
-the operating system they choose.
+JIS Moonshot has no hosted playground. In the clone, `npm install` then `npm run dev` in `web/`
+runs the same engine in the browser (it needs Node.js and Rust with the `wasm32-unknown-unknown`
+target: each install is its own question, rules.md section 2). Suggest it to anyone unsure, then
+come back to start.md for the operating system they choose.
 
 ## Android and iPhone
 
@@ -14,18 +15,17 @@ Out of scope: they'll be covered by a separate input method. Say so and stop.
 
 ## Linux and anything else
 
-There's no JIS Korean input method for them yet. Say so first, then offer, one at a time:
+There's no JIS Moonshot input method for them. Say so first, then offer, one at a time:
 
-1. the web playground, to try the layout;
-2. Minecraft ([minecraft.md](minecraft.md)), if they play Minecraft Java Edition: the mod runs
-   wherever Minecraft 26.3 with Fabric does, Linux included;
-3. **a custom stack** for their operating system and keyboards, below.
+1. the web playground, to try it;
+2. **a custom stack** for their operating system and keyboards, below. It won't have JIS
+   Moonshot's three readings: say so.
 
 ### A custom stack
 
-Help them design a setup of their own that gets as close to JIS Korean as their system allows: a
+Help them design a setup of their own that gets as close to JIS Moonshot as their system allows: a
 Korean input method that's already there, plus remaps for the keys their keyboards lack. It isn't
-JIS Korean, and they maintain it. Say both plainly before starting.
+JIS Moonshot, and they maintain it. Say both plainly before starting.
 
 Read [keyboard-troubleshooting](https://github.com/themrsung/keyboard-troubleshooting) first (public,
 CC0-1.0, by the same author), the same way as these prompts: fetch it over HTTPS from
