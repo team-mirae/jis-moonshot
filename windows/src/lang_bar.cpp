@@ -216,7 +216,7 @@ void LangBarButton::SetState(unsigned mode, bool open, unsigned english) {
 
 const wchar_t* LangBarButton::Label() const {
     if (!open_) return L"ABC";
-    return mode_ == JK_MODE_A_KANA ? L"かな" : L"한글";
+    return mode_ == JK_MODE_A_KANA ? L"かな" : L"한あ";
 }
 
 void LangBarButton::Detach() {
@@ -280,7 +280,7 @@ STDMETHODIMP LangBarButton::GetTooltipString(BSTR* tooltip) {
     const std::wstring code = wide(jk_mode_code_ptr(mode_), jk_mode_code_len(mode_));
     if (!code.empty()) text += L", Mode " + code + L": " + wide(jk_mode_name_ptr(mode_), jk_mode_name_len(mode_));
     if (open_) {
-        text += std::wstring(L": ") + Label();  // 한글, or かな in JIS Kana
+        text += std::wstring(L": ") + Label();  // 한あ, or かな in JIS Kana
     } else {
         // ABC: the English layout it types (spec §8.4), or Windows' own.
         const std::wstring english = wide(jk_mode_name_ptr(english_), jk_mode_name_len(english_));

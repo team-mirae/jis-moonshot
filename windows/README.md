@@ -4,7 +4,7 @@ The Windows input method for JIS Moonshot, the fork of JIS Korean that types Kor
 Japanese kana from one JIS keyboard (`docs/moonshot.md`, which wins over `docs/spec.md`): a TSF
 text input processor (`jismoonshot.dll`) that wraps `/engine`. All behavior is in the engine. This
 shell maps scan codes to engine keys (spec §2) and applies the result to the app as a TSF
-composition, the hanja and prediction list, and the taskbar's 한글 / かな / ABC indicator.
+composition, the hanja and prediction list, and the taskbar's 한あ / かな / ABC indicator.
 
 It installs beside JIS Korean without colliding: its own CLSID and profile (`src/guids.h`),
 `jismoonshot.dll` in `Program Files\JIS Moonshot`, settings in `HKCU\Software\JIS Moonshot` and
@@ -208,7 +208,7 @@ What the shell does differently from what TSF's documentation suggests, and why,
 |---|---|
 | `src/text_service.*` | One per thread: key events in, composition out, the list, focus-loss commits, 한/영 / 無変換 / 変換, the consent gate, the settings menu |
 | `src/key_map.*` | Scan codes → engine keys (spec §2), and the switch keys. No Windows headers; unit-tested |
-| `src/lang_bar.*` | The taskbar indicator (한글 / かな / ABC, drawn at run time) and its menu |
+| `src/lang_bar.*` | The taskbar indicator (한あ / かな / ABC, drawn at run time) and its menu |
 | `src/candidate_window.*` | The hanja / prediction list |
 | `src/settings.*` | The registry settings, the consent value and the default-off apps |
 | `src/training.*`, `src/training_lines.*`, `src/json.*` | Training files (spec §10.12), applied off the UI thread; `training_lines` is unit-tested |

@@ -63,8 +63,8 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 WelcomeLabel2=This will install [name/ver] on your computer.%n%nYou don't need to close other apps. Apps that are open keep the old version, or none, until they restart.
 ConfirmUninstall=Remove JIS Moonshot from this PC and from your keyboards?
 FinishedHeadingLabel=JIS Moonshot is installed
-FinishedLabelNoIcons=Restart the apps that were open: they keep the old version, or none, until they restart.%n%nPress Win+Space and pick JIS Moonshot.%n%n無変換 switches to English, 変換 back to Korean (한/영 toggles them). F6 types hiragana, F7 katakana. Right-click the 한글 / ABC indicator in the taskbar for JIS Kana and the settings.
-FinishedLabel=Restart the apps that were open: they keep the old version, or none, until they restart.%n%nPress Win+Space and pick JIS Moonshot.%n%n無変換 switches to English, 変換 back to Korean (한/영 toggles them). F6 types hiragana, F7 katakana. Right-click the 한글 / ABC indicator in the taskbar for JIS Kana and the settings.
+FinishedLabelNoIcons=Restart the apps that were open: they keep the old version, or none, until they restart.%n%nPress Win+Space and pick JIS Moonshot.%n%n無変換 switches to English, 変換 back to Korean (한/영 toggles them). F6 types hiragana, F7 katakana. Right-click the 한あ / ABC indicator in the taskbar for JIS Kana and the settings.
+FinishedLabel=Restart the apps that were open: they keep the old version, or none, until they restart.%n%nPress Win+Space and pick JIS Moonshot.%n%n無変換 switches to English, 変換 back to Korean (한/영 toggles them). F6 types hiragana, F7 katakana. Right-click the 한あ / ABC indicator in the taskbar for JIS Kana and the settings.
 
 [Files]
 ; The engine's data (the hanja dictionary, the predictor's lexicons, predict/common-ja.txt for

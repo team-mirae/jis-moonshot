@@ -1,5 +1,5 @@
 // The button JIS Moonshot puts in the input indicator (the taskbar, where the Microsoft Korean IME
-// shows 가 / A): 한글 in Mode A, かな in JIS Kana, ABC after 無変換 or 한/영. A click
+// shows 가 / A): 한あ in Mode A, かな in JIS Kana, ABC after 無変換 or 한/영. A click
 // switches between them; right-click opens the settings menu (the macOS input menu's items), a
 // popup the IME shows itself: the indicator only reports the click.
 #pragma once
@@ -45,7 +45,7 @@ public:
 
 private:
     ~LangBarButton();
-    const wchar_t* Label() const;  // 한글, かな or ABC
+    const wchar_t* Label() const;  // 한あ, かな or ABC
     LONG refs_ = 1;
     unsigned mode_ = 0;  // for the tooltip
     unsigned english_ = 0xFFFFFFFF;
