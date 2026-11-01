@@ -432,7 +432,8 @@ impl Engine {
             return self.commit("\u{3000}".into(), true);
         }
         // ⌥ + a symbol or digit key (the same setting): commit, then the key's JIS legend in
-        // full-width, as a Japanese IME types it (⇧⌥1 → ！, ⌥, → 、). Letters stay shortcuts.
+        // full-width, as a Japanese IME types it (⇧⌥1 → ！, ⌥, → 、); in Mode A ⌥[ ⌥] are the
+        // double brackets 『』. Letters stay shortcuts.
         if self.option_space
             && mods.alt
             && !mods.ctrl
@@ -441,7 +442,12 @@ impl Engine {
             && let Some(Out::Char(c)) = layout::output(Layout::Escaped, key, mods.shift)
             && zenkaku(c) != c
         {
-            return self.commit(zenkaku(c).to_string(), true);
+            let typed = match c {
+                '[' if self.mode.is_korean() => '『',
+                ']' if self.mode.is_korean() => '』',
+                _ => zenkaku(c),
+            };
+            return self.commit(typed.to_string(), true);
         }
         if mods.is_shortcut() {
             return self.commit(String::new(), false);
@@ -1071,6 +1077,15 @@ impl Engine {
         // ⌥Space (the setting): `_` (docs/moonshot.md §4).
         if option && key == Key::Space && self.option_space {
             commit.push('_');
+            return Output { commit, consumed: true, ..Output::default() };
+        }
+        // ⌥[ ⌥] (the setting): the double angle quotes « », wherever the mode puts [ and ].
+        if option
+            && self.option_space
+            && !mods.shift
+            && let Some(Out::Char(c @ ('[' | ']'))) = layout::output(Layout::Escaped, self.mode.qwerty_key(key), false)
+        {
+            commit.push(if c == '[' { '«' } else { '»' });
             return Output { commit, consumed: true, ..Output::default() };
         }
         let upper = mods.shift || mods.caps;

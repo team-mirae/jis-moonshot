@@ -223,12 +223,13 @@ fn option_symbols_type_full_width() {
         .into_iter()
         .map(|k| e.key(k, alt).commit)
         .collect();
-    assert_eq!(typed, "、。・「」＠１");
+    assert_eq!(typed, "、。・『』＠１", "Mode A: ⌥[ ⌥] are the double brackets");
     assert_eq!(e.key(Key::Slash, shift_alt).commit, "？");
-    // In JIS Kana too, after the kana.
+    // In JIS Kana too, after the kana; ⌥[ ⌥] are the single brackets there.
     e.set_mode(Mode::AKana);
     press(&mut e, "KeyT");
     assert_eq!(e.key(Key::Period, alt).commit, "か。");
+    assert_eq!(e.key(Key::BracketRight, alt).commit + &e.key(Key::Backslash, alt).commit, "「」");
     // Letters stay shortcuts (passed on), and ⌘ with it too.
     e.set_mode(Mode::A);
     assert!(!e.key(Key::KeyA, alt).consumed);
@@ -247,6 +248,23 @@ fn option_space_types_an_underscore_in_english() {
     assert_eq!((out.commit.as_str(), out.consumed), ("_", true));
     // Plain Space is still the app's.
     assert!(!e.key(Key::Space, Mods::NONE).consumed);
+}
+
+#[cfg(feature = "english")]
+#[test]
+fn option_brackets_type_guillemets_in_english() {
+    let alt = Mods { alt: true, ..Mods::NONE };
+    let mut e = Engine::new();
+    e.set_mode(Mode::AQwerty);
+    assert!(!e.key(Key::BracketRight, alt).consumed, "off by default");
+    e.set_option_space(true);
+    // JIS [ and ] are the BracketRight and Backslash codes.
+    let out = e.key(Key::BracketRight, alt);
+    assert_eq!((out.commit.as_str(), out.consumed), ("«", true));
+    assert_eq!(e.key(Key::Backslash, alt).commit, "»");
+    // Other symbols, and ⇧⌥[, are still the app's.
+    assert!(!e.key(Key::Comma, alt).consumed);
+    assert!(!e.key(Key::BracketRight, Mods { alt: true, shift: true, ..Mods::NONE }).consumed);
 }
 
 #[test]
