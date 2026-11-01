@@ -190,12 +190,22 @@ impl Kanji {
         &self.readings[self.at[i] as usize..self.at[i + 1] as usize]
     }
 
-    /// The entries of `reading`, if it's a word.
+    /// Every reading with its lowest cost (lower is more common), in byte order: for building word
+    /// lists from the dictionary (`examples/first_key.rs`).
+    pub fn words(&self) -> impl Iterator<Item = (&str, u16)> + '_ {
+        (0..self.at.len().saturating_sub(1)).filter_map(move |i| {
+            let reading = std::str::from_utf8(&self.readings[self.at[i] as usize..self.at[i + 1] as usize]).ok()?;
+            let entries = self.entries.get(self.first[i] as usize..self.first[i + 1] as usize)?;
+            Some((reading, entries.iter().map(|e| e.cost).min()?))
+        })
+    }
+
     /// The lowest cost of `hiragana` as a whole word (lower is more common), if it is one.
     pub fn word_cost(&self, hiragana: &str) -> Option<u16> {
         self.lookup(hiragana).iter().map(|e| e.cost).min()
     }
 
+    /// The entries of `reading`, if it's a word.
     fn lookup(&self, reading: &str) -> &[Entry] {
         let key = reading.as_bytes();
         let n = self.at.len() - 1;
