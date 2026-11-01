@@ -1,8 +1,10 @@
 #include "settings.h"
 
 #include <windows.h>
+#include <aclapi.h>
 
 #include <cwctype>
+#include <mutex>
 #include <vector>
 
 namespace jk::settings {
@@ -55,6 +57,41 @@ constexpr const wchar_t* kOffByDefault[] = {
 
 constexpr wchar_t kVersion[] = L"SettingsVersion";
 
+// Sandboxed programs (AppContainer: the Start menu's search, Store apps) read only keys that grant
+// ALL APPLICATION PACKAGES access. HKCU\Software grants it but doesn't pass it on, so the key
+// created by the first write doesn't have it: there PredictiveAccepted was never seen, and the
+// notice came back in every such program, every time (their own write fails too). Grants read,
+// inherited by Apps\<exe>, once per process. Needs WRITE_DAC: a sandboxed program can't, harmlessly.
+void ShareWithApps() {
+    static std::once_flag once;
+    std::call_once(once, [] {
+        BYTE sid[SECURITY_MAX_SID_SIZE];
+        DWORD sid_size = sizeof(sid);
+        if (!CreateWellKnownSid(WinBuiltinAnyPackageSid, nullptr, sid, &sid_size)) return;
+        wchar_t path[] = L"CURRENT_USER\\Software\\JIS Moonshot";
+        PACL old_acl = nullptr;
+        PSECURITY_DESCRIPTOR descriptor = nullptr;
+        if (GetNamedSecurityInfoW(path, SE_REGISTRY_KEY, DACL_SECURITY_INFORMATION, nullptr, nullptr,
+                                  &old_acl, nullptr, &descriptor) != ERROR_SUCCESS) {
+            return;
+        }
+        EXPLICIT_ACCESSW access = {};
+        access.grfAccessPermissions = KEY_READ;
+        access.grfAccessMode = GRANT_ACCESS;
+        access.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+        access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        access.Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+        access.Trustee.ptstrName = reinterpret_cast<LPWSTR>(sid);
+        PACL acl = nullptr;
+        if (SetEntriesInAclW(1, &access, old_acl, &acl) == ERROR_SUCCESS) {
+            SetNamedSecurityInfoW(path, SE_REGISTRY_KEY, DACL_SECURITY_INFORMATION, nullptr, nullptr,
+                                  acl, nullptr);
+            LocalFree(acl);
+        }
+        LocalFree(descriptor);
+    });
+}
+
 // Every change through these functions gives the settings a new version, so engines in every
 // program re-read them (ApplySettings) only when something changed. A counter value from this
 // moment, not an increment: two programs writing at once still leave a value nobody applied.
@@ -64,6 +101,7 @@ void Changed() {
     DWORD version = static_cast<DWORD>(now.QuadPart ^ (now.QuadPart >> 32));
     if (version == Version()) ++version;
     RegSetKeyValueW(HKEY_CURRENT_USER, kKey, kVersion, REG_DWORD, &version, sizeof(version));
+    ShareWithApps();
 }
 
 }  // namespace
@@ -75,7 +113,12 @@ unsigned long Version() {
     return value;
 }
 
-bool ConsentAccepted() { return ReadDword(L"PredictiveAccepted", 0) >= kConsentVersion; }
+bool ConsentAccepted() {
+    const bool accepted = ReadDword(L"PredictiveAccepted", 0) >= kConsentVersion;
+    // A key from an older build, accepted before ShareWithApps: fixed by the next program that reads it.
+    if (accepted) ShareWithApps();
+    return accepted;
+}
 
 void AcceptConsent() { WriteDword(L"PredictiveAccepted", kConsentVersion); }
 

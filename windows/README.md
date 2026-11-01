@@ -251,5 +251,9 @@ show the password in other forms. JIS Moonshot protects it in layers:
   measured yet (#9, P4).
 - Apps that end the composition at every key through the IMM layer still get loose jamo; TSF-native
   ones keep composing (#6, [windows-tsf-notes.md](../docs/troubleshooting/windows-tsf-notes.md)).
-- Store apps that run sandboxed (AppContainer) may not be able to read the settings or the
-  training file, and then use the defaults *(not measured yet)*.
+- Store apps that run sandboxed (AppContainer: Store apps, the Start menu's search) read the
+  settings only because JIS Moonshot grants ALL APPLICATION PACKAGES read access on
+  `HKCU\Software\JIS Moonshot` (at its first write or consent check in an ordinary program):
+  without it they never saw the accepted notice and asked again every time (measured). They
+  can't write it, so a choice made from the menu there doesn't last. Whether they can read the
+  training file is *not measured yet*.
