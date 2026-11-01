@@ -271,10 +271,11 @@ h1 {
 }
 
 /* A key with all three readings: Shift's Korean, English and Japanese along the top, the English
-   key cap in the middle, Korean and Japanese at the bottom corners. */
+   key cap in the middle with Shift's romaji (muted) to its right, and Korean, the kana's romaji and
+   the kana along the bottom. */
 .key.tri {
   display: grid;
-  grid-template: "sk se sj" 1fr ". en ." 1.15fr "ko . ja" 1.1fr / 1fr auto 1fr;
+  grid-template: "sk se sj" 1fr ". en sr" 1.15fr "ko rj ja" 1.1fr / 1fr auto 1fr;
   align-items: center;
   padding: calc(var(--u) * 0.06) calc(var(--u) * 0.09) calc(var(--u) * 0.12);
 }
@@ -286,6 +287,8 @@ h1 {
 .key.tri .en { grid-area: en; justify-self: center; font-size: calc(var(--u) * 0.27); font-weight: 600; }
 .key.tri .ko { grid-area: ko; justify-self: start; font-size: calc(var(--u) * 0.22); font-weight: 500; }
 .key.tri .ja { grid-area: ja; justify-self: end; font-size: calc(var(--u) * 0.2); }
+.key.tri .rj { grid-area: rj; justify-self: center; font-family: var(--mono); font-size: calc(var(--u) * 0.13); color: var(--legend); }
+.key.tri .sr { grid-area: sr; justify-self: end; font-family: var(--mono); font-size: calc(var(--u) * 0.11); color: var(--legend-open); }
 .key.tri .ko.long { font-size: calc(var(--u) * 0.17); }
 .key.tri .sk.long { font-size: calc(var(--u) * 0.13); }
 
@@ -294,6 +297,7 @@ h1 {
 .key-legend .key.tri { --u: 112px; }
 .key-legend .key.tri span { color: var(--muted); font-weight: 600; font-size: 12px; }
 .key-legend .key.tri .en { font-size: 16px; color: var(--legend); }
+.key-legend .key.tri .sr, .key-legend .key.tri .rj { font-family: var(--font); }
 .key-legend p { margin: 0; max-width: 46ch; color: var(--muted); font-size: 0.9rem; }
 
 /* Reading notes under a board */
@@ -383,8 +387,8 @@ footer {
     </div>
     <div class="board"><div class="plate" id="board-a" role="img" aria-label="JIS Moonshot key map: Korean, English and kana on every key"></div></div>
     <div class="key-legend">
-      <div class="key tri" aria-hidden="true"><span class="sk">⇧KO</span><span class="se">⇧EN</span><span class="sj">⇧JA</span><span class="en">EN</span><span class="ko">KO</span><span class="ja">JA</span></div>
-      <p>Top: with Shift, in Korean, English and Japanese (blank: the same as without). Middle: the English key cap; letters type lowercase alone and capitals with Shift. Bottom: Korean and the JIS kana.</p>
+      <div class="key tri" aria-hidden="true"><span class="sk">⇧KO</span><span class="se">⇧EN</span><span class="sj">⇧JA</span><span class="en">EN</span><span class="sr">⇧ro</span><span class="ko">KO</span><span class="rj">ro</span><span class="ja">JA</span></div>
+      <p>Top: with Shift, in Korean, English and Japanese (blank: the same as without). Middle: the English key cap (letters type lowercase alone and capitals with Shift), and Shift's kana in romaji, muted. Bottom: Korean, the kana's romaji and the JIS kana.</p>
     </div>
     <div class="swatches">
       <span class="swatch"><i></i>2-set letter keys</span>
@@ -447,6 +451,15 @@ const ROWS = [
   ] },
 ];
 
+// Romaji as typed in a Japanese IME (small kana with x). ゛ ゜ and punctuation have none.
+const ROMAJI = {
+  ぬ: "nu", ふ: "fu", あ: "a", ぁ: "xa", う: "u", ぅ: "xu", え: "e", ぇ: "xe", お: "o", ぉ: "xo",
+  や: "ya", ゃ: "xya", ゆ: "yu", ゅ: "xyu", よ: "yo", ょ: "xyo", わ: "wa", を: "wo", ほ: "ho", へ: "he", ー: "-",
+  た: "ta", て: "te", い: "i", ぃ: "xi", す: "su", か: "ka", ん: "n", な: "na", に: "ni", ら: "ra", せ: "se",
+  ち: "chi", と: "to", し: "shi", は: "ha", き: "ki", く: "ku", ま: "ma", の: "no", り: "ri", れ: "re", け: "ke", む: "mu",
+  つ: "tsu", っ: "xtu", さ: "sa", そ: "so", ひ: "hi", こ: "ko", み: "mi", も: "mo", ね: "ne", る: "ru", め: "me", ろ: "ro",
+};
+
 function span(cls, text) {
   const s = document.createElement("span");
   s.className = cls + ([...text].length > 1 && (cls === "ko" || cls === "sk") ? " long" : "");
@@ -480,7 +493,7 @@ function draw(plate) {
       key.className = ["key", "tri", kind, (en === "F" || en === "J") && "home"].filter(Boolean).join(" ");
       const shown = (shift, alone) => (shift && shift !== alone ? shift : "");
       key.append(span("sk", shown(sko, ko)), span("se", shown(sen, en)), span("sj", shown(sja, ja)),
-        span("en", en), span("ko", ko), span("ja", ja));
+        span("en", en), span("sr", ROMAJI[shown(sja, ja)] ?? ""), span("ko", ko), span("rj", ROMAJI[ja] ?? ""), span("ja", ja));
       const with_ = [shown(sko, ko) && "Shift " + sko, shown(sen, en) && "Shift " + sen, shown(sja, ja) && "Shift " + sja].filter(Boolean);
       key.title = `${en}: ${ko} / ${ja}` + (with_.length ? ` (${with_.join(", ")})` : "");
       row.append(key);
