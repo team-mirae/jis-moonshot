@@ -225,12 +225,20 @@ pub fn effort(presses: &[Press]) -> Effort {
 }
 
 /// The each-jamo route for `text`: one jamo at a time on plain 2-set, the way it's typed without
-/// JIS Korean's shortcuts. ㅇ is its own key, doubles take Shift, compound vowels and double finals
-/// take two keys. None if a character has no key.
+/// the shortcuts. ㅇ is its own key, the doubles and ㅒ ㅖ take their JIS Moonshot keys (1–5, : and ;;
+/// docs/moonshot.md §9), compound vowels and double finals take two keys. None if a character has
+/// no key.
 pub fn each_jamo(text: &str) -> Option<Vec<Press>> {
     let keymap = keymap();
+    let cheapest = |ways: Vec<Vec<Press>>| ways.into_iter().min_by_key(|w| w.iter().map(|p| p.cost()).sum::<usize>());
+    // Standard 2-set's keys, except what it puts on Shift (ㄲ ㄸ ㅃ ㅆ ㅉ ㅒ ㅖ): JIS Moonshot types
+    // those on their own keys (1–5, : and ;; docs/moonshot.md §9), and Shift+Q is ㅂ there.
     let way = |j: char| {
-        keymap.jamo_ways(Layout::Escaped, j).into_iter().min_by_key(|w| w.iter().map(|p| p.cost()).sum::<usize>())
+        let standard = cheapest(keymap.jamo_ways(Layout::Escaped, j))?;
+        if !standard.iter().any(|p| p.shift) {
+            return Some(standard);
+        }
+        cheapest(keymap.jamo_ways(Layout::JisKorean, j).into_iter().filter(|w| w.len() == 1 && !w[0].shift).collect())
     };
     let mut presses = Vec::new();
     for c in text.chars() {
@@ -890,6 +898,11 @@ mod route_tests {
         assert_eq!(each_jamo("가튼"), Some(keys_of("rkxms")));
         assert_eq!(each_jamo("아이"), Some(keys_of("dkdl")));
         assert_eq!(each_jamo("ㅠㅠ"), Some(keys_of("bb")));
+        // The doubles and ㅒ ㅖ on their own keys, unshifted (Shift+R is ㄱ in JIS Moonshot).
+        let press = |code: &str| Press { key: Key::from_code(code), shift: false };
+        assert_eq!(each_jamo("까"), Some(vec![press("Digit4"), press("KeyK")]));
+        assert_eq!(each_jamo("있"), Some(vec![press("KeyD"), press("KeyL"), press("Digit5")]));
+        assert_eq!(each_jamo("걔"), Some(vec![press("KeyR"), press("Quote")]));
         assert_eq!(effort(&keys_of("rkxms")).presses, 5);
     }
 }
