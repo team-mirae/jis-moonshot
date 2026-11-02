@@ -45,7 +45,7 @@ pub fn scenario(kind: Kind) -> Weight {
         Kind::Mixed => Weight::Mixed,
         Kind::TwoSet => Weight::TwoSet,
         Kind::KoreanKeepFinals => Weight::KeepFinals,
-        Kind::ImpliedL | Kind::Aspirated => Weight::ImpliedL,
+        Kind::ImpliedL => Weight::ImpliedL,
         Kind::Kana | Kind::Katakana | Kind::Kanji => Weight::Kana,
     }
 }

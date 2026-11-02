@@ -117,6 +117,10 @@ private:
     // place) as the composition, and updates the list.
     void Apply(ITfContext* context);
     void Refresh(ITfContext* context, const std::wstring& commit = {});
+    // 半角/全角 with nothing staged (docs/moonshot.md §4.1): the engine asked for the app's own text
+    // to change width (jk_convert_host); reads the selection and the text around it, and replaces
+    // what jk_width_edit says.
+    void ConvertHostText(ITfContext* context);
     void ShowList();
     // Commits everything unconfirmed (focus loss, IME switch, 한/영).
     void Flush(ITfContext* context);

@@ -83,11 +83,22 @@ final class JKInputController: IMKInputController {
     }
 
     override func recognizedEvents(_ sender: Any!) -> Int {
-        Int(NSEvent.EventTypeMask.keyDown.rawValue)
+        Int(NSEvent.EventTypeMask.keyDown.rawValue | NSEvent.EventTypeMask.flagsChanged.rawValue)
     }
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
+        // Cmd or Ctrl held: shortcuts at their QWERTY positions in every app (KeyboardViewerLayout).
+        // The modifier itself always goes on to the app.
+        if let event, event.type == .flagsChanged, let client = sender as? IMKTextInput {
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            KeyboardViewerLayout.shortcutModifiers(down: !flags.isDisjoint(with: [.command, .control]), for: client)
+            return false
+        }
         guard let event, event.type == .keyDown, let client = sender as? IMKTextInput else { return false }
+        // A key without Cmd or Ctrl: an app left on the QWERTY layout (Cmd+Tab released Cmd
+        // elsewhere) gets its own back before the key.
+        let shortcutFlags = event.modifierFlags.intersection([.command, .control])
+        KeyboardViewerLayout.shortcutModifiers(down: !shortcutFlags.isEmpty, for: client)
         // Predictive typing must be accepted before JIS Moonshot types anything (docs/moonshot.md §6):
         // until then every key goes to the app untouched.
         guard Consent.accepted else {
@@ -140,6 +151,7 @@ final class JKInputController: IMKInputController {
         #endif
         let consumed = jk_key(engine, engineKey(event.keyCode), mods)
         apply(to: client)
+        convertHostText(client)
         // F6 and F7 switch the engine to JIS Kana itself (docs/moonshot.md §4).
         followEngineMode(client)
         #if PREDICT
@@ -246,7 +258,7 @@ final class JKInputController: IMKInputController {
     /// Korean in Mode A, back to Mode A from JIS Kana).
     /// `reselect`: the かな proxy was selected (macOS's own かな), so Mode A is selected again
     /// whatever happens, never leaving the proxy selected.
-    func kanaKey(client given: IMKTextInput? = nil, reselect: Bool = false) {
+    func kanaKey(client given: IMKTextInput? = nil, reselect: Bool = false, bare: Bool = false) {
         guard let client = given ?? (client() as IMKTextInput?) else { return }
         if InputModes.current.english || modeID.flatMap(InputModes.mode(id:))?.english == true {
             let target = InputModes.defaultMode
@@ -257,7 +269,8 @@ final class JKInputController: IMKInputController {
         #if PREDICT
         chosen = nil
         #endif
-        jk_kana_key(engine)
+        // Shift+かな: the staged keys forced bare, with no implied ㅇ (docs/moonshot.md §4).
+        if bare { jk_kana_key_bare(engine) } else { jk_kana_key(engine) }
         apply(to: client)
         if reselect || jk_mode(engine) == modeID {
             // Nothing changed mode, or the proxy is selected: Mode A again, shown under the caret.
@@ -413,7 +426,7 @@ final class JKInputController: IMKInputController {
         if code == defaults.integer(forKey: switchKeyDefault) || code == kVK_JIS_Kana {
             // かな (and the Korean Key): docs/moonshot.md §4.
             guard InputModes.kanaTarget != nil else { return nil }
-            if !event.isARepeat { kanaKey() }
+            if !event.isARepeat { kanaKey(bare: mods & UInt32(JK_MOD_SHIFT) != 0) }
             return true
         } else if code == kVK_JIS_Eisu {
             target = InputModes.eisuTarget
@@ -737,6 +750,34 @@ final class JKInputController: IMKInputController {
         }
         jk_key(engine, UInt32(JK_KEY_ENTER), 0)
         apply(to: client)
+    }
+
+    /// 半角/全角 with nothing staged (docs/moonshot.md §4.1): the engine says which width; it also
+    /// says what to replace, from the selection and the text around it, which only the app has.
+    private func convertHostText(_ client: IMKTextInput) {
+        let width = jk_convert_host(engine)
+        guard width != 0 else { return }
+        let selection = client.selectedRange()
+        guard selection.location != NSNotFound else { return }
+        // Enough either side for any word; a longer one converts in part.
+        let reach = 256
+        let end = selection.location + selection.length
+        let length = client.length()
+        func read(_ range: NSRange) -> String {
+            guard range.length > 0 else { return "" }
+            var actual = NSRange(location: NSNotFound, length: 0)
+            return client.string(from: range, actualRange: &actual) ?? ""
+        }
+        let start = max(0, selection.location - reach)
+        let before = Array(read(NSRange(location: start, length: selection.location - start)).utf8)
+        let selected = Array(read(selection).utf8)
+        let after = Array(read(NSRange(location: end, length: max(0, min(reach, length - end)))).utf8)
+        guard jk_width_edit(engine, before, before.count, selected, selected.count, after, after.count,
+                            width == 2 ? 1 : 0) != 0 else { return }
+        let replacement = text(jk_resolved_ptr(engine), jk_resolved_len(engine))
+        let back = jk_width_edit_before(engine), forward = jk_width_edit_after(engine)
+        let range = NSRange(location: selection.location - back, length: back + selection.length + forward)
+        client.insertText(replacement, replacementRange: range)
     }
 
     private func text(_ pointer: UnsafePointer<UInt8>?, _ length: Int) -> String {

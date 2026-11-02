@@ -592,6 +592,7 @@ void TextService::HandleKey(ITfContext* context, unsigned vk, std::uint32_t key,
 #endif
     *eaten = jk_key(engine_, key, mods) != 0;
     Apply(context);
+    ConvertHostText(context);
     // F6 and F7 switch the engine to JIS Kana itself (docs/moonshot.md §4).
     FollowEngineMode();
 #ifdef JK_PREDICT
@@ -634,7 +635,12 @@ void TextService::HandleSwitchKey(ITfContext* context, SwitchKey key, bool repea
 #ifdef JK_PREDICT
     chosen_.reset();
 #endif
-    jk_kana_key(engine_);
+    // Shift+変換: the staged keys forced bare, with no implied ㅇ (docs/moonshot.md §4).
+    if (Modifiers() & JK_MOD_SHIFT) {
+        jk_kana_key_bare(engine_);
+    } else {
+        jk_kana_key(engine_);
+    }
     Apply(context);
     FollowEngineMode();
 }
@@ -724,6 +730,58 @@ void TextService::Apply(ITfContext* context) {
     }
 #endif
     Refresh(context, commit);
+}
+
+void TextService::ConvertHostText(ITfContext* context) {
+    const std::uint32_t width = jk_convert_host(engine_);
+    if (!width || !context) return;
+    ComPtr<ITfContext> held(context);
+    RunEditSession(context, client_id_, [this, held, width](TfEditCookie ec) -> HRESULT {
+        TF_SELECTION selection = {};
+        ULONG fetched = 0;
+        HRESULT hr = held->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &selection, &fetched);
+        if (FAILED(hr) || !fetched || !selection.range) return hr;
+        ComPtr<ITfRange> chosen;
+        chosen.Attach(selection.range);
+        // Enough either side for any word; a longer one converts in part (as on macOS).
+        constexpr LONG kReach = 256;
+        const auto read = [ec](ITfRange* range) {
+            std::wstring out;
+            WCHAR buffer[kReach];
+            ULONG got = 0;
+            while (SUCCEEDED(range->GetText(ec, TF_TF_MOVESTART, buffer, kReach, &got)) && got) {
+                out.append(buffer, got);
+                if (got < kReach) break;
+            }
+            return out;
+        };
+        ComPtr<ITfRange> before, inside, after;
+        if (FAILED(chosen->Clone(&before)) || FAILED(chosen->Clone(&inside)) ||
+            FAILED(chosen->Clone(&after))) {
+            return E_FAIL;
+        }
+        LONG moved = 0;
+        before->Collapse(ec, TF_ANCHOR_START);
+        before->ShiftStart(ec, -kReach, &moved, nullptr);
+        after->Collapse(ec, TF_ANCHOR_END);
+        after->ShiftEnd(ec, kReach, &moved, nullptr);
+        const std::string b = Utf8(read(before.Get()));
+        const std::string i = Utf8(read(inside.Get()));
+        const std::string a = Utf8(read(after.Get()));
+        const auto bytes = [](const std::string& s) { return reinterpret_cast<const std::uint8_t*>(s.data()); };
+        if (!jk_width_edit(engine_, bytes(b), b.size(), bytes(i), i.size(), bytes(a), a.size(),
+                           width == 2 ? 1 : 0)) {
+            return S_OK;
+        }
+        const std::wstring text = Utf16(jk_resolved_ptr(engine_), jk_resolved_len(engine_));
+        ComPtr<ITfRange> target;
+        if (FAILED(chosen->Clone(&target))) return E_FAIL;
+        target->ShiftStart(ec, -static_cast<LONG>(jk_width_edit_before(engine_)), &moved, nullptr);
+        target->ShiftEnd(ec, static_cast<LONG>(jk_width_edit_after(engine_)), &moved, nullptr);
+        hr = target->SetText(ec, 0, text.data(), static_cast<LONG>(text.size()));
+        if (FAILED(hr)) return hr;
+        return CaretToEnd(ec, held.Get(), target.Get());
+    });
 }
 
 void TextService::Refresh(ITfContext* context, const std::wstring& commit) {

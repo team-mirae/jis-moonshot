@@ -41,8 +41,8 @@ pub enum Kind {
     Katakana = 11,
     /// The kana reading converted to kanji (今日は for きょうは), docs/moonshot.md §5.1.
     Kanji = 12,
-    /// Korean with ㄶ where a ㄴ final met ㅋ, ㅌ or ㅊ (않고 for 안코 typed by sound).
-    Aspirated = 13,
+    // 13 was Aspirated (ㄶ for ㄴ + ㅋ / ㅌ / ㅊ, 않고 for 안코), retired on 2026-11-03: ㄶ has its own
+    // key (Shift+@, docs/moonshot.md §9.2). The other ids stay.
 }
 
 impl Kind {
@@ -74,9 +74,6 @@ pub struct Readings {
     pub kept: Vec<String>,
     /// Korean with an implied ㄹ after a ㄴ final, one variant per place (전력 for 저녁).
     pub implied_l: Vec<String>,
-    /// Korean with ㄶ where a ㄴ final met ㅋ, ㅌ or ㅊ, one variant per place and one with all
-    /// (않고 for 안코).
-    pub aspirated: Vec<String>,
     /// JIS Korean without the implied ㅇ.
     pub bare: String,
     /// How many syllables of the Korean reading have an implied ㅇ.
@@ -99,6 +96,9 @@ pub struct Readings {
     /// The last key was one of them: it counts too when the Korean reading is a known word (의 typed
     /// d `,`), not when it may be a comma typed out of habit after English (hello,).
     pub korean_only_last: bool,
+    /// The last key was one of them and typed a consonant first (ㄴ on `]`, 가 on `^`): no habit
+    /// types those characters after English, so it counts whether or not the word is known.
+    pub korean_only_last_consonant: bool,
 }
 
 /// A staged word read as a Korean start, an acronym and maybe more Korean (한전KPS은).
@@ -317,8 +317,6 @@ pub enum Origin {
     /// One final kept before the vowel after it (산이 for 사니).
     Kept,
     ImpliedL,
-    /// ㄶ for ㄴ + ㅋ / ㅌ / ㅊ (않고 for 안코).
-    Aspirated,
     Bare,
     /// An English start and a Korean ending (report에).
     Mixed,
@@ -353,9 +351,10 @@ pub const MAX_WITH_KANJI: usize = MAX_WITH_KANA + MAX_KANJI;
 const SIZE: usize = 27;
 const START: usize = 26;
 const END: usize = 26;
-/// Shift on these can be Korean other than Shift+vowel: none in JIS Moonshot (docs/moonshot.md §9;
-/// JIS Korean had Q W E R T O P). Shift on the vowel keys starts a syllable on ㅇ, mid-word too.
-pub(crate) const KOREAN_SHIFTS: &str = "";
+/// Shift on these can be Korean other than Shift+vowel: every consonant key, which types the
+/// consonant and ㅏ (docs/moonshot.md §9.2, 2026-11-03; JIS Korean had Q W E R T O P). Shift on the
+/// vowel keys starts a syllable on ㅇ, mid-word too.
+pub(crate) const KOREAN_SHIFTS: &str = "QWERTASDFGZXCV";
 pub(crate) const IEUNG_SHIFTS: &str = "YUIOPHJKLBNM";
 /// Canonical 2-set keys for the dedicated number-row jamo (0 is ㅘ, 1–5 ㅃ ㅉ ㄸ ㄲ ㅆ, 6–9 ㅟ ㅝ ㅚ ㅢ).
 const DIGIT_KEYS: [&str; 10] = ["hk", "q", "w", "e", "r", "t", "nl", "nj", "hl", "ml"];
@@ -1071,14 +1070,6 @@ impl Predictor {
                 out.push(Prediction { text: text.clone(), kind: Kind::ImpliedL, score });
                 origins.push((Origin::ImpliedL, None));
             }
-            // ㄶ for ㄴ + ㅋ / ㅌ / ㅊ (않고 for 안코), on the same slider: both spell what was heard.
-            // Ranked the same way, so a known word goes above the literal (않고 over 안코) and a
-            // literal word stays above it (만큼, not 많금).
-            for text in &readings.aspirated {
-                let score = margin - ALTERNATIVE + self.lexicon_odds(readings, text) + w.bits(Weight::ImpliedL);
-                out.push(Prediction { text: text.clone(), kind: Kind::Aspirated, score });
-                origins.push((Origin::Aspirated, None));
-            }
         }
         if let Some(bare) = bare {
             out.push(bare);
@@ -1373,6 +1364,17 @@ impl Predictor {
                         || (s.english.chars().all(|c| c.is_ascii_alphanumeric()) && s.english.chars().any(|c| c.is_ascii_uppercase())))
             })
             .filter(|s| !self.known_head(readings, s))
+            // A Shift+vowel start that isn't an English word (Hv as ⇧ㅗ ㅍ) doesn't split the word
+            // when it's two letters or the Korean reading is a known word (오픈 typed ⇧H v m s isn't
+            // Hv은). A longer unknown name still splits (Kotlin은).
+            .filter(|s| {
+                let mut letters = s.english.chars();
+                let ieung_start = letters.next().is_some_and(|c| IEUNG_SHIFTS.contains(c)) && letters.all(|c| c.is_ascii_lowercase());
+                let lower = s.english.to_lowercase();
+                let english = self.english_words.contains_key(&lower) || self.english_nouns.contains(&lower);
+                let short = s.english.len() <= 2;
+                !(ieung_start && !english && (short || self.korean_words.contains_key(readings.korean.as_str())))
+            })
             // Not capitals after capitals: the acronym goes on (4CCL, not 4CC이).
             .filter(|s| {
                 let rest = &readings.english[s.english.len()..];
@@ -1443,7 +1445,9 @@ impl Predictor {
     /// 등록되어있으며) and the Korean reading has no bare jamo: that's Korean.
     fn korean_head(&self, readings: &Readings, margin: f64) -> Option<Prediction> {
         let head = readings.head.as_ref()?;
-        let korean_capitals = head.acronym.chars().all(|c| KOREAN_SHIFTS.contains(c) || IEUNG_SHIFTS.contains(c) || c.is_ascii_digit())
+        let acronym: Vec<char> = head.acronym.chars().collect();
+        let korean_capitals = acronym.iter().all(|&c| KOREAN_SHIFTS.contains(c) || IEUNG_SHIFTS.contains(c) || c.is_ascii_digit())
+            && !acronym.windows(2).any(|w| acronym_pair(w[0], w[1]))
             && !readings.korean.chars().any(is_jamo);
         let start = head.keys.starts_with(|c: char| c.is_ascii_lowercase())
             && head.keys.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
@@ -1503,7 +1507,8 @@ impl Predictor {
         // A key right of 0 that typed Korean inside the word (ㅢ on `,`, docs/moonshot.md §9): no
         // English word has that character inside it, so the English reading's capitals and shape
         // don't count against Korean (의약품 typed `,` ⇧I r v n a isn't ,Irvna).
-        let last = readings.korean_only_last && self.korean_words.contains_key(readings.korean.as_str());
+        let last = readings.korean_only_last
+            && (readings.korean_only_last_consonant || self.korean_words.contains_key(readings.korean.as_str()));
         let keys = readings.korean_only + last as usize;
         if keys == 0 || context.command {
             return margin;
@@ -1532,6 +1537,14 @@ impl Predictor {
         {
             let known = self.korean_words.contains_key(korean.as_str());
             margin = self.english_margin_with(english, true) - if known { 0.0 } else { CAPITAL_LEAN };
+        }
+        // Capitals in a row typed as Shift+consonant and Shift+vowel (가나 as ⇧R ⇧S): a known Korean
+        // word, not an acronym.
+        if margin <= -99.0
+            && self.korean_words.contains_key(korean.as_str())
+            && english.chars().filter(char::is_ascii_uppercase).all(|c| KOREAN_SHIFTS.contains(c) || IEUNG_SHIFTS.contains(c))
+        {
+            margin = self.key_margin(english);
         }
         if self.korean_words.contains_key(korean.as_str()) {
             margin += LEXICON;
@@ -1602,6 +1615,11 @@ impl Predictor {
             if c.is_ascii_uppercase() && !KOREAN_SHIFTS.contains(c) && !(ieung_ok && IEUNG_SHIFTS.contains(c)) {
                 return -99.0;
             }
+            // Two capitals in a row are an acronym (ESG, KPS), though Shift on any letter key
+            // types Korean (docs/moonshot.md §9.2): margin_of_keys lets a known Korean word back.
+            if i > 0 && acronym_pair(chars[i - 1], c) {
+                return -99.0;
+            }
         }
         let mut margin = self.key_margin(english);
         let lower = english.to_lowercase();
@@ -1616,24 +1634,42 @@ impl Predictor {
     /// Korean minus English in average log2 probability per key, over the letter runs (the keys
     /// runs, with the three-language model).
     pub(crate) fn key_margin(&self, english: &str) -> f64 {
+        // Korean reads a Shift+consonant as the consonant and ㅏ (docs/moonshot.md §9.2): R is r k.
+        // English reads the keys as they are. Both totals are per key pressed.
+        let korean: String = english
+            .chars()
+            .flat_map(|c| {
+                let a = KOREAN_SHIFTS.contains(c) && c.is_ascii_uppercase();
+                [Some(c.to_ascii_lowercase()), a.then_some('k')]
+            })
+            .flatten()
+            .collect();
+        let pressed = keys_of(english);
+        if pressed == 0 {
+            return 0.0;
+        }
         if let Some(model) = self.keys.as_ref().filter(|_| self.keys_for_margin) {
             use crate::keymodel::Class;
-            return per_key(english, |run| model.log_probability(Class::Korean, run) - model.log_probability(Class::English, run));
+            let ko = total_of(&korean, |run| model.log_probability(Class::Korean, run));
+            let en = total_of(english, |run| model.log_probability(Class::English, run));
+            return (ko - en) / pressed as f64;
         }
-        let (mut total, mut keys) = (0.0, 0usize);
-        let mut run = String::new();
-        for c in english.chars().chain([' ']) {
-            if c.is_ascii_alphabetic() {
-                run.push(c.to_ascii_lowercase());
-            } else if let Some(d) = c.to_digit(10) {
-                run.push_str(DIGIT_KEYS[d as usize]);
-            } else if !run.is_empty() {
-                total += log_probability(&self.korean, self.order, &run) - log_probability(&self.english, self.order, &run);
-                keys += run.len() + 1;
-                run.clear();
+        let legacy = |text: &str, table: &[u8]| {
+            let mut total = 0.0;
+            let mut run = String::new();
+            for c in text.chars().chain([' ']) {
+                if c.is_ascii_alphabetic() {
+                    run.push(c.to_ascii_lowercase());
+                } else if let Some(d) = c.to_digit(10) {
+                    run.push_str(DIGIT_KEYS[d as usize]);
+                } else if !run.is_empty() {
+                    total += log_probability(table, self.order, &run);
+                    run.clear();
+                }
             }
-        }
-        if keys == 0 { 0.0 } else { total / keys as f64 }
+            total
+        };
+        (legacy(&korean, &self.korean) - legacy(english, &self.english)) / pressed as f64
     }
 
     /// Kana minus the likelier of Korean and English, in log2 probability over the whole staged
@@ -1653,21 +1689,45 @@ impl Predictor {
 
 /// `score` summed over the runs of keys in `english` (the characters a key types, `keymodel::symbol`),
 /// per key (each run's END counts as one). 0 with no keys.
-fn per_key(english: &str, score: impl Fn(&[u8]) -> f64) -> f64 {
-    let (mut total, mut keys) = (0.0, 0usize);
-    let mut run: Vec<u8> = Vec::new();
+/// Two capitals in a row with a consonant among them: an acronym's (ESG, KPS), not Korean, though
+/// Shift+consonant types Korean (docs/moonshot.md §9.2). Shift+vowels in a row (분야의 as q n s ⇧I
+/// ⇧M l) are still Korean.
+fn acronym_pair(a: char, b: char) -> bool {
+    a.is_ascii_uppercase() && b.is_ascii_uppercase() && (KOREAN_SHIFTS.contains(a) || KOREAN_SHIFTS.contains(b))
+}
+
+/// The keys `english` presses, counted per run of keys (each run and its end).
+fn keys_of(english: &str) -> usize {
+    let mut keys = 0;
+    let mut run = 0;
     for c in english.chars().map(Some).chain([None]) {
+        match c.and_then(crate::keymodel::symbol) {
+            Some(_) => run += 1,
+            None if run > 0 => {
+                keys += run + 1;
+                run = 0;
+            }
+            None => {}
+        }
+    }
+    keys
+}
+
+/// The summed score of each run of keys in `text`.
+fn total_of(text: &str, score: impl Fn(&[u8]) -> f64) -> f64 {
+    let mut total = 0.0;
+    let mut run: Vec<u8> = Vec::new();
+    for c in text.chars().map(Some).chain([None]) {
         match c.and_then(crate::keymodel::symbol) {
             Some(s) => run.push(s),
             None if !run.is_empty() => {
                 total += score(&run);
-                keys += run.len() + 1;
                 run.clear();
             }
             None => {}
         }
     }
-    if keys == 0 { 0.0 } else { total / keys as f64 }
+    total
 }
 
 fn log_probability(table: &[u8], order: usize, keys: &str) -> f64 {

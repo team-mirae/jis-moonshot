@@ -1,5 +1,6 @@
 //! JIS Moonshot (docs/moonshot.md): kana typing, scripts, the switch keys and the kana reading.
 
+use jis_korean::width::Width;
 use jis_korean::{Engine, Key, Mode, Mods, Script};
 
 fn press(e: &mut Engine, keys: &str) -> String {
@@ -60,9 +61,9 @@ fn the_kana_reading_follows_the_jis_kana_layout() {
 
 #[test]
 fn shift_z_is_no_longer_f10() {
-    // §1: Shift+Z is ㅋ in Korean (standard 2-set), っ in kana, Z in English.
+    // §1: Shift+Z is 카 in Korean (Shift+consonant, docs/moonshot.md §9.2), っ in kana, Z in English.
     let e = typed("KeyG KeyK KeyS S-KeyZ");
-    assert_eq!(e.preedit(), "한ㅋ");
+    assert_eq!(e.preedit(), "한카");
     assert_eq!(e.english(), "gksZ");
     assert_eq!(e.kana(), "きのとっ");
 }
@@ -214,26 +215,124 @@ fn option_symbols_type_full_width() {
     press(&mut e, "KeyG KeyK KeyS");
     assert_eq!((e.key(Key::Digit1, shift_alt).commit.as_str(), e.preedit().as_str()), ("한", ""));
     e.set_option_space(true);
-    // ⇧⌥1 → ！ after what's staged; ⌥ , . / [ ] → 、。・「」 (JIS [ and ] are the BracketRight and
-    // Backslash codes; BracketLeft is @); ⌥1 → １.
+    // ⇧⌥1 → ！ after what's staged, staged too (docs/moonshot.md §4), so 半角/全角 can still change
+    // it; ⌥ , . / [ ] → 、。・『』 (JIS [ and ] are the BracketRight and Backslash codes;
+    // BracketLeft is @); ⌥1 → １.
     press(&mut e, "KeyG KeyK KeyS");
     let out = e.key(Key::Digit1, shift_alt);
-    assert_eq!((out.commit.as_str(), out.consumed), ("한！", true));
-    let typed: String = [Key::Comma, Key::Period, Key::Slash, Key::BracketRight, Key::Backslash, Key::BracketLeft, Key::Digit1]
-        .into_iter()
-        .map(|k| e.key(k, alt).commit)
-        .collect();
-    assert_eq!(typed, "、。・『』＠１", "Mode A: ⌥[ ⌥] are the double brackets");
-    assert_eq!(e.key(Key::Slash, shift_alt).commit, "？");
+    assert_eq!((out.commit.as_str(), out.preedit.as_str(), out.consumed), ("", "한！", true));
+    for k in [Key::Comma, Key::Period, Key::Slash, Key::BracketRight, Key::Backslash, Key::BracketLeft, Key::Digit1] {
+        assert_eq!(e.key(k, alt).commit, "");
+    }
+    assert_eq!(e.preedit(), "한！、。・『』＠１", "Mode A: ⌥[ ⌥] are the double brackets");
+    e.key(Key::Slash, shift_alt);
+    assert_eq!(e.key(Key::Space, Mods::NONE).commit, "한！、。・『』＠１？ ");
+    // With nothing staged it stages alone.
+    e.key(Key::Digit1, shift_alt);
+    assert_eq!(e.preedit(), "！");
+    e.clear();
     // In JIS Kana too, after the kana; ⌥[ ⌥] are the single brackets there.
     e.set_mode(Mode::AKana);
     press(&mut e, "KeyT");
-    assert_eq!(e.key(Key::Period, alt).commit, "か。");
-    assert_eq!(e.key(Key::BracketRight, alt).commit + &e.key(Key::Backslash, alt).commit, "「」");
+    e.key(Key::Period, alt);
+    e.key(Key::BracketRight, alt);
+    e.key(Key::Backslash, alt);
+    assert_eq!(e.preedit(), "か。「」");
+    e.clear();
     // Letters stay shortcuts (passed on), and ⌘ with it too.
     e.set_mode(Mode::A);
     assert!(!e.key(Key::KeyA, alt).consumed);
     assert!(!e.key(Key::Digit1, Mods { alt: true, meta: true, ..Mods::NONE }).consumed);
+}
+
+#[test]
+fn hankaku_zenkaku_converts_what_is_staged() {
+    let shift = Mods::SHIFTED;
+    let alt = Mods { alt: true, ..Mods::NONE };
+    let shift_alt = Mods { alt: true, shift: true, ..Mods::NONE };
+    let mut e = Engine::new();
+    e.set_option_space(true);
+    // docs/moonshot.md §4.1: 半角/全角 (the Backquote code) makes what's staged full-width, Shift
+    // half-width; it stays staged. Hangul has no other width.
+    e.key(Key::Digit1, shift_alt);
+    e.key(Key::Slash, shift_alt);
+    assert_eq!(e.preedit(), "！？");
+    let out = e.key(Key::Backquote, shift);
+    assert_eq!((out.commit.as_str(), out.preedit.as_str(), out.consumed), ("", "!?", true));
+    e.key(Key::Backquote, Mods::NONE);
+    assert_eq!(e.preedit(), "！？");
+    e.clear();
+    press(&mut e, "KeyG KeyK KeyS S-Digit1 S-Digit2");
+    assert_eq!(e.preedit(), "한12");
+    e.key(Key::Backquote, Mods::NONE);
+    assert_eq!(e.preedit(), "한１２");
+    // Typing goes on after it.
+    press(&mut e, "KeyG KeyK");
+    assert_eq!(e.preedit(), "한１２하");
+    e.clear();
+    // Kana: half-width katakana, and back.
+    e.set_mode(Mode::AKana);
+    press(&mut e, "KeyT BracketLeft KeyF BracketRight");
+    assert_eq!(e.preedit(), "がぱ");
+    e.key(Key::Backquote, shift);
+    assert_eq!(e.preedit(), "ｶﾞﾊﾟ");
+    e.key(Key::Backquote, Mods::NONE);
+    assert_eq!(e.preedit(), "ガパ");
+    e.clear();
+    e.set_mode(Mode::A);
+    // ⌥ + it is still a shortcut; with nothing staged the host converts its own text.
+    let out = e.key(Key::Backquote, Mods::NONE);
+    assert_eq!((out.consumed, out.convert_host), (true, Some(Width::Full)));
+    assert_eq!(e.key(Key::Backquote, shift).convert_host, Some(Width::Half));
+    assert!(!e.key(Key::Backquote, alt).consumed);
+}
+
+#[test]
+fn the_slot_keys_still_type_kana_in_jis_kana() {
+    // docs/moonshot.md §9.2: the keys right of 0 type Korean in Mode A, but JIS Kana and the kana
+    // reading read them by key, the empty Shift+¥ too.
+    let mut e = Engine::new();
+    e.set_mode(Mode::AKana);
+    press(&mut e, "Equal IntlYen Backslash Period Slash IntlRo");
+    assert_eq!(e.preedit(), "へーむるめろ");
+    let mut a = typed("KeyG KeyK Equal");
+    assert_eq!((a.preedit().as_str(), a.kana().as_str()), ("하가", "きのへ"));
+    a.key(Key::F6, Mods::NONE);
+    assert_eq!(a.preedit(), "きのへ");
+}
+
+#[test]
+fn hankaku_zenkaku_on_the_apps_text() {
+    use jis_korean::width::{WidthEdit, width_edit};
+    let edit = |before: usize, after: usize, text: &str| Some(WidthEdit { before, after, text: text.into() });
+    // 1. The selection, whole.
+    assert_eq!(width_edit("x ", "hello world", " y", Width::Full), edit(0, 0, "ｈｅｌｌｏ\u{3000}ｗｏｒｌｄ"));
+    // 2. The word the caret is on: up to a blank, or a change of script.
+    assert_eq!(width_edit("say he", "", "llo there", Width::Full), edit(2, 3, "ｈｅｌｌｏ"));
+    assert_eq!(width_edit("say ", "", "hello", Width::Full), edit(0, 5, "ｈｅｌｌｏ"));
+    assert_eq!(width_edit("한국어he", "", "llo!", Width::Full), edit(2, 4, "ｈｅｌｌｏ！"));
+    assert_eq!(width_edit("ひらがな", "", "カタカナ", Width::Half), edit(0, 4, "ｶﾀｶﾅ"));
+    assert_eq!(width_edit("ひら", "", "がなカタカナ", Width::Half), edit(2, 2, "ﾋﾗｶﾞﾅ"));
+    assert_eq!(width_edit("ｈｅ", "", "ｌｌｏ　ｘ", Width::Half), edit(2, 3, "hello"));
+    // At the end of a word, nothing.
+    assert_eq!(width_edit("hello", "", "", Width::Full), None);
+    assert_eq!(width_edit("hello", "", " world", Width::Full), None);
+    // 3. Nothing to change: nothing.
+    assert_eq!(width_edit("", "", "한국어", Width::Full), None);
+    assert_eq!(width_edit("", "hello", "", Width::Half), None);
+}
+
+#[cfg(feature = "english")]
+#[test]
+fn hankaku_zenkaku_in_english_converts_the_apps_text() {
+    // 無変換 stages nothing: the key asks the host to convert its text (docs/moonshot.md §4.1).
+    let mut e = Engine::new();
+    e.set_mode(Mode::AQwerty);
+    let out = e.key(Key::Backquote, Mods::NONE);
+    assert_eq!((out.consumed, out.convert_host, out.commit.as_str()), (true, Some(Width::Full), ""));
+    assert_eq!(e.key(Key::Backquote, Mods::SHIFTED).convert_host, Some(Width::Half));
+    // Letters still go to the app.
+    assert!(!e.key(Key::KeyA, Mods::NONE).consumed);
 }
 
 #[cfg(feature = "english")]

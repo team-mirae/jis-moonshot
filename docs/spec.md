@@ -27,9 +27,11 @@ adds a shortcut; it never takes anything away.
 - Double finals (ㄹ+ㄱ → ㄺ etc.) compose as usual.
 
 JIS Moonshot moves the jamo standard 2-set puts on Shift (moonshot.md §9, 2026-11-02, the owner's
-call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only, and ㅒ ㅖ on `:` and `;`. Shift+Q W E R T type ㅂ ㅈ ㄷ ㄱ
-ㅅ, as Shift on every other consonant does, and Shift on every vowel key, O and P included, starts a syllable on ㅇ (§4.2). Everything else
-on the letter keys is standard 2-set, and `engine/tests/baseline.rs` holds it to that.
+call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only, and ㅒ ㅖ on `:` and `;`. Shift on a consonant key types the
+consonant and ㅏ (Shift+R → 가; moonshot.md §9.2, 2026-11-03, the owner's call), and Shift on every
+vowel key, O and P included, starts a syllable on ㅇ (§4.2). Everything else on the letter keys is
+standard 2-set, and `engine/tests/baseline.rs` holds it to that (Shift held over consonants is no
+longer tested: it no longer types 2-set).
 
 Two deliberate exceptions (§4.2):
 
@@ -39,8 +41,8 @@ Two deliberate exceptions (§4.2):
 - **Shift+vowel** (vowel keys whose Shift types nothing else: all but O and P) after a syllable
   starts a new syllable on ㅇ instead of acting like the plain vowel (마ㄹ+⇧ㅣ → 말이, not 마리).
 
-JIS Korean had a third, Shift+Z as F10. JIS Moonshot drops it: Shift+Z is ㅋ, as on standard 2-set
-(and っ in kana, moonshot.md §1).
+JIS Korean had a third, Shift+Z as F10. JIS Moonshot drops it: Shift+Z is 카, as Shift on any
+consonant (and っ in kana, moonshot.md §1).
 
 Any change that breaks this principle is a spec change, not an implementation detail.
 
@@ -94,37 +96,37 @@ except Hangul jamo, which go into the composition automaton (§4).
 | 8 | ㅚ | 8 | most frequent of ㅟ ㅝ ㅚ; middle finger |
 | 9 | ㅢ | 9 | placed for ergonomics |
 | 0 | ㅘ | 0 | JIS kana わ is on this key |
-| − ^ ¥ | ㅙ 다 나 | 왜 도 니 | moonshot.md §9.2 |
+| − ^ ¥ | ㅙ 가 · | 왜, 께서, nothing | moonshot.md §9.2 (Shift+¥ is empty) |
 
 Digits are on Shift, so numbers type with Shift held. The 12 keys right of 0 type the actions of
-moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ゜ breaks, §9.1); JIS Korean's symbols on them are gone.
+moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ㆍ breaks, §9.1); JIS Korean's symbols on them are gone.
 
 ### 3.2 Q row
 
 | Key | Unshifted | Shift | Notes |
 |---|---|---|---|
-| Q W E R T | ㅂ ㅈ ㄷ ㄱ ㅅ | same | Shift ignored, as on every consonant (the doubles are on 1–5, §1) |
+| Q W E R T | ㅂ ㅈ ㄷ ㄱ ㅅ | 바 자 다 가 사 | Shift+consonant: the consonant and ㅏ (moonshot.md §9.2; the doubles are on 1–5, §1) |
 | Y U I | ㅛ ㅕ ㅑ | ㅛ ㅕ ㅑ | standard 2-set (Shift: §4.2) |
 | O P | ㅐ ㅔ | ㅐ ㅔ | Shift: §4.2 (ㅒ ㅖ are on : and ;, moonshot.md §9.2) |
-| @ [ | ㅡㄹ ゜ | 을 ゜ | moonshot.md §9.2 |
+| @ [ | ㅄ, ㆍ (break) | ㄶ, ㆍ | moonshot.md §9.2 (ㅄ ㄶ type their two jamo) |
 
 ### 3.3 A row
 
 | Key | Unshifted | Shift | Notes |
 |---|---|---|---|
-| A S D F G | ㅁ ㄴ ㅇ ㄹ ㅎ | same | standard 2-set |
+| A S D F G | ㅁ ㄴ ㅇ ㄹ ㅎ | 마 나 아 라 하 | Shift+consonant (moonshot.md §9.2) |
 | H J K L | ㅗ ㅓ ㅏ ㅣ | same | standard 2-set |
-| ; : ] | ㅖ ㅒ 무 | 예 얘 부 | moonshot.md §9.2 |
+| ; : ] | ㅖ ㅒ ㄴ | 예 얘 ㄹ | moonshot.md §9.2 |
 
 ### 3.4 Z row
 
 | Key | Unshifted | Shift | Notes |
 |---|---|---|---|
-| Z | ㅋ | ㅋ | standard 2-set. JIS Korean made Shift+Z F10; JIS Moonshot doesn't (it's っ on the kana layout, moonshot.md §1) |
-| X C V | ㅌ ㅊ ㅍ | same | standard 2-set |
+| Z | ㅋ | 카 | Shift+consonant. JIS Korean made Shift+Z F10; JIS Moonshot doesn't (it's っ on the kana layout, moonshot.md §1) |
+| X C V | ㅌ ㅊ ㅍ | 타 차 파 | Shift+consonant (moonshot.md §9.2) |
 | B N M | ㅠ ㅜ ㅡ | same | standard 2-set |
-| , . / | ㅢ ㅂㅅ 메 | , . · | moonshot.md §9.2; Korean keeps , . · (U+00B7) on Shift |
-| ろ | 로 | 로゜ | moonshot.md §9.2 |
+| , . / | ㅢ 을 서 | , 를 에서 | moonshot.md §9.2; Korean keeps only , on Shift (· is on ¥) |
+| ろ | 로 | 으로 | moonshot.md §9.2 |
 
 ### 3.5 Keys outside this map
 
@@ -147,7 +149,7 @@ JIS Moonshot is **JIS only** (moonshot.md §2). JIS Korean's **Mode B** (US ANSI
 ISO), and their English modes `B_QWERTY` and `CJ_QWERTY`, are retired: their ids are never reused,
 `jk_set_mode` refuses them, and a saved setting naming one falls back to Mode A. The kana reading
 needs the JIS kana legends, which no other keyboard has. `Backquote` (the HHKB's `` ` `` key; 半角/全角
-on a full JIS board) types `` ` `` and `~` as on stock US keyboards, in every mode. `IntlBackslash`
+on a full JIS board) is 半角/全角 in every mode: full-width, Shift half-width (moonshot.md §4.1). `IntlBackslash`
 isn't in Mode A: it commits and passes through (§3.5).
 
 The stock keyboard (JIS) drives everything that reads keys as plain characters: the **English
@@ -457,8 +459,8 @@ whole Shift+vowel in one press. The English reading keeps the shifted letter (�
 While composing, Backspace removes the **last jamo keystroke** and recomposes:
 간 → 가 → ㄱ → (empty). A compound medial typed as a sequence comes apart one key at a time
 (과 → 고), and one typed with a dedicated key goes in one press (과 via 0 → ㄱ) *(from prototype)*.
-An implied ㅇ isn't a keystroke, so it goes with its vowel (가어 → 가). A key that types several
-jamo (moonshot.md §9: 다, ㅡㄹ, 로゜) comes off whole: 하다 → 하.
+An implied ㅇ isn't a keystroke, so it goes with its vowel (가어 → 가). A slot key (moonshot.md §9)
+comes off whole, as one key. None types several jamo since the 2026-11-03 slots were freed.
 With nothing unconfirmed, Backspace passes through to the app.
 
 ---
@@ -721,9 +723,17 @@ Scores are in bits per key, positive leaning Korean:
    its Korean reading is a common word (a count of 20 or more, §10.9: 쓰 typed `5 ㅡ`, 빠 typed
    `1 ㅏ`; in JIS Moonshot ⇧T ⇧M is TM, since Shift on Q W E R T types no double, moonshot.md §9),
    and so is an English start of two capitals before a particle (KPI와).
+   **Shift+consonant** (moonshot.md §9.2, 2026-11-03) types the consonant and ㅏ, so a capital on a
+   consonant key can be Korean too (`KOREAN_SHIFTS`; the key model reads `R` as `r k` on the Korean
+   side). Two capitals in a row with a consonant among them are still an acronym (ESG, KPS), unless
+   the Korean reading is a known word; Shift+vowels in a row (분야의 as `q n s ⇧I ⇧M l`) stay Korean.
+   A Shift+vowel start that is no English word splits off as English (before a particle) only when
+   it's longer than two letters and the Korean reading isn't a known word: 오픈 typed `⇧H v m s` isn't
+   Hv은, while Kotlin은 still splits.
    **Korean-only keys:** a key right of 0 that typed Korean inside the word (ㅢ on `,`,
    moonshot.md §9.3) lifts Korean over these capital rules and adds 3 bits per key; the last key
-   counts only when the Korean reading is a known word.
+   counts only when the Korean reading is a known word, or when it typed a consonant first (ㄴ on
+   `]`, 가 on `^`): no habit types those characters after English the way `,` (hello,) or `.` is.
    After any key of the word, a number-row key included (있 as `l 5`), a capital on a vowel key is
    Shift+vowel. **Digits then a Korean counter** (개 년 월 일 원 명 건 억 조 배 개월 년간 분기 …,
    maybe with a particle: 3년간, 2개의) or a known Korean word are Korean, at least one step: 2개,
@@ -827,13 +837,10 @@ reading unless it's a known word, with word counts deciding between two known wo
 often valid (저녁, 전력), so it's a slider (default 1.0; 0.00 turns it off; macOS
 `Weight.ImpliedL`).
 
-**ㄶ by sound:** ㅎ then ㄱ, ㄷ or ㅈ sounds ㅋ, ㅌ or ㅊ, so 않고 is said [안코] and a typist going by
-sound types 안코 (`dkszh`). Where a ㄴ final is followed by ㅋ, ㅌ or ㅊ starting a syllable, the
-reading gets that ㄴ as ㄶ and the consonant as ㄱ, ㄷ or ㅈ: 안코 → 않고, 만타 → 많다, 괜찬치 → 괜찮지.
-One variant per place, and one with all of them when there are several. It's ranked like the
-implied ㄹ, so a known word goes **above the literal** (않고 over 안코) and a literal word stays on
-top (만큼, not 많금; 한테, not 핞데). It shares the implied ㄹ slider (`Weight.ImpliedL`): both spell
-what was heard, and 0 turns both off. Kind `Aspirated`.
+**ㄶ by sound (retired 2026-11-03):** a typist going by sound types 않고 as 안코 (`dkszh`), and
+the reading used to offer ㄶ where a ㄴ final met ㅋ, ㅌ or ㅊ (안코 → 않고, kind `Aspirated`, id 13).
+ㄶ now has its own key (Shift+`@`, moonshot.md §9.2), so the rule and the kind are gone; id 13
+isn't reused.
 
 Hosts store them per user: the web playground has sliders under "Tune predictions" (remembered
 in the browser); macOS reads `defaults write me.sjun.inputmethod.JISMoonshot Weight.<Scenario>`;

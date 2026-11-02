@@ -103,13 +103,22 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
 |---|---|---|---|
 | 英数 / 無変換 | (stays) | commit what shows, to the last English mode | commit, to the last English mode |
 | かな / 変換 | to Mode A | staged text: **force Korean** (script Korean). Nothing staged: nothing | to Mode A, the staged keys forced Korean |
+| Shift+かな / Shift+変換 | to Mode A | staged text: **force bare Korean** (script KoreanBare): no implied ㅇ, so ㅏ stays ㅏ (2026-11-03) | to Mode A, the staged keys forced bare |
 | F6 | goes to the app | hiragana: the staged keys read as kana, **until the next commit** (then Auto again) | hiragana, kept |
 | F7 | goes to the app | katakana, until the next commit | katakana, kept |
 | F8 | goes to the app | **kanji**: the kana reading's conversions on top, until the next commit (§5.1) | the conversions above the kana, until the next commit |
 | Shift+F8 | goes to the app | the same as F8 (the hanja list is gone) | the same as F8 |
 | F9 / F10 | goes to the app | as in JIS Korean (the word's keys as full- / half-width letters) | the staged run's keys as full- / half-width characters |
-| Shift+Z | Z | ㅋ / っ (a key like any other) | っ |
+| Shift+Z | Z | 카 (Shift+consonant, §9.2) / っ | っ |
+| Cmd / Ctrl + a key | the app's shortcut | the app's shortcut | the app's shortcut |
 
+- **Cmd and Ctrl shortcuts are the app's, at their QWERTY positions** (2026-11-03). The engine
+  commits what shows and passes them on. On macOS, while either is held the app is given JIS
+  English's layout, whose plain layer is QWERTY: apps that match shortcuts by
+  `charactersIgnoringModifiers` (zenteru) read that layer, which is jamo in Mode A (Cmd+C read as
+  ㅊ) and Dvorak's letters in JIS Dvorak. On release the mode's layout comes back (or, if Cmd+Tab
+  released it in another app, before the next key without Cmd or Ctrl there). The Keyboard Viewer
+  shows QWERTY while it's held.
 - **The staged keys are kept, not their text**, so forcing a script re-reads the same keystrokes:
   `ㅎ ㅏ ㄴ` (G K S) shows 한; F6 → きのと; かな → 한 again.
 - **F6 and F7 are per segment in Mode A** (2026-11-01, after trying it: a sticky switch to `A_KANA`
@@ -131,8 +140,9 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   `A_KANA`, and types `_` in the English modes. It's an engine setting (`jk_set_option_space`), off
   by default: on Windows Alt+Space is the window menu. In a terminal, ⌥ in an English mode still
   goes to the app untouched.
-- **⌥ + a symbol or digit key** (macOS, the same setting, 2026-11-01) commits what shows and types
-  the key's JIS legend in full-width in Mode A and `A_KANA`: ⇧⌥1 → ！, ⌥1 → １, ⇧⌥/ → ？. The
+- **⌥ + a symbol or digit key** (macOS, the same setting, 2026-11-01) types the key's JIS legend
+  in full-width in Mode A and `A_KANA`, **staged** after what shows (2026-11-03; it used to commit),
+  so 半角/全角 (§4.1) can still change it and F9/F10 read it as a symbol run: ⇧⌥1 → ！, ⌥1 → １, ⇧⌥/ → ？. The
   punctuation a Japanese IME converts is typed its way: ⌥ `,` `.` `/` → 、 。 ・, and ⌥ `[` `]` →
   『 』 in Mode A, 「 」 in `A_KANA`. ⌥ + a letter is still a shortcut for the app. In the English
   modes (無変換) ⌥ `[` `]` type « » (wherever the layout puts [ and ]); other ⌥ symbols go to the
@@ -142,6 +152,34 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   (Japanese IMEs confirm with Enter). **[decide]**
 - The engine can change its own mode (かな from `A_KANA`): shells read `jk_mode` after each call
   and select the matching input source when it changed.
+
+### 4.1 半角/全角
+
+The 半角/全角 key (the `Backquote` code: left of 1 on a full JIS board; 2026-11-03) does what its
+label says: **full-width**, and with **Shift half-width**. It no longer types `` ` `` and `~`
+(on JIS they're Shift+`@` and Shift+`^` in the English modes). ⌥, ⌘ or Ctrl with it is a shortcut.
+
+- **Staged text** (Mode A, `A_KANA`): what shows (the reading on screen, a prediction included)
+  converts and stays staged, as plain text: ⇧⌥1 ⇧⌥/ → ！？, then ⇧半角/全角 → !?, then 半角/全角 →
+  ！？ again; 한12 → 한１２; かな → ｶﾅ. Typing goes on after it.
+- **Nothing staged, or an English mode** (無変換, which stages nothing): the app's text, in this
+  order:
+  1. the **selection**, if there is one;
+  2. else the **word the caret is on**: the run of characters up to a blank (space, U+3000, any
+     whitespace) or a change of script (Latin → Hangul, hiragana → katakana; digits, punctuation
+     and ー go with the script they're in), holding the character right after the caret.
+     `wo|rd` and `|word` convert `word`; at the end of a word (`word|`) there's none;
+  3. else nothing (the key is still taken).
+- **What converts:** every character with a form in that width (spec §5.3's pairs: ASCII and the
+  space, ¥ and the like, 。「」、・), and kana: half-width makes hiragana and katakana half-width
+  katakana (がぱ → ｶﾞﾊﾟ), full-width puts half-width katakana back (ｶﾞﾊﾟ → ガパ; hiragana stays
+  katakana). Hangul and kanji have no other width.
+
+The engine decides all of it: with nothing staged it answers `convert_host` (`jk_convert_host`),
+and the shell hands it the selection and the text around it (`jk_width_edit`), which say what to
+replace with what. macOS and Windows (an edit session) read up to 256 characters either side, and
+the caret ends after the replaced text. Windows' English is ABC, which never reaches the engine, so
+there the key works in Mode A and JIS Kana only.
 
 ## 5. The kana reading (predictions)
 
@@ -219,6 +257,27 @@ predictions **only when a Japanese reading (kana or katakana) is among the top n
   their own font ignore it), **Yu Gothic UI** in the Windows list (Hiragino isn't on Windows), and a
   Japanese font stack with `lang="ja"` on the web. Committed text takes the app's font.
 
+### 5.2 Symbol variants
+
+A reading that ends in a symbol is also offered with that symbol's variants, right below it and of
+its kind (2026-11-03), as a Japanese IME offers 、 and ， for a comma. Every reading gets them
+(Korean, English, kana, mixed), except the standard 2-set reading, whose symbols are the stock
+keys' (`<` for Shift+`,`). Only the last character counts, so they show while the symbol is the
+last thing typed. The table is `engine/src/punctuation.rs`:
+
+| Symbol | Variants |
+|---|---|
+| , | 、 ， |
+| . | 。 … ... ． |
+| / and · | ・ ／ (/) and ・ ･ (·) |
+| [ ] | 「 『 【 ［ 〔 and 」 』 】 ］ 〕 |
+| 「 」 『 』 | each other, 【 】, [ ] |
+| ( ) { } < > | full-width, and 〈 《 « / 〉 》 » for < > |
+| ! ? : ; ~ - ' " | full-width, 〜 for ~, ー — – for -, curly quotes |
+
+Shift+`,` → , 、 ，; 한 + Shift+`,` → 한, 한、 한，; `¥` → · ・ ･; `h e l l o .` → hello. hello。 hello…
+hello... (the English reading's period: `.` types 을 in Korean, §9.2).
+
 ## 6. Predictive typing must be accepted
 
 Predictions are always on; there is no switch and no lite build in the shells. The first time JIS
@@ -286,6 +345,13 @@ Mode A types three languages, so its symbol keys are better spent on Korean: sym
 (§4). Every JIS Korean symbol leaves Mode A, with and without Shift, which frees the 12 keys right
 of 0 as 24 slots.
 
+**Refilled** (2026-11-03, the owner's call): 다 도, 나 니, ㅡㄹ 을, 무 부, ㅂㅅ, 메 and 로 로゜ were
+little used, so the slots were freed and refilled with particles, endings and finals (§9.2). Shift+`.`
+and Shift+`/` went with them, so Mode A has **no `.` or `·` on Shift** any more: · is on `¥`, and
+a period comes from English (無変換) or ⌥`.` (。). Shift+`¥` is left **empty**: it types nothing in
+Korean (the syllable goes on across it), but it's still a key: the kana reading and JIS Kana read
+it as ー, the English reading as `|`, F9/F10 convert it, and Backspace takes it off.
+
 ### 9.1 Notation
 
 An action is a short run of 2-set jamo, typed as if those keys were pressed. How a legend is
@@ -295,31 +361,39 @@ written says how it types:
 |---|---|---|
 | (none) | a bare vowel, written without ㅇ: it joins the consonant before it like a vowel key, and gets the usual implied ㅇ with nothing before it | ㄷ + ㅙ → 돼; 말 + ㅙ → 마뢔 |
 | (written with ㅇ) | the ㅇ is real: typed as an initial, so the action starts its own syllable (what Shift+vowel already does, spec §4.2) | 말 + 왜 (Shift+`−`) → 말왜 |
-| ゜ | ends the syllable with no final: the next consonant starts a syllable, and a vowel after it gets an implied ㅇ | 갈 + ゜ + ㅏ → 갈아 (not 가라) |
+| ㆍ | the syllable break: ends the syllable with no final, so the next consonant starts a syllable and a vowel after it gets an implied ㅇ. Typed with nothing else staged it shows as ㆍ (U+318D, arae-a, an archaic jamo no modern text uses), so it's on screen and is a reading of its own; anything typed after it reads as before | 갈 + ㆍ + ㅏ → 갈아 (not 가라); ㆍ alone → ㆍ |
 
 ### 9.2 The keys
 
 | Key | Alone | Shift | Was (JIS Korean) |
 |---|---|---|---|
 | `−` | ㅙ | 왜 | ! ? |
-| `^` | 다 | 도 | ( ) |
-| `¥` | 나 | 니 | — ^ |
-| `@` | ㅡㄹ | 을 | ' " |
-| `[` | ゜ | ゜ | [ 「 |
+| `^` | 가 | 께서 | ( ) |
+| `¥` | · (U+00B7) | (empty) | — ^ |
+| `@` | ㅄ (ㅂㅅ) | ㄶ (ㄴㅎ) | ' " |
+| `[` | ㆍ (break) | ㆍ (break) | [ 「 |
 | `;` | ㅖ | 예 | ~ - |
 | `:` | ㅒ | 얘 | : ; |
-| `]` | 무 | 부 | ] 」 |
+| `]` | ㄴ | ㄹ | ] 」 |
 | `,` | ㅢ | , | , , |
-| `.` | ㅂㅅ | . | . . |
-| `/` | 메 | · | · · |
-| `ろ` | 로 | 로゜ | \ _ |
+| `.` | 을 | 를 | . . |
+| `/` | 서 | 에서 | · · |
+| `ろ` | 로 | 으로 | \ _ |
 
-Examples: 하 + `^` → 하다; 나 + Shift+`^` → 나도; ㄱ + `@` → 글, 마 + `@` → 마을; 책 + Shift+`@` → 책을;
-나 + `]` → 나무; 공 + Shift+`]` → 공부; 어 + `.` → 없; `/` ㅇ ㅣ ㄹ → 메일; 으 + `ろ` → 으로.
+Legends write a double final as the compatibility jamo it makes (ㅄ, not ㅂㅅ): the keys type its
+two jamo.
+
+Examples: ㄷ + `−` → 돼; 말 + Shift+`−` → 말왜; 갈 + `[` + ㅏ → 갈아; ㄱ + `;` → 계; 말 + Shift+`;` → 말예;
+하 + `^` → 하가; 선생님 + Shift+`^` → 선생님께서; 어 + `@` → 없; 마 + Shift+`@` → 많; 가 + `]` → 간;
+책 + `.` → 책을; 사과 + Shift+`.` → 사과를; 업 + `/` → 업서; 학교 + Shift+`/` → 학교에서; 서울 + `ろ` →
+서울로; 집 + Shift+`ろ` → 집으로.
 
 The letter keys change on Shift only:
 
-- **Shift+Q W E R T** type ㅂ ㅈ ㄷ ㄱ ㅅ, as Shift+A types ㅁ. ㅃ ㅉ ㄸ ㄲ ㅆ stay on 1–5.
+- **Shift on a consonant key** (2026-11-03, the owner's call) types the consonant and **ㅏ**, as if
+  both keys were pressed: ⇧ㄱ → 가, 하 ⇧ㄴ → 하나, 갑 ⇧ㅅ → 갑사. ㅃ ㅉ ㄸ ㄲ ㅆ stay on 1–5. This
+  replaces "Shift on a consonant changes nothing" (2026-11-02), so Shift held over consonants is
+  no longer a way of typing 2-set.
 - **Shift+O / Shift+P** are Shift+vowel like every other vowel key: 애, 에, a syllable on a real ㅇ
   (간 ⇧ㅔ → 간에; ㄱ ⇧ㅐ → 개). ㅒ ㅖ moved to `:` and `;`.
 - Legends write a Shift+vowel as its syllable (아, 우, 애): no marks.
@@ -330,11 +404,13 @@ reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ ther
 ### 9.3 How the engine types an action
 
 - **Keys, not jamo.** An action's first jamo carries the key (its stock JIS character, or the
-  letter); the rest are parts of it. **Backspace takes the whole key off** (하다 → 하, 으로゜ → 으),
+  letter); the rest are parts of it. **Backspace takes the whole key off** (an empty slot too),
   as the kana reading counts keys. F9 / F10 read each key once (`i` ⇧P `h o n e` F10 → iPhone).
-- **Shift still held.** Shift on a consonant changes nothing, so a Shift+vowel right after one is
-  Shift held over: the vowel takes the consonant (가 ⇧ㄱ ⇧ㅏ → 가가; after the ㄲ key, 4 ⇧ㅏ, Shift
-  is new and starts 아).
+- **No Shift held over.** Shift on a consonant types its ㅏ, so a Shift+vowel after it starts its
+  own syllable on ㅇ like any Shift+vowel (⇧ㄱ ⇧ㅏ → 가아). (Until 2026-11-03 Shift on a consonant
+  changed nothing, and a Shift+vowel right after one was read as Shift still held.)
+- **An action's vowel isn't a press.** The same vowel typed right after an action's vowel isn't a
+  double press (spec §4.2): 하 + `^` (가) + ㅏ → 하가아, not 학아.
 - **The English reading** reads a slot key as its stock JIS character (`-` for ㅙ), as before.
   The standard 2-set reading (spec §10.2) types that character too.
 - **Korean-only keys** (spec §10.3): a slot key that typed Korean inside the word means the keys
@@ -343,15 +419,17 @@ reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ ther
   when the Korean reading is a known word (의 typed `d` `,`), so a habitual comma after English
   (`hello,`) still reads as English.
 - **Kana evidence** still counts the 12 keys by key: they type kana-only legends (§5).
-- **Capitals.** Shift on Q W E R T no longer types Korean, so it reads as a capital: ⇧T ⇧M is TM,
-  not 쓰 (only O and P are Korean Shifts now, `KOREAN_SHIFTS`).
-- **Legends.** `examples/legends.rs` (the macOS Keyboard Viewer) prints actions in full (다,
-  ㅡㄹ, 왜). `jk_legend` / `jk_legend_in` return one code point, the legend's first (다, ㅡ, 왜),
+- **Capitals.** Shift on every consonant key types Korean again (consonant + ㅏ), so all 14 are
+  Korean Shifts (`KOREAN_SHIFTS`): a capital may be a Korean syllable (⇧R → 가), and acronyms (ESG,
+  CRM) compete with that reading. The key model scores a capital consonant as its key and ㅏ's
+  (`R` as `r k`) on the Korean side.
+- **Legends.** `examples/legends.rs` (the macOS Keyboard Viewer) prints actions in full (왜,
+  께서, ㅄ, ㆍ; nothing for an empty slot). `jk_legend` / `jk_legend_in` return one code point, the legend's first (왜, 께; a space for an empty slot),
   so the web playground's board shows that until it gets a string legend.
 
 ### 9.4 Open questions
 
 - **[decide]** A string legend in the C ABI (`jk_legend_text_in`) for the web board and Windows.
-- The learned ranker (`learned.bin`) wasn't retrained on the new keys; the corpus tests pass with
-  it and with the rules alone. Retrain when the corpora are at hand (`engine/tools/train_learned.py`).
+- The learned ranker (`learned.bin`) was retrained on these keys on 2026-11-03, from the jis-korean
+  checkout's extracted corpora (`corpora/derived`, `corpora/eval`).
 

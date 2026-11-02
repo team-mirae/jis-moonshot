@@ -16,8 +16,10 @@ pub mod kana;
 mod key;
 mod layout;
 pub mod plan;
+pub mod punctuation;
 pub mod resolve;
 pub mod travel;
+pub mod width;
 #[cfg(feature = "predict")]
 pub mod learn;
 #[cfg(all(feature = "predict", not(feature = "legacy-predict")))]

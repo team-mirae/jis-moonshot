@@ -135,12 +135,15 @@ enum {
     JK_SCRIPT_KOREAN = 1,   /* forced Korean */
     JK_SCRIPT_HIRAGANA = 2,
     JK_SCRIPT_KATAKANA = 3,
+    JK_SCRIPT_KOREAN_BARE = 4, /* forced Korean without the implied ㅇ (Shift+かな / Shift+変換) */
 };
 uint32_t jk_script(JkEngine *engine);
 /* The かな / 変換 key: from an English mode to Mode A; in Mode A, force the staged keys' Korean
  * reading; from JIS Kana to Mode A, forced Korean. Always consumed (1, or JK_RESULT_ERROR). Apply
  * the commit and preedit, then read jk_mode. */
 uint32_t jk_kana_key(JkEngine *engine);
+/* Shift+かな / Shift+変換: jk_kana_key, with the staged keys forced bare (no implied ㅇ: ㅏ stays ㅏ). */
+uint32_t jk_kana_key_bare(JkEngine *engine);
 /* The staged keys read as kana, in hiragana, whatever the script. */
 const uint8_t *jk_kana_ptr(JkEngine *engine);
 size_t jk_kana_len(JkEngine *engine);
@@ -204,6 +207,17 @@ size_t jk_candidate_comment_len(JkEngine *engine, size_t index);
  * symbols), for hosts that choose between Korean and English themselves. */
 const uint8_t *jk_english_ptr(JkEngine *engine);
 size_t jk_english_len(JkEngine *engine);
+/* The 半角/全角 key with nothing staged (docs/moonshot.md §4.1), from the last call: 0 = nothing,
+ * 1 = convert the app's text to full-width, 2 = to half-width. Then call jk_width_edit with the
+ * selection (empty without one) and the text either side of it (UTF-8). It returns 1 when there's
+ * an edit: replace jk_width_edit_before UTF-16 units before the selection's start (or the caret),
+ * the selection, and jk_width_edit_after units after its end with jk_resolved_*; 0: nothing. */
+uint32_t jk_convert_host(JkEngine *engine);
+uint32_t jk_width_edit(JkEngine *engine, const uint8_t *before, size_t before_len,
+                       const uint8_t *selected, size_t selected_len,
+                       const uint8_t *after, size_t after_len, uint32_t half);
+size_t jk_width_edit_before(JkEngine *engine);
+size_t jk_width_edit_after(JkEngine *engine);
 /* Discards everything unconfirmed without committing it. */
 void jk_clear(JkEngine *engine);
 

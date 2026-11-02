@@ -198,6 +198,7 @@ fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> 
                     Step::Jamo(j) => part_of_text(j),
                     Step::Ieung(j) => part_of_text('ㅇ') && part_of_text(j),
                     Step::Break => true,
+                    Step::Blank => false,
                 })
         }
         _ => part_of_text(out.char()),
