@@ -992,7 +992,9 @@ one line of counts and show the setting.
     moves up. (JIS Moonshot predicts no hanja at all, moonshot.md §5.1.)
   - The Shift rule and the chat-run rule are not weights and don't learn.
 - **Stored:** no text, no keys, no times, no app names, only the counts (`jk_learner_export`, one
-  line). Nothing leaves the device.
+  line). Nothing leaves the device, unless the user wrote a sync config file by hand
+  (`docs/sync.md`, planned, not built: end-to-end encrypted, to a server the user runs, with no
+  setting in any menu).
   - **macOS:** the app's preferences, keys `LearnFromChoices` and `Learned`. The input menu has
     "Learn from My Choices (Stays on This Mac)" and "Learned Weights" (read-only, with "Reset What
     It Learned").
