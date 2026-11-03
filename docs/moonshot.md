@@ -333,6 +333,41 @@ in case (apple → Apple is the English reading's own Capitalized).
   an English name and a Korean or Japanese one, built by `engine/tools/brands/build_brands.py`
   (queries cached in `corpora/brands/`). It's compiled into the engine, so no shell loads it.
 
+### 5.5 Long context: staged phrases
+
+Space stages a space (§4), so a whole phrase can stay unconfirmed. Such a phrase is **decoded word
+by word** (2026-11-03): each word (a piece between spaces or punctuation, spec §10.10) is ranked
+on its own with the language of the word before it as its context, as a committed word gives
+the next one; its scores become probabilities, and a beam search (8 phrases, 4 readings a word)
+keeps the likeliest phrases. The phrases typing straight through would give (every word Korean,
+every word English) stay listed after them. Text staged without spaces (Research(이하) keeps the
+pieces reading of spec §10.10. A 24-word phrase predicts in about a millisecond.
+
+- **In a phrase**, a Japanese particle after English is read only in Japanese context: in a
+  Korean or English phrase the last letter of an English word reads as one (PowerPoint as
+  PowerPoin + `t` か).
+- **Stacked particles** count as an ending after English: 들 + 에게, 부터 + 가, 들 + 에게 + 는
+  (client들에게, naming부터가). Only particles that can start a stack come first; 이 가 을 를 은 는
+  의 end one (model의 isn't mode + 이의).
+- **The d of a name** (Claude + `d p` → Claude에) is only taken back after a capitalized start:
+  a lowercase word keeps it (frontend에서).
+- **No neighbour bonus:** rewarding neighbours for sharing a language cost words on real
+  code-switching text, which switches often.
+
+**Measured** by `engine/tests/long_context.rs`, typing each line of the evaluation texts in
+8-word windows with Space between the words, against the same words typed and committed one at a
+time. On the benchmark (480 mixed Korean + English sentences from the open corpora, none trained
+on: `engine/tools/corpora/build_long_eval.py` → `corpora/eval-long/`, gitignored) staged phrases
+went from 97.8% of 7,366 words right (86.9% of 1,081 phrases exact) to 98.3% (89.9%); on the
+owner's mixed-script text from 98.5% to 99.9%, now as good as one word at a time.
+
+**Next: bigger lexicons.** Rebuilding the word lists with lower minimum counts
+(`build_ranker.py --lexicon-min-en 5 --lexicon-min-ko 4`: 40,000 English and 63,000 Korean
+generated words, up from 14,000 and 34,000) lifted the benchmark to 98.7% of words (92.3% of
+phrases exact) without retraining, but broke the owner's corpus limits, the avoid list and the
+bare-vowel tests in both builds: the rarer words bring noise (keystrings, rare forms). **[decide]**
+whether to clean a larger list, recalibrate the rules to it and retrain the learned ranker.
+
 ## 6. Predictive typing must be accepted
 
 Predictions are always on; there is no switch and no lite build in the shells. The first time JIS
