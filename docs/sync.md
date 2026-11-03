@@ -42,7 +42,7 @@ JSON, in the folder that holds the training file (spec §10.12):
   "format": "jis-sync-config",
   "version": 1,
   "server": "https://sync.example.com",
-  "token": "the server's bearer token for this device",
+  "token": "jsr_… (this device's refresh token, §3.1)",
   "key": "base64 of 32 random bytes, the same on every device",
   "kinds": ["learner", "weights", "training"],
   "interval": 900
@@ -53,7 +53,7 @@ JSON, in the folder that holds the training file (spec §10.12):
 |---|---|---|
 | `format`, `version` | yes | `"jis-sync-config"`, `1` |
 | `server` | yes | Base URL of the server, without `/v1` |
-| `token` | yes | Sent as `Authorization: Bearer <token>` (§3.1). Written by `<Product> sync login` (§3.1) or by hand |
+| `token` | yes | This device's refresh token (§3.1). Written by `<Product> sync login` and on every rotation |
 | `key` | yes | The encryption key (§5): 32 bytes, base64 (standard alphabet, padded) |
 | `kinds` | no | What to sync (§4). Default `["learner", "weights"]`. Unknown kinds are ignored |
 | `interval` | no | Seconds between syncs, 300–86400. Default 900 (15 minutes) |
@@ -68,8 +68,8 @@ JSON, in the folder that holds the training file (spec §10.12):
 A refusal is logged once per change of the file (the reason, never the token or key) and shown in
 the status line (§2.3).
 
-The shell writes the file back for one thing only: to add `device` on the first run. `<Product>
-sync login` writes `token`.
+The shell writes the file back for two things only: to add `device` on the first run, and to
+store `token` (`<Product> sync login`, and each rotation, §3.1). It keeps the file's permissions.
 
 ### 2.2 Environment variables
 
@@ -110,14 +110,22 @@ Base64 fields use the standard alphabet with padding.
 
 ### 3.1 Accounts and tokens
 
-A token names an **account**: one person's devices. How tokens are issued and revoked is up to the
-server. The owner's server issues one per device after a passkey sign-in (a security key such as a
-YubiKey, or a synced passkey such as Google Password Manager's), started by `<Product> sync login`:
-a command, not a menu item, that opens the sign-in page in the browser or prints a QR code for a
-phone, then writes the token into the config file (coordination server spec). The client only
-sends one. A server may give each device its
-own token on the same account, so that one lost device can be revoked. Every request without a
-valid token gets `401`. The server only ever returns the caller's own account's records.
+Tokens belong to one **device** of one **account** (a person's devices). They're issued after a
+passkey sign-in (a security key such as a YubiKey, or a synced passkey such as Google Password
+Manager's), started by `<Product> sync login`: a command, not a menu item, that opens the sign-in
+page in the browser or prints a QR code for a phone, then writes the refresh token into the config
+file. The sign-in flows are the coordination server spec's (kept outside the repo).
+
+- **Refresh token** (`jsr_…`, in the config file): exchanged at `POST /v1/auth/token` for an
+  access token and a **new** refresh token. The client stores the new one before using the access
+  token. A refresh token used again after a short grace is treated as leaked, and the server
+  revokes the device.
+- **Access token** (`jsa_…`, in memory only): sent as `Authorization: Bearer <token>` on every
+  `/v1/records` call. It lasts minutes; the client refreshes it when it's about to expire, or once
+  after a 401.
+- A token only writes its own device's records (§3.4). The server only ever returns the caller's
+  own account's records. Revoking a device is done on the server's account page, not by the
+  client.
 
 ### 3.2 Records
 
@@ -173,6 +181,7 @@ Writes this device's record of one kind. Body: `{ "generation", "nonce", "data" 
   generation. This only happens when one device wrote from two places.
 - **413**: `data` is over `maxRecordBytes`. The client logs it and skips that kind until it changes.
 - **400** `{ "error": "malformed" }`: a bad path, kind, base64 or field.
+- **403** `{ "error": "device" }`: `{device}` isn't the token's device.
 
 A client writes a kind only when it has changed since its last write.
 
@@ -201,10 +210,10 @@ The client's own records come back too, and it uses them to recover after a 409 
 
 ### 3.6 Deleting
 
-- `DELETE /v1/records/{device}`: every record of one device (a device being retired, or "Reset What
-  It Learned" on it). **204**.
-- `DELETE /v1/records`: every record in the account. **204**. Only from a command a person runs by
-  hand, never from regular sync.
+- `DELETE /v1/records/{device}`: every record of the token's own device ("Reset What It Learned"
+  on it). **204**; **403** for another device.
+- Deleting another device's records, or the whole account's, needs a passkey: it's done on the
+  server's account page, never by a device token or by regular sync.
 
 A server keeps a deletion in `deleted` for at least 30 days, so other devices hear of it, and may
 answer older cursors with 410.
@@ -215,7 +224,7 @@ Every error body is `{ "error": "<code>", "message": "<for logs>" }`.
 
 | Status | Client does |
 |---|---|
-| 401 | Stops syncing until the config file changes. Status: *token refused* |
+| 401 | Refreshes the access token once and retries. If the refresh token is refused too: stops syncing until the config file changes. Status: *signed out, run `sync login`* |
 | 429, 503 | Waits `Retry-After` seconds (default: the backoff below) |
 | other 4xx | Logs it, skips that request, carries on next interval |
 | 5xx, network error | Exponential backoff: 1 min, doubling, at most 6 hours, ±10% jitter |
