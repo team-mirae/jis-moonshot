@@ -890,7 +890,7 @@ impl Engine {
 
     #[cfg(feature = "predict")]
     fn prediction_context(&self) -> Context {
-        Context { previous: self.previous, command: false, weights: self.effective_weights(), ranker: self.ranker, force_kanji: self.kanji }
+        Context { previous: self.previous, command: false, weights: self.effective_weights(), ranker: self.ranker, force_kanji: self.kanji, in_phrase: false }
     }
 
     /// The staged text's distinct readings with the learned ranker's features (spec §10.13), in a

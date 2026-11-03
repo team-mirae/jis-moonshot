@@ -118,6 +118,8 @@ def eval_files():
     if os.path.exists(samsung):
         files.append(samsung)
     files += glob.glob(os.path.join(CORPORA, "eval", "**", "*.txt"), recursive=True)
+    # The long-context benchmark (engine/tools/corpora/build_long_eval.py), one sentence a line.
+    files += glob.glob(os.path.join(CORPORA, "eval-long", "*.txt"))
     return sorted(files)
 
 

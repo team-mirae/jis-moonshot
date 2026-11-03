@@ -110,8 +110,9 @@ BUSINESS_WEIGHT = 4.0
 BUSINESS_COUNT = 20
 # A colloquial word joins the lexicon when it's seen this often in the training sentences. English
 # needs 3+ letters: shorter generated words (al, ki) collide with Korean syllables (미, 아).
-LEXICON_MIN_KO = 8
-LEXICON_MIN_EN = 30
+# --lexicon-min-ko / --lexicon-min-en override them (docs/moonshot.md §5.5: bigger lexicons).
+LEXICON_MIN_KO = int(sys.argv[sys.argv.index("--lexicon-min-ko") + 1]) if "--lexicon-min-ko" in sys.argv else 8
+LEXICON_MIN_EN = int(sys.argv[sys.argv.index("--lexicon-min-en") + 1]) if "--lexicon-min-en" in sys.argv else 30
 # One-syllable Korean words (내, 몇, 굿) need more: they're where Korean and English keys collide.
 # A lone jamo (ㅁ, ㅜ) is never a word.
 LEXICON_MIN_KO_SINGLE = 20

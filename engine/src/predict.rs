@@ -58,7 +58,7 @@ impl Kind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Language {
     Korean,
     English,
@@ -151,6 +151,8 @@ pub struct Context {
     /// F8 (docs/moonshot.md §4): kanji conversions of the kana reading on top, whatever ranks
     /// first.
     pub force_kanji: bool,
+    /// The word is one of a phrase staged with spaces (docs/moonshot.md §5.5).
+    pub in_phrase: bool,
 }
 
 /// How the predictor ranks the implied-ㅇ alternatives: the bare vowels (ㅠㅠ against 유유) and the
@@ -984,6 +986,10 @@ impl Predictor {
     /// any) is only used for stems in front of 曰. With a learned model (spec §10.13) and the
     /// rules ranker, the model ranks; otherwise the rules do.
     pub fn predict(&self, readings: &Readings, context: Context) -> Vec<Prediction> {
+        // A phrase staged with spaces (docs/moonshot.md §5.5): decoded word by word.
+        if readings.pieces.len() > 1 && readings.pieces.iter().any(|p| p.separator.chars().any(char::is_whitespace)) {
+            return self.predict_phrase(readings, context);
+        }
         #[cfg(not(feature = "legacy-predict"))]
         if let Some(model) = &self.learned
             && context.ranker == Ranker::Rules
@@ -995,6 +1001,74 @@ impl Predictor {
         let ranked = self.predict_by_rules(readings, context);
         let ranked = self.with_kana(ranked, readings, context);
         self.with_kanji_conversions(ranked, readings, context)
+    }
+
+    /// A phrase staged with spaces between its words (docs/moonshot.md §5.5, spec §10.10): each
+    /// piece is ranked on its own, with the language of the piece before it as its context (as a
+    /// committed word gives the next one), its scores turned into probabilities, and a beam search
+    /// keeps the likeliest phrases. The whole keys read as Korean and as English, the two phrases
+    /// typing straight through would give, stay listed after them.
+    fn predict_phrase(&self, readings: &Readings, context: Context) -> Vec<Prediction> {
+        const PER_PIECE: usize = 4;
+        const BEAM: usize = 8;
+        // A piece's readings under the previous piece's language: log2-probabilities, ranked.
+        let mut cache: HashMap<(usize, Option<Language>), Vec<(String, Kind, f64)>> = HashMap::new();
+        let mut options = |i: usize, previous: Option<Language>| -> Vec<(String, Kind, f64)> {
+            cache
+                .entry((i, previous))
+                .or_insert_with(|| {
+                    let ranked = self.predict(&readings.pieces[i].readings, Context { previous, in_phrase: true, ..context });
+                    let top: Vec<Prediction> = ranked.into_iter().filter(|p| p.score.is_finite()).take(PER_PIECE).collect();
+                    let max = top.iter().map(|p| p.score).fold(f64::NEG_INFINITY, f64::max);
+                    let sum: f64 = top.iter().map(|p| (p.score - max).exp2()).sum();
+                    top.into_iter().map(|p| (p.text, p.kind, p.score - max - sum.log2())).collect()
+                })
+                .clone()
+        };
+        // (text so far, the last piece's language, total log2-probability)
+        let mut beam: Vec<(String, Option<Language>, f64)> = vec![(String::new(), context.previous, 0.0)];
+        for (i, piece) in readings.pieces.iter().enumerate() {
+            let mut next = Vec::new();
+            for (text, previous, total) in &beam {
+                let choices = options(i, *previous);
+                if choices.is_empty() {
+                    next.push((format!("{text}{}", piece.separator), *previous, *total));
+                    continue;
+                }
+                // No bonus for neighbours sharing a language: code-switching text switches often (a
+                // bonus of 1 bit or more cost words on the long-context benchmark).
+                for (word, kind, lp) in choices {
+                    next.push((format!("{text}{word}{}", piece.separator), Some(kind.language()), total + lp));
+                }
+            }
+            next.sort_by(|a, b| b.2.total_cmp(&a.2));
+            next.dedup_by(|a, b| a.0 == b.0);
+            next.truncate(BEAM);
+            beam = next;
+        }
+        let mut out: Vec<Prediction> = Vec::new();
+        for (text, _, total) in beam {
+            if out.iter().any(|p| p.text == text) {
+                continue;
+            }
+            let kind = if text == readings.korean {
+                Kind::Korean
+            } else if text == readings.english {
+                Kind::English
+            } else {
+                Kind::Mixed
+            };
+            out.push(Prediction { text, kind, score: total });
+        }
+        // The literal readings, typed straight through, as the last options.
+        let floor = out.last().map_or(0.0, |p| p.score) - 1.0;
+        for (text, kind) in [(&readings.korean, Kind::Korean), (&readings.english, Kind::English)] {
+            if !out.iter().any(|p| &p.text == text) {
+                out.push(Prediction { text: text.clone(), kind, score: floor });
+            }
+        }
+        out.truncate(MAX_PREDICTIONS.max(4));
+        out
     }
 
     /// [`Predictor::predict`] by the rules only (the legacy ranker), whatever model is loaded.
@@ -1092,7 +1166,7 @@ impl Predictor {
             out.push(bare);
             origins.push((Origin::Bare, None));
         }
-        if let Some((mut mixed, split)) = self.mixed(readings, -margin) {
+        if let Some((mut mixed, split)) = self.mixed(readings, -margin, context) {
             // When the whole keys make a Korean word (kanxms is 아무튼; a word in the lexicon or in
             // the hanja dictionary), a split is only an alternative to it, never ahead of it. Junk
             // Korean (slack에 as 님차에) doesn't hold it back.
@@ -1362,7 +1436,12 @@ impl Predictor {
     /// ([`SPLIT_EDGE`]; a capitalized name always qualifies) and the whole isn't a known English
     /// word. Then the particle is the better explanation for the last keys, and the split ranks
     /// above the whole-word English reading (`english_score`).
-    fn mixed(&self, readings: &Readings, english_score: f64) -> Option<(Prediction, Split)> {
+    fn mixed(&self, readings: &Readings, english_score: f64, context: Context) -> Option<(Prediction, Split)> {
+        // A Japanese particle only after a name (a capitalized start: Claudeの, Tokyoの), in
+        // Japanese context or typed on its own: elsewhere the last letter of an English word reads
+        // as one (PowerPoint as PowerPoin + t か, JavaScript as JavaScrip + t か), docs/moonshot.md §5.3.
+        let japanese = context.previous == Some(Language::Japanese) || (context.previous.is_none() && !context.in_phrase);
+        let kana_ok = |s: &Split| s.english.starts_with(|c: char| c.is_ascii_uppercase()) && japanese;
         // Measured the way the starts are, so a Shift+vowel capital weighs the same on both.
         let whole = -self.start_margin(&readings.english);
         let lower = readings.english.to_lowercase();
@@ -1374,10 +1453,14 @@ impl Predictor {
             .iter()
             // A particle or ending, or after an acronym a Korean word (LG에너지솔루션은); or a
             // Japanese particle read as kana (Claudeの, docs/moonshot.md §5.3).
-            .filter(|s| self.is_ending(&s.korean) || self.acronym_tail(readings, s) || KANA_PARTICLES.contains(&s.kana.as_str()))
-            // An ending typed in full, its ㅇ included (Claude + d p → Claude에), over a start that
-            // takes the d (Clauded + p), unless that start is a known English word (Android에).
+            .filter(|s| self.is_ending(&s.korean) || self.acronym_tail(readings, s) || (KANA_PARTICLES.contains(&s.kana.as_str()) && kana_ok(s)))
+            // An ending typed in full, its ㅇ included (Claude + d p → Claude에), over a name that
+            // takes the d (Clauded + p), unless that start is a known English word (Android에). Only
+            // after a capitalized start: a lowercase word keeps its d (frontend에서, method를).
             .filter(|s| {
+                if !s.english.starts_with(|c: char| c.is_ascii_uppercase()) {
+                    return true;
+                }
                 let Some(shorter) = s.english.strip_suffix('d') else { return true };
                 let lower = s.english.to_lowercase();
                 let known = self.english_words.contains_key(&lower) || self.english_nouns.contains(&lower);
@@ -1539,6 +1622,7 @@ impl Predictor {
     pub(crate) fn is_ending(&self, korean: &str) -> bool {
         PARTICLES.contains(&korean)
             || (korean.starts_with(|c: char| VERB_STARTS.contains(c)) && self.korean_words.contains_key(korean))
+            || stacked_particles(korean)
     }
 
     /// Korean minus English, with the rules on top of the model.
@@ -1729,6 +1813,31 @@ impl Predictor {
 
 /// `score` summed over the runs of keys in `english` (the characters a key types, `keymodel::symbol`),
 /// per key (each run's END counts as one). 0 with no keys.
+/// Particles stacked two or three deep (들 + 에게, 부터 + 가, 들 + 에게 + 는): an ending after an
+/// English word as much as one particle is (client들에게, naming부터가).
+fn stacked_particles(korean: &str) -> bool {
+    // Particles that can come first in a stack; 이 가 을 를 은 는 의 end one.
+    const FIRST: &[&str] = &["들", "에", "에서", "에게", "한테", "께", "부터", "까지", "로", "으로", "만", "처럼", "보다", "과", "와", "랑", "이랑", "하고", "께서"];
+    let chars: Vec<char> = korean.chars().collect();
+    let text = |a: usize, b: usize| chars[a..b].iter().collect::<String>();
+    let piece = |a: usize, b: usize| {
+        let t = text(a, b);
+        PARTICLES.contains(&t.as_str()) && (b == chars.len() || FIRST.contains(&t.as_str()))
+    };
+    // can[i]: the first i characters are 1 to 3 particles; parts[i]: how many.
+    let n = chars.len();
+    let mut parts = vec![usize::MAX; n + 1];
+    parts[0] = 0;
+    for end in 1..=n {
+        for start in 0..end {
+            if parts[start] != usize::MAX && parts[start] < 3 && piece(start, end) {
+                parts[end] = parts[end].min(parts[start] + 1);
+            }
+        }
+    }
+    (2..=3).contains(&parts[n])
+}
+
 /// Two capitals in a row with a consonant among them: an acronym's (ESG, KPS), not Korean, though
 /// Shift+consonant types Korean (docs/moonshot.md §9.2). Shift+vowels in a row (분야의 as q n s ⇧I
 /// ⇧M l) are still Korean.
