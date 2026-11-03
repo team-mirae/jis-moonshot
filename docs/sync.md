@@ -1,3 +1,7 @@
+> **Parked branch: do not merge.** This branch (`docs/sync-spec`) holds a possible future
+> implementation, kept for later. `main` should not follow it: nothing here is the plan of record,
+> and `docs/spec.md` on `main` doesn't mention sync.
+
 # Sync: what the remote server accepts and returns
 
 *(Draft, 2026-11-03. Not built: no engine, shell or server code exists yet.)*
