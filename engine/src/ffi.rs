@@ -104,6 +104,14 @@ pub extern "C" fn jk_key_commits(handle: *mut JkEngine, key: u32, mods: u32) -> 
     with(handle, 0, |h| h.engine.commits(Key::from_id(key), Mods::from_bits(mods)) as u32)
 }
 
+/// Whether `key` keeps a prediction row the user chose: the keys `jk_key_commits` names, and Space
+/// (it stages a space after the row, docs/moonshot.md §4). With a row chosen, send these with
+/// `jk_key_after_prediction` and the chosen index.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_key_keeps_choice(handle: *mut JkEngine, key: u32, mods: u32) -> u32 {
+    with(handle, 0, |h| h.engine.keeps_choice(Key::from_id(key), Mods::from_bits(mods)) as u32)
+}
+
 /// Commits everything unconfirmed (focus loss, app or IME switch).
 #[unsafe(no_mangle)]
 pub extern "C" fn jk_flush(handle: *mut JkEngine) {

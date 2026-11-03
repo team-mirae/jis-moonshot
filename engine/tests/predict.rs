@@ -736,6 +736,9 @@ fn an_english_word_takes_a_japanese_particle_read_as_kana() {
     assert_eq!(top("S-KeyO KeyP KeyE KeyN S-KeyA S-KeyI KeyK"), ("OpenAIの".into(), Kind::Mixed));
     // A Korean particle still wins where both fit: Claude + p is Claude에.
     assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyP"), ("Claude에".into(), Kind::Mixed));
+    // And over a longer start with a kana particle: Claude + r k is Claude가, not Clauder + k (の).
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyR KeyK"), ("Claude가".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyD KeyM KeyS"), ("Claude은".into(), Kind::Mixed));
 }
 
 #[test]
@@ -766,4 +769,20 @@ fn a_brand_is_suggested_in_its_default_script_below_what_was_typed() {
     assert!(!texts("KeyT KeyK KeyA KeyT KeyJ KeyD").iter().any(|t| t == "Samsung"));
     // The kana of Korean typing, or a short English start, isn't matched (rnr isn't スミス).
     assert!(typed("KeyR KeyN KeyR KeyM KeyF").predictions().iter().filter(|p| p.kind == Kind::Brand).count() == 1);
+}
+
+#[test]
+fn space_keeps_a_chosen_row_and_stages_a_space_after_it() {
+    // docs/moonshot.md §4: a row chosen with ↓ is kept by Space, which stages a space after it;
+    // the top reading nobody chose isn't taken by Space (the words after it may still change it).
+    let mut e = typed("KeyD KeyK KeyS KeyS KeyU KeyD");
+    assert!(e.keeps_choice(Key::Space, Mods::NONE) && !e.commits(Key::Space, Mods::NONE));
+    let english = e.predictions().iter().position(|p| p.kind == Kind::English).unwrap();
+    let out = e.key_after_prediction(english, Key::Space, Mods::NONE);
+    assert_eq!((out.commit.as_str(), out.preedit.as_str(), out.consumed), ("", "dkssud ", true));
+    // Typing goes on after it, still unconfirmed.
+    e.key(Key::KeyG, Mods::NONE);
+    assert_eq!(e.preedit(), "dkssud ㅎ");
+    // Letters don't keep a choice: they type on (spec §5.1).
+    assert!(!e.keeps_choice(Key::KeyG, Mods::NONE));
 }

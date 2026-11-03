@@ -1418,7 +1418,10 @@ impl Predictor {
                 // not Frontierf을).
                 let lower = s.english.to_lowercase();
                 let known = self.english_words.contains_key(&lower) || self.english_nouns.contains(&lower);
-                let rank = (!trailing, known, if trailing { -length } else { length });
+                // A Korean particle beats a kana one (Claude + r k is Claude가, not Clauder + k as
+                // の): a kana particle is read only where no Korean one fits (docs/moonshot.md §5.3).
+                let korean = self.is_ending(&s.korean) || self.acronym_tail(readings, s);
+                let rank = (korean, !trailing, known, if trailing { -length } else { length });
                 (-self.start_margin(&s.english), rank, s)
             })
             // A kana particle's keys (w @ for で) needn't look Korean: after a capitalized start
@@ -1430,7 +1433,8 @@ impl Predictor {
                     || (*start >= SPLIT_START && *start - whole >= SPLIT_EDGE)
                     || (kana && capitalized && *start >= SPLIT_START)
             })
-            .max_by(|a, b| a.0.min(99.0).total_cmp(&b.0.min(99.0)).then(a.1.cmp(&b.1)))
+            // A Korean particle first, then the most English start, then the rank.
+            .max_by(|a, b| a.1.0.cmp(&b.1.0).then(a.0.min(99.0).total_cmp(&b.0.min(99.0))).then(a.1.cmp(&b.1)))
             .map(|(start, _, s)| {
                 // The Korean ending when it is one, else the kana particle.
                 let korean = self.is_ending(&s.korean) || self.acronym_tail(readings, s);

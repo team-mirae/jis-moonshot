@@ -483,7 +483,7 @@ Korean IME, and it is what F10 and the predictions need **[decide]**.
 | Enter | Default: commit the segment, then pass Enter to the app. Setting "Enter commits": commit only, as Shift+Enter does. *(planned)* **[decide]** |
 | Focus loss, app switch, IME switch | Commit the segment. |
 | Ctrl/Alt/Cmd/Win shortcuts | Commit, then pass through (§3.5). |
-| ↓ / Tab, ↑ / Shift+Tab | With predictions showing more than one reading (§10): move through them (↓ and Tab next, ↑ and Shift+Tab previous, wrapping); Enter then commits the chosen one and Esc goes back to none chosen. Otherwise: commit, then pass through. As the macOS shell does; Windows matches. |
+| ↓ / Tab, ↑ / Shift+Tab | With predictions showing more than one reading (§10): move through them (↓ and Tab next, ↑ and Shift+Tab previous, wrapping); Enter then commits the chosen one, Space keeps it and stages a space after it (moonshot.md §4), and Esc goes back to none chosen. Otherwise: commit, then pass through. As the macOS shell does; Windows matches. |
 | ← / →, Esc | Commit, then pass through. |
 
 ### 5.2 Words

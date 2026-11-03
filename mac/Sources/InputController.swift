@@ -139,8 +139,12 @@ final class JKInputController: IMKInputController {
             return handled
         }
         // A key that commits takes the reading on screen, not the Korean one underneath, and then
-        // does to it what it does to any text (Space adds a space, Shift+Enter only commits).
-        if shown != nil && jk_key_commits(engine, engineKey(event.keyCode), mods) != 0 {
+        // does to it what it does to any text (Shift+Space adds a space, Shift+Enter only commits).
+        // A row chosen with ↓ / Tab is kept by Space too, which stages a space after it
+        // (jk_key_keeps_choice, docs/moonshot.md §4).
+        let key = engineKey(event.keyCode)
+        let keepsChoice = chosen != nil && jk_key_keeps_choice(engine, key, mods) != 0
+        if keepsChoice || (shown != nil && jk_key_commits(engine, key, mods) != 0) {
             let consumed = jk_key_after_prediction(engine, chosen ?? 0, engineKey(event.keyCode), mods)
             chosen = nil
             apply(to: client)
