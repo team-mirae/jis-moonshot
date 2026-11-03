@@ -207,17 +207,17 @@ size_t jk_candidate_comment_len(JkEngine *engine, size_t index);
  * symbols), for hosts that choose between Korean and English themselves. */
 const uint8_t *jk_english_ptr(JkEngine *engine);
 size_t jk_english_len(JkEngine *engine);
-/* The 半角/全角 key with nothing staged (docs/moonshot.md §4.1), from the last call: 0 = nothing,
- * 1 = convert the app's text to full-width, 2 = to half-width. Then call jk_width_edit with the
- * selection (empty without one) and the text either side of it (UTF-8). It returns 1 when there's
- * an edit: replace jk_width_edit_before UTF-16 units before the selection's start (or the caret),
- * the selection, and jk_width_edit_after units after its end with jk_resolved_*; 0: nothing. */
+/* An edit of the app's own text the last call asks for (docs/moonshot.md §4.1): 0 = none,
+ * 1 = to full-width, 2 = to half-width (半角/全角 with nothing staged). Then call jk_host_edit with the selection (empty without one) and
+ * the text either side of it (UTF-8). It returns 1 when there's an edit: replace
+ * jk_host_edit_before UTF-16 units before the selection's start (or the caret), the selection, and
+ * jk_host_edit_after units after its end with jk_resolved_*; 0: nothing. */
 uint32_t jk_convert_host(JkEngine *engine);
-uint32_t jk_width_edit(JkEngine *engine, const uint8_t *before, size_t before_len,
-                       const uint8_t *selected, size_t selected_len,
-                       const uint8_t *after, size_t after_len, uint32_t half);
-size_t jk_width_edit_before(JkEngine *engine);
-size_t jk_width_edit_after(JkEngine *engine);
+uint32_t jk_host_edit(JkEngine *engine, const uint8_t *before, size_t before_len,
+                      const uint8_t *selected, size_t selected_len,
+                      const uint8_t *after, size_t after_len);
+size_t jk_host_edit_before(JkEngine *engine);
+size_t jk_host_edit_after(JkEngine *engine);
 /* Discards everything unconfirmed without committing it. */
 void jk_clear(JkEngine *engine);
 
@@ -247,6 +247,8 @@ enum {
     JK_PREDICTION_KANA = 10,     /* the keys on the JIS kana layout, hiragana */
     JK_PREDICTION_KATAKANA = 11, /* the kana reading in katakana (a known katakana word) */
     JK_PREDICTION_KANJI = 12,    /* the kana reading converted to kanji (docs/moonshot.md §5.1) */
+    /* 13 was the ㄶ-by-sound reading, retired. */
+    JK_PREDICTION_BRAND = 14,    /* a brand in its default script (docs/moonshot.md §5.4) */
 };
 /* With the kana reading, up to this many predictions. */
 #define JK_MAX_PREDICTIONS 5

@@ -73,6 +73,9 @@ iPhone are out of scope.
 - Kanji (docs/moonshot.md §5.1): `python3 engine/tools/kanji/build_kanji.py` fetches Mozc's
   open-source dictionary at a pinned commit (cached, gitignored) and writes `engine/predict/kanji.bin`,
   `LICENSE-mozc.txt` and `tests/data/kanji-evaluation.tsv`. `tests/kanji.rs` holds the accuracy floor.
+- Brands (docs/moonshot.md §5.4): `python3 -I engine/tools/brands/build_brands.py` queries Wikidata
+  (CC0) and writes `engine/predict/brands.tsv`, compiled into the engine; queries are cached in the
+  gitignored `corpora/brands/`.
 - Corpus tools (from the dropped Minecraft mod): `engine/tools/corpora/` (`fetch_corpora.py`,
   `build_ranker.py`, the Mirae word lists).
 - Windows: `tools/build.ps1` in `/windows` (x64 + x86, runs the shell tests),

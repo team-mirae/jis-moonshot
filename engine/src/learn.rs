@@ -42,7 +42,7 @@ pub fn scenario(kind: Kind) -> Weight {
         Kind::Korean => Weight::Korean,
         Kind::English | Kind::EnglishCapitalized | Kind::EnglishUpper => Weight::English,
         Kind::BareVowels => Weight::Implied,
-        Kind::Mixed => Weight::Mixed,
+        Kind::Mixed | Kind::Brand => Weight::Mixed,
         Kind::TwoSet => Weight::TwoSet,
         Kind::KoreanKeepFinals => Weight::KeepFinals,
         Kind::ImpliedL => Weight::ImpliedL,

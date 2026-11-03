@@ -1,7 +1,7 @@
 //! JIS Moonshot (docs/moonshot.md): kana typing, scripts, the switch keys and the kana reading.
 
 use jis_korean::width::Width;
-use jis_korean::{Engine, Key, Mode, Mods, Script};
+use jis_korean::{Engine, HostEdit, Key, Mode, Mods, Script};
 
 fn press(e: &mut Engine, keys: &str) -> String {
     let mut committed = String::new();
@@ -87,9 +87,9 @@ fn f6_and_f7_show_the_staged_keys_as_kana_until_the_commit() {
     let out = e.key(Key::Enter, Mods::SHIFTED);
     assert_eq!((out.commit.as_str(), e.script()), ("きのと", Script::Auto));
     assert_eq!(typed("KeyG KeyK KeyS").preedit(), "한");
-    // Space types a full-width space after kana.
+    // Shift+Space commits with a full-width space after kana.
     press(&mut e, "KeyT F6");
-    assert_eq!(e.key(Key::Space, Mods::NONE).commit, "か\u{3000}");
+    assert_eq!(e.key(Key::Space, Mods::SHIFTED).commit, "か\u{3000}");
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn the_kana_key_forces_korean_and_goes_back_to_mode_a() {
     e.kana_key();
     assert_eq!((e.mode(), e.script(), e.preedit().as_str()), (Mode::A, Script::Korean, "한"));
     // Forced Korean lasts for the segment; the next one is Auto again.
-    let out = e.key(Key::Space, Mods::NONE);
+    let out = e.key(Key::Space, Mods::SHIFTED);
     assert_eq!(out.commit, "한 ");
     assert_eq!(e.script(), Script::Auto);
     // Nothing staged: nothing.
@@ -169,10 +169,10 @@ fn the_kana_key_leaves_english_for_mode_a() {
 }
 
 #[test]
-fn f6_after_f9_undoes_the_conversion_first() {
+fn f6_after_f10_undoes_the_conversion_first() {
     let mut e = typed("KeyG KeyK KeyS");
-    e.key(Key::F9, Mods::NONE);
-    assert_eq!(e.preedit(), "ｇｋｓ");
+    e.key(Key::F10, Mods::NONE);
+    assert_eq!(e.preedit(), "gks");
     e.key(Key::F6, Mods::NONE);
     assert_eq!(e.preedit(), "きのと");
 }
@@ -226,7 +226,7 @@ fn option_symbols_type_full_width() {
     }
     assert_eq!(e.preedit(), "한！、。・『』＠１", "Mode A: ⌥[ ⌥] are the double brackets");
     e.key(Key::Slash, shift_alt);
-    assert_eq!(e.key(Key::Space, Mods::NONE).commit, "한！、。・『』＠１？ ");
+    assert_eq!(e.key(Key::Space, Mods::SHIFTED).commit, "한！、。・『』＠１？ ");
     // With nothing staged it stages alone.
     e.key(Key::Digit1, shift_alt);
     assert_eq!(e.preedit(), "！");
@@ -282,8 +282,8 @@ fn hankaku_zenkaku_converts_what_is_staged() {
     e.set_mode(Mode::A);
     // ⌥ + it is still a shortcut; with nothing staged the host converts its own text.
     let out = e.key(Key::Backquote, Mods::NONE);
-    assert_eq!((out.consumed, out.convert_host), (true, Some(Width::Full)));
-    assert_eq!(e.key(Key::Backquote, shift).convert_host, Some(Width::Half));
+    assert_eq!((out.consumed, out.host_edit), (true, Some(HostEdit::Width(Width::Full))));
+    assert_eq!(e.key(Key::Backquote, shift).host_edit, Some(HostEdit::Width(Width::Half)));
     assert!(!e.key(Key::Backquote, alt).consumed);
 }
 
@@ -329,8 +329,8 @@ fn hankaku_zenkaku_in_english_converts_the_apps_text() {
     let mut e = Engine::new();
     e.set_mode(Mode::AQwerty);
     let out = e.key(Key::Backquote, Mods::NONE);
-    assert_eq!((out.consumed, out.convert_host, out.commit.as_str()), (true, Some(Width::Full), ""));
-    assert_eq!(e.key(Key::Backquote, Mods::SHIFTED).convert_host, Some(Width::Half));
+    assert_eq!((out.consumed, out.host_edit, out.commit.as_str()), (true, Some(HostEdit::Width(Width::Full)), ""));
+    assert_eq!(e.key(Key::Backquote, Mods::SHIFTED).host_edit, Some(HostEdit::Width(Width::Half)));
     // Letters still go to the app.
     assert!(!e.key(Key::KeyA, Mods::NONE).consumed);
 }

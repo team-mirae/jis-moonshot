@@ -82,12 +82,19 @@ impl Script {
 
 pub use crate::width::Width;
 
-/// An F9/F10 conversion in progress (spec §6.2).
+/// An edit of the app's own text, which the host applies with what it can read around the caret
+/// (`jk_host_edit`): 半角/全角 with nothing staged (docs/moonshot.md §4.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostEdit {
+    /// The selection or the word at the caret to this width.
+    Width(Width),
+}
+
+/// An F10 conversion in progress (spec §6.2).
 #[derive(Clone)]
 struct Conversion {
     start: usize,
     original: Vec<Token>,
-    width: Width,
     /// 0 = as typed, 1 = UPPER, 2 = Capitalized.
     case: u8,
 }
@@ -112,10 +119,9 @@ pub struct Output {
     pub candidates: Option<Candidates>,
     /// The same keystrokes read as English on stock JIS (see [`Engine::english`]).
     pub english: String,
-    /// The 半角/全角 key with nothing staged (docs/moonshot.md §4.1): the host converts its own
-    /// text to this width, as [`crate::width::width_edit`] says, with the selection or the text
-    /// around the caret.
-    pub convert_host: Option<Width>,
+    /// An edit of the app's own text for the host to apply ([`Engine::host_edit`]): 半角/全角
+    /// with nothing staged (docs/moonshot.md §4.1).
+    pub host_edit: Option<HostEdit>,
 }
 
 #[derive(Clone)]
@@ -256,6 +262,15 @@ impl Engine {
     /// are forced bare, with no implied ㅇ (ㅏ stays ㅏ, not 아).
     pub fn kana_key_bare(&mut self) -> Output {
         self.kana_key_with(Script::KoreanBare)
+    }
+
+    /// Applies `edit` to the app's text around the caret (docs/moonshot.md §4.1): `selected` is
+    /// the selection (empty without one), `before` and `after` the text either side of it. `None`
+    /// when nothing changes.
+    pub fn host_edit(&mut self, edit: HostEdit, before: &str, selected: &str, after: &str) -> Option<crate::width::WidthEdit> {
+        match edit {
+            HostEdit::Width(width) => crate::width::width_edit(before, selected, after, width),
+        }
     }
 
     fn kana_key_with(&mut self, forced: Script) -> Output {
@@ -446,7 +461,7 @@ impl Engine {
         if key == Key::Backquote && !mods.is_shortcut() {
             let width = if mods.shift { Width::Half } else { Width::Full };
             if self.segment.is_empty() {
-                return Output { consumed: true, convert_host: Some(width), ..Output::default() };
+                return Output { consumed: true, host_edit: Some(HostEdit::Width(width)), ..Output::default() };
             }
             let shown = self.preedit();
             let converted = crate::width::convert(&shown, width);
@@ -475,21 +490,31 @@ impl Engine {
             self.conversion = None;
             return self.unchanged(false);
         }
-        if !matches!(key, Key::F9 | Key::F10) {
+        // F9 (docs/moonshot.md §4): the Korean reading forced, as 変換 / かな; Shift+F9 bare.
+        if key == Key::F9 {
+            return self.kana_key_with(if mods.shift { Script::KoreanBare } else { Script::Korean });
+        }
+        // Space (docs/moonshot.md §4): a space, staged. The words around it stay unconfirmed and
+        // are read together; with nothing staged it's the app's. Shift+Space commits.
+        if key == Key::Space && !mods.shift {
+            if self.segment.is_empty() {
+                return self.unchanged(false);
+            }
+            self.conversion = None;
+            self.segment.push(Token::Typed(' ', ' ', Some('\u{3000}')));
+            return self.unchanged(true);
+        }
+        if key != Key::F10 {
             self.conversion = None;
         }
         match key {
             // Shift+F6, Shift+F7: nothing (reserved).
             Key::F6 | Key::F7 => self.unchanged(true),
-            Key::F9 => {
-                self.convert(Width::Full);
-                self.unchanged(true)
-            }
             Key::F10 => {
-                self.convert(Width::Half);
+                self.to_english();
                 self.unchanged(true)
             }
-            // Kana types a full-width space, as Japanese IMEs do in hiragana.
+            // Shift+Space commits, then a space; kana a full-width one, as Japanese IMEs do.
             Key::Space if self.script.is_kana() => self.commit("\u{3000}".into(), true),
             Key::Space => self.commit(" ".into(), true),
             Key::Enter if self.segment.is_empty() => self.unchanged(false),
@@ -552,51 +577,18 @@ impl Engine {
         }
     }
 
-    /// F9/F10: the current word as its keys' alphanumerics, or a run of typed symbols and digits,
-    /// in the other width, cycling case on repeat presses. Every character with a form in that
-    /// width takes it; one without stays as it is (spec §5.3).
-    fn convert(&mut self, width: Width) {
+    /// F10 (docs/moonshot.md §4): the whole staged text as its keys, half-width (the English
+    /// reading as typed), staged; pressed again it cycles case: as typed → UPPER → Capitalized.
+    /// Symbols stay as typed, with their half-width forms (spec §5.3). F9, F6 and F7 undo it.
+    fn to_english(&mut self) {
         match &mut self.conversion {
-            Some(conversion) => {
-                if conversion.width == width {
-                    conversion.case = (conversion.case + 1) % 3;
-                }
-                conversion.width = width;
-            }
+            Some(conversion) => conversion.case = (conversion.case + 1) % 3,
             None => {
-                // A symbol run (spec §5.3) is typed symbols and digits, and symbols an earlier
-                // conversion left; letters and digits it left belong to a word, which never mixes in.
-                let in_run = |t: &Token| match *t {
-                    Token::Typed(c, ..) => !c.is_whitespace(),
-                    Token::Text(c) => !c.is_alphanumeric() && !c.is_whitespace(),
-                    _ => false,
-                };
-                let symbols = self.segment.last().is_some_and(in_run);
-                // Kana: the staged run of keys, whatever they type in Korean.
-                let kana = self.script.is_kana();
-                let run = self
-                    .segment
-                    .iter()
-                    .rev()
-                    .take_while(|t| match t {
-                        _ if kana => !matches!(t, Token::Bare),
-                        Token::Text(_) | Token::Typed(..) => symbols && in_run(t),
-                        // An action's parts go with its key (docs/moonshot.md §9).
-                        t if is_part(t) => !symbols,
-                        Token::Jamo { raw, .. }
-                        | Token::IeungVowel { raw, .. }
-                        | Token::Break { raw, .. }
-                        | Token::Blank { raw, .. } => !symbols && raw.is_some(),
-                        Token::Part(_) => !symbols,
-                        Token::Bare => false,
-                    })
-                    .count();
-                if run == 0 {
+                if self.segment.is_empty() {
                     return;
                 }
-                let start = self.segment.len() - run;
-                let original = self.segment[start..].to_vec();
-                self.conversion = Some(Conversion { start, original, width, case: 0 });
+                let original = std::mem::take(&mut self.segment);
+                self.conversion = Some(Conversion { start: 0, original, case: 0 });
             }
         }
         let Some(conversion) = &self.conversion else { return };
@@ -624,11 +616,8 @@ impl Engine {
             }
         };
         let start = conversion.start;
-        let width = conversion.width;
         self.segment.truncate(start);
-        self.segment.extend(cased.chars().map(|c| {
-            Token::Text(if width == Width::Full { full_width(c) } else { half_width(c) })
-        }));
+        self.segment.extend(cased.chars().map(|c| Token::Text(half_width(c))));
     }
 
     /// Turns the predictive layer on (`Some`) or off (`None`, the lite engine). Engines can share one.
@@ -795,7 +784,13 @@ impl Engine {
         let mut splits: Vec<Split> = (first..count)
             .map(at)
             .filter(|&k| !segment[..k].iter().any(jamo_digit))
-            .map(|k| Split { english: typed_of(&segment[..k]), korean: compose(&segment[k..]) })
+            .map(|k| Split {
+                english: typed_of(&segment[..k]),
+                korean: compose(&segment[k..]),
+                kana: kana_of(&segment[k..]),
+                korean_start: compose(&segment[..k]),
+                kana_start: kana_of(&segment[..k]),
+            })
             .collect();
         // The keys one by one, to find where the case changes.
         let keys: Vec<Option<char>> = starts.iter().map(|&k| typed_key(&segment[k])).collect();
@@ -808,7 +803,13 @@ impl Engine {
         // case changes, however far from the end, so the rest can be read as Korean.
         let acronym = capital_run(0);
         if acronym >= 2 && acronym < first && lower(acronym) {
-            splits.push(Split { english: typed_of(&segment[..at(acronym)]), korean: compose(&segment[at(acronym)..]) });
+            splits.push(Split {
+                english: typed_of(&segment[..at(acronym)]),
+                korean: compose(&segment[at(acronym)..]),
+                kana: kana_of(&segment[at(acronym)..]),
+                korean_start: compose(&segment[..at(acronym)]),
+                kana_start: kana_of(&segment[..at(acronym)]),
+            });
         }
         // A Korean start then an acronym (한전KPS, 에너지ICT): the first place lowercase keys are
         // followed by two capitals.
@@ -866,7 +867,9 @@ impl Engine {
     pub fn predictions(&self) -> Vec<Prediction> {
         match &self.predictor {
             Some(p) if !self.segment.is_empty() && self.script == Script::Auto && self.mode.is_korean() => {
-                with_symbol_variants(p.predict(&self.readings(), self.prediction_context()))
+                let readings = self.readings();
+                let predicted = p.predict(&readings, self.prediction_context());
+                with_symbol_variants(crate::brands::with_suggestions(predicted, &readings, |k| p.is_ending(k)))
             }
             // JIS Kana after F8: the conversions, then the kana as typed (docs/moonshot.md §4).
             Some(p) if !self.segment.is_empty() && self.kanji && self.mode.is_kana() => {
@@ -956,6 +959,9 @@ impl Engine {
         match key {
             // 半角/全角 converts the reading on screen (docs/moonshot.md §4.1).
             Key::Backquote => true,
+            // Space stages a space (docs/moonshot.md §4): what shows stays as typed. Shift+Space
+            // commits it.
+            Key::Space if !mods.shift => false,
             Key::Space | Key::Enter | Key::Escape | Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight | Key::Other => true,
             Key::Backspace | Key::F6 | Key::F7 | Key::F8 | Key::F9 | Key::F10 => false,
             _ => layout::output_with(self.mode, self.symbols, Layout::JisKorean, key, mods.shift).is_none(),
@@ -1040,7 +1046,7 @@ impl Engine {
         // 半角/全角 (docs/moonshot.md §4.1): nothing is staged, so the app's text converts.
         if key == Key::Backquote && !mods.is_shortcut() {
             let width = if mods.shift { Width::Half } else { Width::Full };
-            return Output { commit, consumed: true, convert_host: Some(width), ..Output::default() };
+            return Output { commit, consumed: true, host_edit: Some(HostEdit::Width(width)), ..Output::default() };
         }
         // ⌥Space (the setting): `_` (docs/moonshot.md §4).
         if option && key == Key::Space && self.option_space {

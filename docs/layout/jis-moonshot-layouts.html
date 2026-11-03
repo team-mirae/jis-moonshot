@@ -399,8 +399,8 @@ footer {
       <div><dt>Shift on the letter keys</dt><dd>Shift on a consonant types it with ㅏ: ⇧ㄱ → 가 (ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5). Shift on every vowel key, O and P too, starts a syllable on ㅇ (ㅒ ㅖ are on : and ;).</dd></div>
       <div><dt>Symbols</dt><dd>Korean keeps only , on Shift, and · on ¥. Symbols come from 無変換 (English), ー from the kana reading, and ⌥ , . / [ ] type 、。・『』 (staged). 半角/全角 makes what's staged (or the word at the caret) full-width, Shift half-width.</dd></div>
       <div><dt>F6 ひらがな · F7 カタカナ</dt><dd>The staged keys read as kana until the next commit. F8 (or Shift+F8) puts the kana reading's kanji on top.</dd></div>
-      <div><dt>F9 전각 · F10 반각</dt><dd>The word's keys as full- or half-width letters; pressing again cycles as typed → UPPER → Capitalized.</dd></div>
-      <div><dt>かな · 英数</dt><dd>かな / 変換: to Mode A, or force Korean on the staged text. 英数 / 無変換: commit and go to the last English mode.</dd></div>
+      <div><dt>F9 한글 · F10 ABC</dt><dd>F9 forces the Korean reading (as 変換; Shift+F9 bare, no implied ㅇ). F10 shows the staged keys as letters; again cycles UPPER → Capitalized. Neither commits.</dd></div>
+      <div><dt>かな · 英数 · Space</dt><dd>かな / 変換: to Mode A, or force Korean. 英数 / 無変換: commit and go to English. Space stages a space, so the words are read together; Shift+Space, Enter and Shift+Enter commit.</dd></div>
     </dl>
   </section>
 
@@ -411,7 +411,7 @@ footer {
 // Each key: [ko, shift ko, en, shift en, ja, shift ja, kind]. A shift reading that is null or the
 // same as the key alone isn't drawn. en: the JIS key cap (letters type lowercase alone). kind: ""
 // letter or "sym".
-const FN = [["F6", "ひらがな"], ["F7", "カタカナ"], ["F8", "漢字"], ["F9", "전각"], ["F10", "반각"]];
+const FN = [["F6", "ひらがな"], ["F7", "カタカナ"], ["F8", "漢字"], ["F9", "한글"], ["F10", "ABC"]];
 const ROWS = [
   { offset: 0, keys: [
     ["ㅃ", "1", "1", "!", "ぬ", null, "sym"], ["ㅉ", "2", "2", "\"", "ふ", null, "sym"],

@@ -100,7 +100,7 @@ fn a_committing_key_acts_on_the_prediction_shown() {
     let shift = Mods { shift: true, ..Mods::NONE };
 
     let mut e = typed("KeyD KeyK KeyS KeyS KeyU KeyD");
-    let out = e.key_after_prediction(english(&e), key("Space"), Mods::NONE);
+    let out = e.key_after_prediction(english(&e), key("Space"), shift);
     assert_eq!((out.commit.as_str(), out.consumed), ("dkssud ", true));
 
     // Plain Enter commits and goes on to the app; Shift+Enter and "Enter commits" only commit.
@@ -118,7 +118,7 @@ fn a_committing_key_acts_on_the_prediction_shown() {
 
     // An index that isn't listed: the key acts on the Korean reading.
     let mut e = typed("KeyG KeyK KeyS");
-    let out = e.key_after_prediction(99, key("Space"), Mods::NONE);
+    let out = e.key_after_prediction(99, key("Space"), shift);
     assert_eq!(out.commit, "한 ");
 }
 
@@ -723,4 +723,47 @@ fn a_reading_ending_in_a_symbol_offers_its_variants() {
     }
     // Only a symbol at the end.
     assert!(!texts("KeyG KeyK KeyS S-Comma KeyG KeyK").iter().any(|t| t.contains('、')));
+}
+
+#[test]
+fn an_english_word_takes_a_japanese_particle_read_as_kana() {
+    // docs/moonshot.md §5.3: as Claude에, the ending's keys read as JIS kana when they make a
+    // Japanese particle: k の, f は, w @ で.
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyK"), ("Claudeの".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyF"), ("Claudeは".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyT KeyO KeyK KeyY KeyO KeyK"), ("Tokyoの".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyG KeyI KeyT S-KeyH KeyU KeyB KeyW BracketLeft"), ("GitHubで".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyO KeyP KeyE KeyN S-KeyA S-KeyI KeyK"), ("OpenAIの".into(), Kind::Mixed));
+    // A Korean particle still wins where both fit: Claude + p is Claude에.
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyP"), ("Claude에".into(), Kind::Mixed));
+}
+
+#[test]
+fn an_ending_typed_with_its_ieung_keeps_the_start_whole() {
+    // Claude + d p (에 with its ㅇ) is Claude에, not Clauded + p; a known word still takes the d
+    // (Android + p is Android에, not Androi + d p).
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyD KeyP"), ("Claude에".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyA KeyN KeyD KeyR KeyO KeyI KeyD KeyP"), ("Android에".into(), Kind::Mixed));
+}
+
+#[test]
+fn a_brand_is_suggested_in_its_default_script_below_what_was_typed() {
+    // docs/moonshot.md §5.4: by country of origin; only suggested, right below the reading that
+    // spells it, never above.
+    let after = |keys: &str, typed: &str, brand: &str| {
+        let t = texts(keys);
+        let at = t.iter().position(|x| x == typed).unwrap_or_else(|| panic!("{typed}: {t:?}"));
+        assert_eq!(t.get(at + 1).map(String::as_str), Some(brand), "{t:?}");
+    };
+    // An American brand typed in Korean: English. Japanese ones: Japanese, typed either way.
+    after("KeyT KeyM KeyX KeyK KeyQ KeyJ KeyR KeyT KeyM", "스타벅스", "Starbucks");
+    after("KeyR KeyN KeyR KeyM KeyF", "구글", "Google");
+    after("KeyT KeyH KeyS KeyL", "소니", "ソニー");
+    after("KeyH KeyO KeyN KeyD KeyA", "honda", "ホンダ");
+    // Before a particle, the particle stays.
+    after("KeyT KeyM KeyX KeyK KeyQ KeyJ KeyR KeyT KeyM KeyD KeyP", "스타벅스에", "Starbucks에");
+    // A Korean brand typed in Korean is already in its script: nothing to add.
+    assert!(!texts("KeyT KeyK KeyA KeyT KeyJ KeyD").iter().any(|t| t == "Samsung"));
+    // The kana of Korean typing, or a short English start, isn't matched (rnr isn't スミス).
+    assert!(typed("KeyR KeyN KeyR KeyM KeyF").predictions().iter().filter(|p| p.kind == Kind::Brand).count() == 1);
 }

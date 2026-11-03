@@ -124,16 +124,15 @@ pub struct WidthEdit {
     pub text: String,
 }
 
-/// The 半角/全角 key on the app's text (docs/moonshot.md §4.1), with nothing staged: `selected`
-/// converted if there's a selection; else the word the caret is on (the run of characters around
-/// it up to a blank or a change of script, holding the character right after the caret: at the
-/// end of a word there's none); else nothing. `before` and `after` are the text either side of
-/// the caret or selection (as much as the host has; a word longer than that converts in part).
-/// `None` when nothing would change.
-pub fn width_edit(before: &str, selected: &str, after: &str, width: Width) -> Option<WidthEdit> {
+/// Which of the app's text a key with nothing staged acts on (docs/moonshot.md §4.1): the
+/// selection, if there is one; else the word the caret is on (the run of characters around it up
+/// to a blank or a change of script, holding the character right after the caret: at the end of a
+/// word there's none); else nothing. `before` and `after` are the text either side of the caret or
+/// selection (as much as the host has; a word longer than that is taken in part). The answer is
+/// (characters before the caret, characters after it, the text): for a selection, (0, 0, it).
+pub fn target(before: &str, selected: &str, after: &str) -> Option<(usize, usize, String)> {
     if !selected.is_empty() {
-        let text = convert(selected, width);
-        return (text != selected).then_some(WidthEdit { before: 0, after: 0, text });
+        return Some((0, 0, selected.to_string()));
     }
     let mut left: Vec<char> = before.chars().rev().take_while(|c| !c.is_whitespace()).collect();
     left.reverse();
@@ -160,7 +159,13 @@ pub fn width_edit(before: &str, selected: &str, after: &str, width: Width) -> Op
     }
     pieces.push(start..run.len());
     let piece = pieces.into_iter().find(|p| p.contains(&caret))?;
-    let word: String = run[piece.clone()].iter().collect();
+    Some((caret - piece.start, piece.end - caret, run[piece].iter().collect()))
+}
+
+/// The 半角/全角 key on the app's text (docs/moonshot.md §4.1), with nothing staged: [`target`]
+/// converted to `width`. `None` when nothing would change.
+pub fn width_edit(before: &str, selected: &str, after: &str, width: Width) -> Option<WidthEdit> {
+    let (b, a, word) = target(before, selected, after)?;
     let text = convert(&word, width);
-    (text != word).then_some(WidthEdit { before: caret - piece.start, after: piece.end - caret, text })
+    (text != word).then_some(WidthEdit { before: b, after: a, text })
 }

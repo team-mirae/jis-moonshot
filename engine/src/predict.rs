@@ -43,12 +43,15 @@ pub enum Kind {
     Kanji = 12,
     // 13 was Aspirated (ㄶ for ㄴ + ㅋ / ㅌ / ㅊ, 않고 for 안코), retired on 2026-11-03: ㄶ has its own
     // key (Shift+@, docs/moonshot.md §9.2). The other ids stay.
+    /// A brand in its default script, suggested below the reading that spells it (Starbucks for
+    /// 스타벅스, トヨタ for 도요타), docs/moonshot.md §5.4.
+    Brand = 14,
 }
 
 impl Kind {
     fn language(self) -> Language {
         match self {
-            Kind::English | Kind::EnglishCapitalized | Kind::EnglishUpper => Language::English,
+            Kind::English | Kind::EnglishCapitalized | Kind::EnglishUpper | Kind::Brand => Language::English,
             Kind::Kana | Kind::Katakana | Kind::Kanji => Language::Japanese,
             _ => Language::Korean,
         }
@@ -126,6 +129,12 @@ pub struct Piece {
 pub struct Split {
     pub english: String,
     pub korean: String,
+    /// The ending's keys read as JIS kana (docs/moonshot.md §5): Claudeの, Claudeは.
+    pub kana: String,
+    /// The start's keys read as Korean and as kana, for brands typed in either (스타벅스에,
+    /// docs/moonshot.md §5.4).
+    pub korean_start: String,
+    pub kana_start: String,
 }
 
 /// What the predictor knows besides the keys.
@@ -388,6 +397,14 @@ const SPLIT_START: f64 = 1.0;
 pub(crate) const AVOIDED: f64 = 4.0;
 
 /// Particles and endings that attach to English words in mixed Korean text.
+/// Japanese particles and endings that follow an English word (Claudeの, Claudeは, GitHubで),
+/// read from the ending's keys as JIS kana (docs/moonshot.md §5.3).
+pub(crate) const KANA_PARTICLES: &[&str] = &[
+    "は", "が", "を", "に", "で", "と", "も", "へ", "の", "や", "か", "ね", "よ", "から", "まで", "より",
+    "には", "では", "とは", "にも", "でも", "への", "との", "での", "からの", "までの", "って", "けど",
+    "だ", "です", "でした", "という", "など", "さん", "くん", "ちゃん", "さま",
+];
+
 pub(crate) const PARTICLES: &[&str] = &[
     "은", "는", "이", "가", "을", "를", "의", "에", "에서", "에게", "에는", "에서는", "에서의", "에도",
     "과", "와", "도", "만", "로", "으로", "로는", "으로는", "로도", "으로도", "까지", "부터", "까지는", "까지의", "부터는", "부터의", "부로", "처럼", "보다",
@@ -1355,8 +1372,17 @@ impl Predictor {
         readings
             .splits
             .iter()
-            // A particle or ending, or after an acronym a Korean word (LG에너지솔루션은).
-            .filter(|s| self.is_ending(&s.korean) || self.acronym_tail(readings, s))
+            // A particle or ending, or after an acronym a Korean word (LG에너지솔루션은); or a
+            // Japanese particle read as kana (Claudeの, docs/moonshot.md §5.3).
+            .filter(|s| self.is_ending(&s.korean) || self.acronym_tail(readings, s) || KANA_PARTICLES.contains(&s.kana.as_str()))
+            // An ending typed in full, its ㅇ included (Claude + d p → Claude에), over a start that
+            // takes the d (Clauded + p), unless that start is a known English word (Android에).
+            .filter(|s| {
+                let Some(shorter) = s.english.strip_suffix('d') else { return true };
+                let lower = s.english.to_lowercase();
+                let known = self.english_words.contains_key(&lower) || self.english_nouns.contains(&lower);
+                known || !readings.splits.iter().any(|o| o.english == shorter && o.korean == s.korean && self.is_ending(&o.korean))
+            })
             // Letters, or letters and digits with a capital (APR1400은, GWh의).
             .filter(|s| {
                 s.english.len() >= 2
@@ -1395,10 +1421,20 @@ impl Predictor {
                 let rank = (!trailing, known, if trailing { -length } else { length });
                 (-self.start_margin(&s.english), rank, s)
             })
-            .filter(|(start, _, _)| *start >= 99.0 || (*start >= SPLIT_START && *start - whole >= SPLIT_EDGE))
+            // A kana particle's keys (w @ for で) needn't look Korean: after a capitalized start
+            // that reads as English it's enough (GitHubで).
+            .filter(|(start, _, s)| {
+                let kana = !self.is_ending(&s.korean) && !self.acronym_tail(readings, s);
+                let capitalized = s.english.starts_with(|c: char| c.is_ascii_uppercase());
+                *start >= 99.0
+                    || (*start >= SPLIT_START && *start - whole >= SPLIT_EDGE)
+                    || (kana && capitalized && *start >= SPLIT_START)
+            })
             .max_by(|a, b| a.0.min(99.0).total_cmp(&b.0.min(99.0)).then(a.1.cmp(&b.1)))
             .map(|(start, _, s)| {
-                let text = format!("{}{}", s.english, s.korean);
+                // The Korean ending when it is one, else the kana particle.
+                let korean = self.is_ending(&s.korean) || self.acronym_tail(readings, s);
+                let text = format!("{}{}", s.english, if korean { &s.korean } else { &s.kana });
                 (Prediction { text, kind: Kind::Mixed, score: start.max(english_score) + PARTICLE }, s.clone())
             })
     }

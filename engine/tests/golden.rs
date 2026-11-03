@@ -207,11 +207,11 @@ fn backspace_takes_a_whole_key_off() {
 }
 
 #[test]
-fn f9_and_f10_convert_every_symbol_with_a_form_in_that_width() {
-    pre("S-Comma S-Comma F9", "，，");
-    // A symbol with no other form stays, and the run goes on past it: · has none.
-    pre("S-Comma IntlYen S-Comma F9", "，·，");
-    pre("S-Comma IntlYen S-Comma F9 F10", ",·,");
+fn hankaku_zenkaku_converts_every_symbol_with_a_form_in_that_width() {
+    pre("S-Comma S-Comma Backquote", "，，");
+    // A symbol with no other form stays: · has none.
+    pre("S-Comma IntlYen S-Comma Backquote", "，·，");
+    pre("S-Comma IntlYen S-Comma Backquote S-Backquote", ",·,");
 }
 
 #[test]
@@ -324,14 +324,15 @@ fn backspace_removes_one_jamo_keystroke() {
 
 #[test]
 fn backspace_with_nothing_unconfirmed_passes_through() {
-    doc("KeyR KeyK Space Backspace Backspace", "", "");
+    doc("KeyR KeyK S-Space Backspace Backspace", "", "");
 }
 
 // §5 Commit
 
 #[test]
-fn space_commits_and_types_a_space() {
-    doc("KeyG KeyK KeyS Space", "한 ", "");
+fn shift_space_commits_and_types_a_space() {
+    // docs/moonshot.md §4 (2026-11-03): Shift+Space commits; plain Space stages a space.
+    doc("KeyG KeyK KeyS S-Space", "한 ", "");
 }
 
 #[test]
@@ -412,10 +413,10 @@ fn f8_changes_no_keys() {
     assert!(!e.is_escaped());
 }
 
-// §6.2 F9 / F10
+// §6.2 F9 한글 / F10 ABC (docs/moonshot.md §4)
 
 #[test]
-fn f9_f10_cycle() {
+fn f10_cycles_case_and_f9_goes_back_to_korean() {
     let mut h = Host::new();
     let mut step = |keys: &str, expected: &str| {
         h.keys(keys);
@@ -425,12 +426,55 @@ fn f9_f10_cycle() {
     step("F10", "gks");
     step("F10", "GKS");
     step("F10", "Gks");
-    step("F9", "Ｇｋｓ");
+    // F9 is the forced Korean reading (as 変換): it undoes F10. Nothing commits.
+    step("F9", "한");
+    assert_eq!(h.doc, "");
 }
 
 #[test]
-fn switching_width_keeps_case() {
-    pre("KeyG KeyK KeyS F10 F10 F9", "ＧＫＳ");
+fn f10_then_hankaku_zenkaku_is_full_width_letters() {
+    // Full-width letters are 半角/全角 on F10's letters (F9 no longer converts).
+    pre("KeyG KeyK KeyS F10 F10 Backquote", "ＧＫＳ");
+}
+
+#[test]
+fn shift_f9_forces_the_bare_reading() {
+    // ㅏ alone shows 아; Shift+F9 drops the implied ㅇ, as Shift+変換 does; F9 brings it back.
+    pre("KeyK S-F9", "ㅏ");
+    pre("KeyR KeyK KeyJ S-F9", "가ㅓ");
+    pre("KeyK S-F9 F9", "아");
+    // Typing goes on in the forced script, until the commit.
+    pre("KeyK S-F9 KeyJ", "ㅏㅓ");
+}
+
+#[test]
+fn f6_to_f10_never_commit() {
+    for key in ["F6", "F7", "F8", "F9", "S-F9", "F10"] {
+        doc(&format!("KeyG KeyK KeyS {key}"), "", match key {
+            "F6" => "きのと",
+            "F7" => "キノト",
+            "F10" => "gks",
+            _ => "한",
+        });
+    }
+}
+
+#[test]
+fn space_stages_a_space() {
+    // docs/moonshot.md §4: the space is staged, the words stay unconfirmed; Shift+Space commits all.
+    doc("KeyG KeyK KeyS Space KeyR KeyM KeyF", "", "한 글");
+    doc("KeyG KeyK KeyS Space KeyR KeyM KeyF S-Space", "한 글 ", "");
+    // Shift+Enter commits with no side effect; Enter commits and goes on to the app.
+    doc("KeyG KeyK KeyS Space KeyR KeyM KeyF S-Enter", "한 글", "");
+    // Backspace takes the staged space off; F10 reads the whole staged text.
+    pre("KeyG KeyK KeyS Space Backspace KeyK", "하나");
+    pre("KeyG KeyK KeyS Space KeyR KeyM KeyF F10", "gks rmf");
+    // With nothing staged it's the app's.
+    let mut e = Engine::new();
+    assert!(!e.key(Key::Space, Mods::NONE).consumed);
+    // It doesn't commit what shows: hosts send it to jk_key, not jk_key_after_prediction.
+    assert!(!e.commits(Key::Space, Mods::NONE));
+    assert!(e.commits(Key::Space, Mods::SHIFTED));
 }
 
 #[test]
@@ -441,15 +485,15 @@ fn conversion_uses_raw_keys() {
 }
 
 #[test]
-fn conversion_word_ends_at_symbols_and_commits() {
-    pre("KeyG KeyK KeyS S-Comma KeyG KeyK KeyS F10", "한,gks");
+fn conversion_takes_the_whole_staged_text() {
+    pre("KeyG KeyK KeyS S-Comma KeyG KeyK KeyS F10", "gks,gks");
     doc("KeyG KeyK S-Enter KeyG KeyK F10", "하", "gk");
 }
 
 #[test]
 fn conversion_with_no_word_is_a_no_op() {
     pre("F10", "");
-    doc("KeyG KeyK KeyS S-Enter F9", "한", "");
+    doc("KeyG KeyK KeyS S-Enter F10", "한", "");
 }
 
 #[test]
@@ -460,7 +504,7 @@ fn input_after_conversion_ends_it() {
 
 #[test]
 fn space_commits_converted_text() {
-    doc("KeyG KeyK KeyS F9 Space", "ｇｋｓ ", "");
+    doc("KeyG KeyK KeyS F10 S-Space", "gks ", "");
 }
 
 // English reading and clear (for hosts that rank Korean against English)
@@ -587,9 +631,12 @@ fn plain_z_still_types_kieuk() {
 #[test]
 fn the_engine_says_which_keys_commit_what_stands() {
     let e = Engine::new();
-    for key in [Key::Space, Key::Enter, Key::Escape, Key::ArrowDown, Key::ArrowLeft, Key::Other, Key::IntlBackslash] {
+    for key in [Key::Enter, Key::Escape, Key::ArrowDown, Key::ArrowLeft, Key::Other, Key::IntlBackslash] {
         assert!(e.commits(key, Mods::NONE), "{key:?}");
     }
+    // Shift+Space commits; Space stages a space (docs/moonshot.md §4).
+    assert!(e.commits(Key::Space, Mods::SHIFTED));
+    assert!(!e.commits(Key::Space, Mods::NONE));
     assert!(e.commits(Key::KeyG, Mods { ctrl: true, ..Mods::NONE }));
     for key in [Key::KeyG, Key::Digit1, Key::Minus, Key::Backspace, Key::F6, Key::F10, Key::Modifier] {
         assert!(!e.commits(key, Mods::NONE), "{key:?}");

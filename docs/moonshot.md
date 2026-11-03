@@ -108,10 +108,24 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
 | F7 | goes to the app | katakana, until the next commit | katakana, kept |
 | F8 | goes to the app | **kanji**: the kana reading's conversions on top, until the next commit (§5.1) | the conversions above the kana, until the next commit |
 | Shift+F8 | goes to the app | the same as F8 (the hanja list is gone) | the same as F8 |
-| F9 / F10 | goes to the app | as in JIS Korean (the word's keys as full- / half-width letters) | the staged run's keys as full- / half-width characters |
+| F9 (한글) | goes to the app | **force Korean**, the same as かな / 変換 (2026-11-03) | the same as かな / 変換 |
+| Shift+F9 | goes to the app | **force bare Korean**, the same as Shift+かな / Shift+変換 | the same |
+| F10 (ABC) | goes to the app | the whole staged text as its keys (English, half-width); again: UPPER, Capitalized | the same |
+| Space | the app's | **a space, staged** (2026-11-03): the words stay unconfirmed and are read together. Nothing staged: the app's | a full-width space, staged |
+| Shift+Space | the app's | **commit** what shows, then a space | commit, then a full-width space |
 | Shift+Z | Z | 카 (Shift+consonant, §9.2) / っ | っ |
 | Cmd / Ctrl + a key | the app's shortcut | the app's shortcut | the app's shortcut |
 
+- **Committing** (2026-11-03): **Shift+Enter** commits with no side effect; **Shift+Space** and
+  **Enter** commit and then do what they do (a space, a new line; in kana Enter only confirms);
+  losing focus commits too (no side effect, though probably not meant). F6–F10 never commit: they
+  only change the reading. Plain **Space** stages a space instead of committing, so a phrase stays
+  unconfirmed longer and its words are read together (spec §10.10's pieces); with nothing staged
+  it's the app's. With nothing staged F6–F10 still go to the app (F6–F8 apply to the next
+  segment, as before). The English modes are untouched: 英数 / 無変換 there does nothing.
+- **F9 한글 / F10 ABC.** F9 used to be full-width letters; full-width now comes from 半角/全角
+  (§4.1), so F9 forces the Korean reading like 変換 (which stays), Shift+F9 the bare one. F10
+  shows the whole staged text as its keys and cycles case on repeat; F9, F6 or F7 undo it.
 - **Cmd and Ctrl shortcuts are the app's, at their QWERTY positions** (2026-11-03). The engine
   commits what shows and passes them on. On macOS, while either is held the app is given JIS
   English's layout, whose plain layer is QWERTY: apps that match shortcuts by
@@ -126,7 +140,7 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   the next segment is kana (Chrome's F6 is lost, as in JIS Korean it wasn't). **[decide]**
   `A_KANA`, the kana-only mode, is selected from the input menu; there F6 / F7 switch its script
   for good.
-- **F6 or F7 after F9/F10** undo the conversion first, then show kana.
+- **F6, F7 or F9 after F10** undo the conversion first, then show their reading.
 - **F8** (2026-11-01) asks for kanji: the staged keys' kana reading is converted and the
   conversions (up to three) go on top, the kana reading right after them, then the other readings.
   Like F6 it lasts until the next commit, and with nothing staged it's taken and applies to the next
@@ -142,7 +156,7 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   goes to the app untouched.
 - **⌥ + a symbol or digit key** (macOS, the same setting, 2026-11-01) types the key's JIS legend
   in full-width in Mode A and `A_KANA`, **staged** after what shows (2026-11-03; it used to commit),
-  so 半角/全角 (§4.1) can still change it and F9/F10 read it as a symbol run: ⇧⌥1 → ！, ⌥1 → １, ⇧⌥/ → ？. The
+  so 半角/全角 (§4.1) can still change it and F10 converts it: ⇧⌥1 → ！, ⌥1 → １, ⇧⌥/ → ？. The
   punctuation a Japanese IME converts is typed its way: ⌥ `,` `.` `/` → 、 。 ・, and ⌥ `[` `]` →
   『 』 in Mode A, 「 」 in `A_KANA`. ⌥ + a letter is still a shortcut for the app. In the English
   modes (無変換) ⌥ `[` `]` type « » (wherever the layout puts [ and ]); other ⌥ symbols go to the
@@ -175,8 +189,8 @@ label says: **full-width**, and with **Shift half-width**. It no longer types ``
   katakana (がぱ → ｶﾞﾊﾟ), full-width puts half-width katakana back (ｶﾞﾊﾟ → ガパ; hiragana stays
   katakana). Hangul and kanji have no other width.
 
-The engine decides all of it: with nothing staged it answers `convert_host` (`jk_convert_host`),
-and the shell hands it the selection and the text around it (`jk_width_edit`), which say what to
+The engine decides all of it: with nothing staged it asks for a host edit (`jk_convert_host`),
+and the shell hands it the selection and the text around it (`jk_host_edit`), which say what to
 replace with what. macOS and Windows (an edit session) read up to 256 characters either side, and
 the caret ends after the replaced text. Windows' English is ABC, which never reaches the engine, so
 there the key works in Mode A and JIS Kana only.
@@ -278,6 +292,46 @@ last thing typed. The table is `engine/src/punctuation.rs`:
 Shift+`,` → , 、 ，; 한 + Shift+`,` → 한, 한、 한，; `¥` → · ・ ･; `h e l l o .` → hello. hello。 hello…
 hello... (the English reading's period: `.` types 을 in Korean, §9.2).
 
+### 5.3 Japanese particles after English
+
+As Claude에 (an English start and a Korean particle, spec §10.3), an English start can take a
+Japanese particle read from the ending's keys as JIS kana (2026-11-03): Claude `k` → Claudeの,
+Claude `f` → Claudeは, GitHub `w @` → GitHubで, Tokyoの, OpenAIの (`KANA_PARTICLES`: は が を に で
+と も へ の や か ね よ から まで より and a few longer ones). The same gates hold: the start reads
+clearly more English than the whole keys, or is a capitalized name (for a kana particle a
+capitalized start that reads as English is enough, since `w @` doesn't look Korean), and a whole
+that is a known English word isn't split. Where a Korean particle fits too, it wins (Claude `p` →
+Claude에). The reading is of kind Mixed.
+
+### 5.4 Brand names
+
+A reading that spells a brand, in any script, also offers the brand in its **default script**
+(2026-11-03, the owner's call), by the country of origin:
+
+1. A name ending in "Korea" (a Korean branch, AWS Korea → 아마존웹서비시즈코리아): Korean.
+2. A name ending in "Japan" (구글재팬 → Google Japan): English.
+3. Else a company registered or operating mainly in Korea: Korean; in Japan: Japanese; anywhere
+   else: English.
+
+So 스타벅스 offers Starbucks, 구글 Google, 소니 / sony ソニー, honda / 혼다 ホンダ, 도요타 トヨタ, kakao
+카카오, and before a particle the particle stays (스타벅스에 → Starbucks에). It's **only a
+suggestion** (kind `Brand`, id 14): it goes right below the reading that spells it, never above
+what was typed, and nothing is added when the brand is already in what was typed or differs only
+in case (apple → Apple is the English reading's own Capitalized).
+
+- **Matching:** the Korean reading, the English reading (four letters or more, or capitals: LG)
+  and the kana reading (only when a kana reading is offered) are matched without spaces or middle
+  dots, so long Korean and Japanese names typed without spaces match. Before a particle the start
+  keeps one script: a Korean start with a Korean particle, a kana one with a kana particle, an
+  English start (read as English: a mixed reading with it) with either.
+- **Which name:** a brand's names in its default script, without legal forms (Inc., 주식회사,
+  株式会社), the main one unless an alias is clearly closer in length to what was typed (도요타 →
+  トヨタ, not トヨタ自動車; honda → ホンダ, not 本田技研工業). Short forms without corporate words
+  (소니 for 소니 그룹) are spellings too.
+- **Data:** `engine/predict/brands.tsv`, about 18,000 companies and brands from Wikidata (CC0) with
+  an English name and a Korean or Japanese one, built by `engine/tools/brands/build_brands.py`
+  (queries cached in `corpora/brands/`). It's compiled into the engine, so no shell loads it.
+
 ## 6. Predictive typing must be accepted
 
 Predictions are always on; there is no switch and no lite build in the shells. The first time JIS
@@ -350,7 +404,7 @@ little used, so the slots were freed and refilled with particles, endings and fi
 and Shift+`/` went with them, so Mode A has **no `.` or `·` on Shift** any more: · is on `¥`, and
 a period comes from English (無変換) or ⌥`.` (。). Shift+`¥` is left **empty**: it types nothing in
 Korean (the syllable goes on across it), but it's still a key: the kana reading and JIS Kana read
-it as ー, the English reading as `|`, F9/F10 convert it, and Backspace takes it off.
+it as ー, the English reading as `|`, F10 converts it, and Backspace takes it off.
 
 ### 9.1 Notation
 
@@ -405,7 +459,7 @@ reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ ther
 
 - **Keys, not jamo.** An action's first jamo carries the key (its stock JIS character, or the
   letter); the rest are parts of it. **Backspace takes the whole key off** (an empty slot too),
-  as the kana reading counts keys. F9 / F10 read each key once (`i` ⇧P `h o n e` F10 → iPhone).
+  as the kana reading counts keys. F10 reads each key once (`i` ⇧P `h o n e` F10 → iPhone).
 - **No Shift held over.** Shift on a consonant types its ㅏ, so a Shift+vowel after it starts its
   own syllable on ㅇ like any Shift+vowel (⇧ㄱ ⇧ㅏ → 가아). (Until 2026-11-03 Shift on a consonant
   changed nothing, and a Shift+vowel right after one was read as Shift still held.)

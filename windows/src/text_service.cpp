@@ -733,10 +733,9 @@ void TextService::Apply(ITfContext* context) {
 }
 
 void TextService::ConvertHostText(ITfContext* context) {
-    const std::uint32_t width = jk_convert_host(engine_);
-    if (!width || !context) return;
+    if (!jk_convert_host(engine_) || !context) return;
     ComPtr<ITfContext> held(context);
-    RunEditSession(context, client_id_, [this, held, width](TfEditCookie ec) -> HRESULT {
+    RunEditSession(context, client_id_, [this, held](TfEditCookie ec) -> HRESULT {
         TF_SELECTION selection = {};
         ULONG fetched = 0;
         HRESULT hr = held->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &selection, &fetched);
@@ -769,15 +768,14 @@ void TextService::ConvertHostText(ITfContext* context) {
         const std::string i = Utf8(read(inside.Get()));
         const std::string a = Utf8(read(after.Get()));
         const auto bytes = [](const std::string& s) { return reinterpret_cast<const std::uint8_t*>(s.data()); };
-        if (!jk_width_edit(engine_, bytes(b), b.size(), bytes(i), i.size(), bytes(a), a.size(),
-                           width == 2 ? 1 : 0)) {
+        if (!jk_host_edit(engine_, bytes(b), b.size(), bytes(i), i.size(), bytes(a), a.size())) {
             return S_OK;
         }
         const std::wstring text = Utf16(jk_resolved_ptr(engine_), jk_resolved_len(engine_));
         ComPtr<ITfRange> target;
         if (FAILED(chosen->Clone(&target))) return E_FAIL;
-        target->ShiftStart(ec, -static_cast<LONG>(jk_width_edit_before(engine_)), &moved, nullptr);
-        target->ShiftEnd(ec, static_cast<LONG>(jk_width_edit_after(engine_)), &moved, nullptr);
+        target->ShiftStart(ec, -static_cast<LONG>(jk_host_edit_before(engine_)), &moved, nullptr);
+        target->ShiftEnd(ec, static_cast<LONG>(jk_host_edit_after(engine_)), &moved, nullptr);
         hr = target->SetText(ec, 0, text.data(), static_cast<LONG>(text.size()));
         if (FAILED(hr)) return hr;
         return CaretToEnd(ec, held.Get(), target.Get());

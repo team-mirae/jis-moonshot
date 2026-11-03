@@ -752,11 +752,11 @@ final class JKInputController: IMKInputController {
         apply(to: client)
     }
 
-    /// 半角/全角 with nothing staged (docs/moonshot.md §4.1): the engine says which width; it also
-    /// says what to replace, from the selection and the text around it, which only the app has.
+    /// An edit of the app's own text the engine asked for (docs/moonshot.md §4.1): 半角/全角 with
+    /// nothing staged. The engine says what to replace, from the selection and the text around it,
+    /// which only the app has.
     private func convertHostText(_ client: IMKTextInput) {
-        let width = jk_convert_host(engine)
-        guard width != 0 else { return }
+        guard jk_convert_host(engine) != 0 else { return }
         let selection = client.selectedRange()
         guard selection.location != NSNotFound else { return }
         // Enough either side for any word; a longer one converts in part.
@@ -772,10 +772,9 @@ final class JKInputController: IMKInputController {
         let before = Array(read(NSRange(location: start, length: selection.location - start)).utf8)
         let selected = Array(read(selection).utf8)
         let after = Array(read(NSRange(location: end, length: max(0, min(reach, length - end)))).utf8)
-        guard jk_width_edit(engine, before, before.count, selected, selected.count, after, after.count,
-                            width == 2 ? 1 : 0) != 0 else { return }
+        guard jk_host_edit(engine, before, before.count, selected, selected.count, after, after.count) != 0 else { return }
         let replacement = text(jk_resolved_ptr(engine), jk_resolved_len(engine))
-        let back = jk_width_edit_before(engine), forward = jk_width_edit_after(engine)
+        let back = jk_host_edit_before(engine), forward = jk_host_edit_after(engine)
         let range = NSRange(location: selection.location - back, length: back + selection.length + forward)
         client.insertText(replacement, replacementRange: range)
     }

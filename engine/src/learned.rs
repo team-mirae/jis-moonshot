@@ -204,6 +204,8 @@ fn scenario_bits(w: &Weights, kind: Kind, origin: Origin, readings: &Readings, t
         Kind::Mixed => bits(Weight::Mixed),
         // Never featurized: the kana reading is merged after ranking (docs/moonshot.md §5).
         Kind::Kana | Kind::Katakana | Kind::Kanji => bits(Weight::Kana),
+        // Never featurized: brands are suggested after ranking (docs/moonshot.md §5.4).
+        Kind::Brand => 0.0,
     }
 }
 
