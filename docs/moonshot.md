@@ -121,7 +121,8 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   losing focus commits too (no side effect, though probably not meant). F6–F10 never commit: they
   only change the reading. Plain **Space** stages a space instead of committing, so a phrase stays
   unconfirmed longer and its words are read together (spec §10.10's pieces); with nothing staged
-  it's the app's. With nothing staged F6–F10 still go to the app (F6–F8 apply to the next
+  it's the app's. A row chosen with ↓ / Tab is kept by Space, which stages the space after it
+  (`jk_key_keeps_choice`); the top reading nobody chose stays open to the words after it. With nothing staged F6–F10 still go to the app (F6–F8 apply to the next
   segment, as before). The English modes are untouched: 英数 / 無変換 there does nothing.
 - **F9 한글 / F10 ABC.** F9 used to be full-width letters; full-width now comes from 半角/全角
   (§4.1), so F9 forces the Korean reading like 変換 (which stays), Shift+F9 the bare one. F10
@@ -300,8 +301,8 @@ Claude `f` → Claudeは, GitHub `w @` → GitHubで, Tokyoの, OpenAIの (`KANA
 と も へ の や か ね よ から まで より and a few longer ones). The same gates hold: the start reads
 clearly more English than the whole keys, or is a capitalized name (for a kana particle a
 capitalized start that reads as English is enough, since `w @` doesn't look Korean), and a whole
-that is a known English word isn't split. Where a Korean particle fits too, it wins (Claude `p` →
-Claude에). The reading is of kind Mixed.
+that is a known English word isn't split. Where a Korean particle fits too, it wins, even over a
+longer start (Claude `p` → Claude에; Claude `r k` → Claude가, not Clauder + `k` as の). The reading is of kind Mixed.
 
 ### 5.4 Brand names
 

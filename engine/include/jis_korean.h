@@ -108,6 +108,10 @@ uint32_t jk_key(JkEngine *engine, uint32_t key, uint32_t mods);
 /* 1 if the key commits the unconfirmed text as it stands (Space, Enter, Esc, arrows, shortcuts, keys
  * outside the mode's map): while a prediction shows, send it with jk_key_after_prediction. */
 uint32_t jk_key_commits(JkEngine *engine, uint32_t key, uint32_t mods);
+/* Whether `key` keeps a prediction row the user chose: the keys jk_key_commits names, and Space (it
+ * stages a space after the row). With a row chosen, send these with jk_key_after_prediction and
+ * the chosen index. */
+uint32_t jk_key_keeps_choice(JkEngine *engine, uint32_t key, uint32_t mods);
 /* Commits everything unconfirmed: focus loss, app switch, IME switch. */
 void jk_flush(JkEngine *engine);
 /* The IME was switched back to. Nothing to reset since the F8 escape was retired (spec §6.1). */

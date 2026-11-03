@@ -968,6 +968,14 @@ impl Engine {
         }
     }
 
+    /// Whether `key` keeps a prediction row the user chose (↓ / Tab, spec §5.1): every key that
+    /// [`Engine::commits`], and Space, which stages a space after the chosen row (docs/moonshot.md
+    /// §4). With a row chosen, hosts send these through [`Engine::key_after_prediction`]; a top
+    /// prediction nobody chose stays open to the words after it, so Space alone doesn't take it.
+    pub fn keeps_choice(&self, key: Key, mods: Mods) -> bool {
+        self.commits(key, mods) || (key == Key::Space && !mods.is_shortcut())
+    }
+
     /// Commits prediction `index` because the host must (focus loss, a click elsewhere): like
     /// [`Engine::flush`], it isn't a choice, so nothing is learned.
     #[cfg(feature = "predict")]
