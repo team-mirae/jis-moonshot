@@ -155,21 +155,25 @@ int main() {
         Check(!jk::SameKeyDown(0x47, press, 100, 1000, 0x4B, 0x00250001, 100, 1000), "another key");
     }
 
-    // Typed through the map: G K S → 한 (unconfirmed), Space commits it with a space.
-    const Press g = {0x47, 0x22}, k = {0x4B, 0x25}, s = {0x53, 0x1F}, space = {0x20, 0x39};
+    // Typed through the map: G K S → 한 (unconfirmed). Space stages a space; Shift+Space commits
+    // with one (docs/moonshot.md §4).
+    const Press g = {0x47, 0x22}, k = {0x4B, 0x25}, s = {0x53, 0x1F}, space = {0x20, 0x39},
+                shift_space = {0x20, 0x39, true};
     std::string preedit;
     Check(Type(0, {g, k, s}, &preedit).empty() && preedit == "한", "G K S → 한");
-    Check(Type(0, {g, k, s, space}) == "한 ", "한 Space");
+    Check(Type(0, {g, k, s, space}, &preedit).empty() && preedit == "한 ", "한 Space stages");
+    Check(Type(0, {g, k, s, shift_space}) == "한 ", "한 Shift+Space");
     // Spec §6.2: F10 → gks.
     Check((Type(0, {g, k, s, {0x79, 0x44}}, &preedit), preedit == "gks"), "한 F10 → gks");
-    // Shift+Z is ㅋ, no longer F10 (docs/moonshot.md §1).
-    Check((Type(0, {{0x5A, 0x2C, true}, k}, &preedit), preedit == "카"), "Shift+Z K → 카");
+    // Shift+Z is 카 (Shift on a consonant adds ㅏ), no longer F10 (docs/moonshot.md §9.2).
+    Check((Type(0, {{0x5A, 0x2C, true}}, &preedit), preedit == "카"), "Shift+Z → 카");
     // Number row: 1 → ㅃ.
     Check((Type(0, {{0x31, 0x02}}, &preedit), preedit == "ㅃ"), "1 → ㅃ");
-    // Mode A: the @ key (US [) types ㅡㄹ, 을 on its own (docs/moonshot.md §9.2).
-    Check((Type(0, {{0xDB, 0x1A}}, &preedit), preedit == "을"), "Mode A @ → 을");
-    // The key left of 1 (the HHKB's ` key; 半角/全角 on a full JIS board) types ` (spec §3.6).
-    Check((Type(0, {{0xC0, 0x29}}, &preedit), preedit == "`"), "Mode A ` → `");
+    // Mode A: the @ key (US [) types ㅄ's two jamo (docs/moonshot.md §9.2).
+    Check((Type(0, {{0xDB, 0x1A}}, &preedit), preedit == "ㅂㅅ"), "Mode A @ → ㅂㅅ");
+    // The key left of 1 (半角/全角 on a full JIS board) makes what's staged full-width
+    // (docs/moonshot.md §4.1): Shift+1 → 1 → １.
+    Check((Type(0, {{0x31, 0x02, true}, {0xC0, 0x29}}, &preedit), preedit == "１"), "Mode A 1 半角/全角 → １");
     // The modes (docs/moonshot.md §2): A, the three JIS English modes and JIS Kana. Ids have gaps:
     // the menu lists them by index; the retired 1, 2, 9, 10 and unknown ids are refused, which the
     // shell turns into Mode A (SetMode).
