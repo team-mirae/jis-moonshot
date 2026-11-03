@@ -480,6 +480,8 @@ impl Screen {
         if !out.consumed {
             match p.key {
                 Key::Enter => self.doc.push('\n'),
+                // Space with nothing staged is the app's (docs/moonshot.md §4).
+                Key::Space => self.doc.push(' '),
                 Key::Backspace => {
                     self.doc.pop();
                 }
@@ -809,8 +811,10 @@ impl Robot {
         } else if upper == 1 && word.starts_with(|c: char| c.is_ascii_uppercase()) {
             f10 = f10.min(word.len() + 3);
         }
-        // Plus F6 first if the unconfirmed text ends in Hangul.
-        let f10 = f10 + self.screen.ends_in_hangul() as usize;
+        // Plus a commit first if anything is staged: F10 takes the whole staged text
+        // (docs/moonshot.md §4).
+        let staged = !self.screen.engine.preedit().is_empty();
+        let f10 = f10 + staged as usize;
         if switch < f10 {
             // Switching input sources commits whatever is composing, then types the word as is.
             let out = self.screen.engine.flush();
@@ -822,7 +826,9 @@ impl Robot {
             self.expected = want;
             return true;
         }
-        self.break_word();
+        if staged {
+            self.press_all(&[COMMIT]);
+        }
         let key = |c: char, shift: bool| Press { key: Key::from_code(&format!("Key{}", c.to_ascii_uppercase())), shift };
         let f10 = |n: usize| vec![Press::new(Key::F10); n];
         let as_typed: Vec<Press> = word.chars().map(|c| key(c, c.is_ascii_uppercase())).chain(f10(1)).collect();

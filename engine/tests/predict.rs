@@ -100,7 +100,7 @@ fn a_committing_key_acts_on_the_prediction_shown() {
     let shift = Mods { shift: true, ..Mods::NONE };
 
     let mut e = typed("KeyD KeyK KeyS KeyS KeyU KeyD");
-    let out = e.key_after_prediction(english(&e), key("Space"), Mods::NONE);
+    let out = e.key_after_prediction(english(&e), key("Space"), shift);
     assert_eq!((out.commit.as_str(), out.consumed), ("dkssud ", true));
 
     // Plain Enter commits and goes on to the app; Shift+Enter and "Enter commits" only commit.
@@ -118,7 +118,7 @@ fn a_committing_key_acts_on_the_prediction_shown() {
 
     // An index that isn't listed: the key acts on the Korean reading.
     let mut e = typed("KeyG KeyK KeyS");
-    let out = e.key_after_prediction(99, key("Space"), Mods::NONE);
+    let out = e.key_after_prediction(99, key("Space"), shift);
     assert_eq!(out.commit, "한 ");
 }
 
@@ -250,23 +250,23 @@ fn weights_are_clamped() {
 // Shift+Z with predictions (docs/moonshot.md §1: no longer F10)
 
 #[test]
-fn shift_z_types_kieuk_and_z_with_predictions() {
-    // A key like any other: ㅋ in the Korean reading, Z in the English one. Nothing converts.
+fn shift_z_types_ka_and_z_with_predictions() {
+    // Shift+consonant (docs/moonshot.md §9.2): 카 in the Korean reading, Z in the English one.
     let e = typed("KeyG KeyK KeyS KeyR KeyM KeyF S-KeyZ");
-    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("한글ㅋ", "gksrmfZ"));
-    assert!(texts("KeyG KeyK KeyS KeyR KeyM KeyF S-KeyZ").iter().any(|t| t == "한글ㅋ"));
+    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("한글카", "gksrmfZ"));
+    assert!(texts("KeyG KeyK KeyS KeyR KeyM KeyF S-KeyZ").iter().any(|t| t == "한글카"));
     // F10 itself is unchanged.
     assert_eq!(typed("KeyH KeyE KeyL KeyL KeyO F10").preedit(), "hello");
 }
 
 #[test]
-fn shift_z_without_a_predictor_types_kieuk() {
+fn shift_z_without_a_predictor_types_ka() {
     let mut e = Engine::new();
     for code in ["KeyG", "KeyK", "KeyS"] {
         e.key(Key::from_code(code), Mods::NONE);
     }
     e.key(Key::from_code("KeyZ"), Mods::SHIFTED);
-    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("한ㅋ", "gksZ"));
+    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("한카", "gksZ"));
 }
 
 // Mixed words must not take over real Korean
@@ -559,48 +559,13 @@ fn an_implied_l_after_n_is_offered_and_its_weight_0_turns_it_off() {
     assert!(typed("KeyT KeyK KeyF KeyK KeyA").predictions().iter().all(|x| x.kind != Kind::ImpliedL));
 }
 
-// ㄶ for ㄴ + ㅋ / ㅌ / ㅊ (spec §10.5): 않고 is said [안코], so it gets typed that way
-
-fn aspirated(keys: &str) -> Vec<(String, Kind)> {
-    typed(keys).predictions().into_iter().map(|p| (p.text, p.kind)).collect()
-}
+// ㄶ by sound is retired (spec §10.5): ㄶ has its own key (Shift+@, docs/moonshot.md §9.2)
 
 #[test]
-fn nh_read_from_n_and_an_aspirated_consonant_goes_above_the_literal() {
-    // ㅇ ㅏ ㄴ ㅋ ㅗ: 안코 as typed, 않고 meant.
-    let p = aspirated("KeyD KeyK KeyS KeyZ KeyH");
-    assert_eq!(p[0], ("않고".into(), Kind::Aspirated), "{p:?}");
-    assert!(p.iter().any(|(t, _)| t == "안코"), "the literal is still offered: {p:?}");
-    // ㅇ ㅏ ㄴ ㅋ ㅔ: 안케 → 않게.
-    assert_eq!(aspirated("KeyD KeyK KeyS KeyZ KeyP")[0], ("않게".into(), Kind::Aspirated));
-    // After a slot key's vowel (docs/moonshot.md §9): ^ (다) ㄴ ㅋ ㅗ → 닪고 is offered.
-    assert!(aspirated("Equal KeyS KeyZ KeyH").iter().any(|(t, k)| t == "닪고" && *k == Kind::Aspirated));
-    // ㄴ + ㅌ: 만타 → 많다.
-    assert_eq!(aspirated("KeyA KeyK KeyS KeyX KeyK")[0], ("많다".into(), Kind::Aspirated));
-    // ㄴ + ㅊ, with a second ㄴ + ㅊ earlier in the word: 괜찬치 → 괜찮지 (only the last place).
-    let p = aspirated("KeyR KeyH KeyO KeyS KeyC KeyK KeyS KeyC KeyL");
-    assert_eq!(p[0], ("괜찮지".into(), Kind::Aspirated), "{p:?}");
-}
-
-#[test]
-fn nh_stays_below_a_literal_word_and_its_weight_0_turns_it_off() {
-    use jis_korean::predict::Weight;
-    // 만큼 and 한테 are words: the ㄶ readings (많금, 핞데) never pass them.
-    for (keys, word) in [("KeyA KeyK KeyS KeyZ KeyM KeyA", "만큼"), ("KeyG KeyK KeyS KeyX KeyP", "한테")] {
-        let p = aspirated(keys);
-        assert_eq!(p[0].0, word, "{p:?}");
-    }
-    // Neither known (귀찬케 / 귀찮게): one step below the literal.
-    let p = aspirated("KeyR KeyN KeyL KeyC KeyK KeyS KeyZ KeyP");
-    let at = |t: &str| p.iter().position(|(x, _)| x == t);
-    assert!(at("귀찬케").is_some() && at("귀찮게").is_some() && at("귀찬케") < at("귀찮게"), "{p:?}");
-    // Only after a ㄴ final and before a vowel: 사람 and 안ㅋ have none.
-    assert!(aspirated("KeyT KeyK KeyF KeyK KeyA").iter().all(|(_, k)| *k != Kind::Aspirated));
-    assert!(aspirated("KeyD KeyK KeyS KeyZ").iter().all(|(_, k)| *k != Kind::Aspirated));
-    // It shares the implied ㄹ slider (both spell what was heard): 0 turns it off.
-    let mut e = typed("KeyD KeyK KeyS KeyZ KeyH");
-    e.set_prediction_weight(Weight::ImpliedL, 0.0);
-    assert!(e.predictions().iter().all(|x| x.kind != Kind::Aspirated), "{:?}", e.predictions());
+fn n_and_an_aspirated_consonant_stay_as_typed() {
+    // ㅇ ㅏ ㄴ ㅋ ㅗ is 안코: no 않고 reading any more; ㅇ ㅏ Shift+@ ㄱ ㅗ types 않고.
+    assert!(!texts("KeyD KeyK KeyS KeyZ KeyH").iter().any(|t| t == "않고"));
+    assert_eq!(typed("KeyD KeyK S-BracketLeft KeyR KeyH").preedit(), "않고");
 }
 
 /// The standard 2-set reading (spec §10.2) types the stock JIS symbol: Shift+2 is ".
@@ -707,9 +672,9 @@ fn a_word_in_capitals_is_an_acronym() {
 
 #[test]
 fn a_lone_capital_beside_latin_pieces_is_a_letter() {
-    // Mode A's punctuation is , . · (docs/moonshot.md §9).
-    assert_eq!(top("S-KeyK S-Slash S-KeyI S-KeyF S-KeyR S-KeyS").0, "K·IFRS");
-    assert_eq!(top("S-KeyC S-KeyT S-Slash S-KeyP S-Digit1 S-Digit3").0, "CT·P13");
+    // Mode A's punctuation is , and · (on ¥, docs/moonshot.md §9).
+    assert_eq!(top("S-KeyK IntlYen S-KeyI S-KeyF S-KeyR S-KeyS").0, "K·IFRS");
+    assert_eq!(top("S-KeyC S-KeyT IntlYen S-KeyP S-Digit1 S-Digit3").0, "CT·P13");
     // A lowercase one stays Korean: USD,에.
     assert_eq!(top("S-KeyU S-KeyS S-KeyD S-Comma KeyP").0, "USD,에");
 }
@@ -739,4 +704,66 @@ fn the_learned_ranker_refuses_a_malformed_model() {
     }
     // Dropping it gives the rules back.
     assert!(!p.without_learned().is_learned());
+}
+
+#[test]
+fn a_reading_ending_in_a_symbol_offers_its_variants() {
+    // docs/moonshot.md §5.2: right after the reading, of its kind, as a Japanese IME offers 、 ，.
+    assert_eq!(texts("S-Comma")[..3], [",", "、", "，"]);
+    let after = texts("KeyG KeyK KeyS S-Comma");
+    assert_eq!(after[..3], ["한,", "한、", "한，"]);
+    // Every reading, not only the top one; never the standard 2-set reading's stock symbols.
+    assert!(after.iter().any(|t| t == "gks、"), "{after:?}");
+    assert!(!after.iter().any(|t| t == "한＜"), "{after:?}");
+    // · on ¥ offers the Japanese middle dots; the English reading's period offers 。 … and ...
+    assert_eq!(texts("IntlYen")[..3], ["·", "・", "･"]);
+    let hello = texts("KeyH KeyE KeyL KeyL KeyO Period");
+    for want in ["hello.", "hello。", "hello…", "hello..."] {
+        assert!(hello.iter().any(|t| t == want), "{want}: {hello:?}");
+    }
+    // Only a symbol at the end.
+    assert!(!texts("KeyG KeyK KeyS S-Comma KeyG KeyK").iter().any(|t| t.contains('、')));
+}
+
+#[test]
+fn an_english_word_takes_a_japanese_particle_read_as_kana() {
+    // docs/moonshot.md §5.3: as Claude에, the ending's keys read as JIS kana when they make a
+    // Japanese particle: k の, f は, w @ で.
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyK"), ("Claudeの".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyF"), ("Claudeは".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyT KeyO KeyK KeyY KeyO KeyK"), ("Tokyoの".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyG KeyI KeyT S-KeyH KeyU KeyB KeyW BracketLeft"), ("GitHubで".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyO KeyP KeyE KeyN S-KeyA S-KeyI KeyK"), ("OpenAIの".into(), Kind::Mixed));
+    // A Korean particle still wins where both fit: Claude + p is Claude에.
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyP"), ("Claude에".into(), Kind::Mixed));
+}
+
+#[test]
+fn an_ending_typed_with_its_ieung_keeps_the_start_whole() {
+    // Claude + d p (에 with its ㅇ) is Claude에, not Clauded + p; a known word still takes the d
+    // (Android + p is Android에, not Androi + d p).
+    assert_eq!(top("S-KeyC KeyL KeyA KeyU KeyD KeyE KeyD KeyP"), ("Claude에".into(), Kind::Mixed));
+    assert_eq!(top("S-KeyA KeyN KeyD KeyR KeyO KeyI KeyD KeyP"), ("Android에".into(), Kind::Mixed));
+}
+
+#[test]
+fn a_brand_is_suggested_in_its_default_script_below_what_was_typed() {
+    // docs/moonshot.md §5.4: by country of origin; only suggested, right below the reading that
+    // spells it, never above.
+    let after = |keys: &str, typed: &str, brand: &str| {
+        let t = texts(keys);
+        let at = t.iter().position(|x| x == typed).unwrap_or_else(|| panic!("{typed}: {t:?}"));
+        assert_eq!(t.get(at + 1).map(String::as_str), Some(brand), "{t:?}");
+    };
+    // An American brand typed in Korean: English. Japanese ones: Japanese, typed either way.
+    after("KeyT KeyM KeyX KeyK KeyQ KeyJ KeyR KeyT KeyM", "스타벅스", "Starbucks");
+    after("KeyR KeyN KeyR KeyM KeyF", "구글", "Google");
+    after("KeyT KeyH KeyS KeyL", "소니", "ソニー");
+    after("KeyH KeyO KeyN KeyD KeyA", "honda", "ホンダ");
+    // Before a particle, the particle stays.
+    after("KeyT KeyM KeyX KeyK KeyQ KeyJ KeyR KeyT KeyM KeyD KeyP", "스타벅스에", "Starbucks에");
+    // A Korean brand typed in Korean is already in its script: nothing to add.
+    assert!(!texts("KeyT KeyK KeyA KeyT KeyJ KeyD").iter().any(|t| t == "Samsung"));
+    // The kana of Korean typing, or a short English start, isn't matched (rnr isn't スミス).
+    assert!(typed("KeyR KeyN KeyR KeyM KeyF").predictions().iter().filter(|p| p.kind == Kind::Brand).count() == 1);
 }

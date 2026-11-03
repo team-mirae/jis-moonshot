@@ -179,8 +179,9 @@ export function App({ engine }: { engine: Engine }) {
     // An OS input method is composing: these keys aren't ours.
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     setPressed((p) => new Set(p).add(e.code));
-    // With predictions on, Space commits the top reading (and types the space).
-    if (e.code === "Space" && readings.length && !(e.ctrlKey || e.altKey || e.metaKey)) {
+    // With predictions on, Shift+Space commits the top reading (and types the space); plain Space
+    // stages a space (docs/moonshot.md §4), which the engine does.
+    if (e.code === "Space" && (e.shiftKey || shift) && readings.length && !(e.ctrlKey || e.altKey || e.metaKey)) {
       e.preventDefault();
       pick(0, " ");
       return;
@@ -325,8 +326,8 @@ export function App({ engine }: { engine: Engine }) {
   }
 
   function onScreenKey(code: string) {
-    // As on a real keyboard: with predictions showing, Space commits the top one.
-    if (code === "Space" && readings.length) {
+    // As on a real keyboard: with predictions showing, Shift+Space commits the top one.
+    if (code === "Space" && shift && readings.length) {
       pick(0, " ");
       setShift(false);
       surface.current?.focus();
@@ -552,15 +553,15 @@ export function App({ engine }: { engine: Engine }) {
           </div>
           <div>
             <dt>Shift+Z</dt>
-            <dd>A key like any other: ㅋ in Korean (standard 2-set), っ in kana, Z in English. It's no longer F10.</dd>
+            <dd>카 in Korean (Shift on a consonant adds ㅏ), っ in kana, Z in English. It's no longer F10.</dd>
           </div>
           <div>
-            <dt>Space</dt>
-            <dd>Commits what's shown and types a space; after F6 / F7 or in JIS Kana, a full-width space. Shift+Enter commits only.</dd>
+            <dt>Space · Shift+Space</dt>
+            <dd>Space adds a space and keeps typing unconfirmed, so the words are read together. Shift+Space commits what's shown and types a space (after F6 / F7 or in JIS Kana, a full-width one). Shift+Enter commits only.</dd>
           </div>
           <div>
             <dt>Predictions</dt>
-            <dd>Always on: the likeliest reading of what you typed (Korean, English, kana, plain 2-set, …) is highlighted, and Space commits it. Click another to use it instead. The input methods ask you to accept predictive typing once, before they type anything.</dd>
+            <dd>Always on: the likeliest reading of what you typed (Korean, English, kana, plain 2-set, …) is highlighted, and Shift+Space commits it. Click another to use it instead. The input methods ask you to accept predictive typing once, before they type anything.</dd>
           </div>
           <div>
             <dt>英数 / かな</dt>
@@ -666,6 +667,7 @@ const KIND_LABELS: Record<PredictionKind, string> = {
   kana: "かな",
   katakana: "カナ",
   kanji: "漢字",
+  brand: "™",
 };
 
 /** The predictive layer's ranked readings of the staged text, top one first. */
@@ -689,7 +691,7 @@ function PredictionList({ readings, label, onPick }: { readings: Prediction[]; l
           {r.text}
         </span>
       ))}
-      {(!label || label === "Rules") && <span className="prediction-hint">Space</span>}
+      {(!label || label === "Rules") && <span className="prediction-hint">Shift+Space</span>}
     </span>
   );
 }

@@ -3,9 +3,10 @@
 //! keys setting on and off.
 //!
 //! JIS Moonshot moved the keys standard 2-set (KS X 5002) puts on Shift (docs/moonshot.md §9,
-//! 2026-11-02, the owner's call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 and ㅒ ㅖ on : and ;, and Shift on Q W E R
-//! T types the plain consonant, as it does on every other consonant key. Everything else is KS X
-//! 5002 and is held to it here, as strictly as before.
+//! 2026-11-02, the owner's call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 and ㅒ ㅖ on : and ;. Since 2026-11-03
+//! (the owner's call again) Shift on a consonant key types the consonant and ㅏ (Shift+R → 가), so
+//! Shift held on consonants is no longer a way of typing 2-set and isn't tested. Everything else is
+//! KS X 5002 and is held to it here, as strictly as before.
 //!
 //! "Conventional" means each syllable starts with its consonant key (ㅇ included), compound vowels
 //! and double finals are typed as two keys, and double consonants and ㅒ ㅖ take their own keys.
@@ -113,9 +114,6 @@ fn every_syllable() -> impl Iterator<Item = char> {
 enum Style {
     /// 2-set as taught, the doubles and ㅒ ㅖ on their own keys.
     Conventional,
-    /// Shift held anyway on the consonant letter keys, where it changes nothing (Shift+A is still ㅁ,
-    /// Shift+Z still ㅋ, and in JIS Moonshot Shift+Q still ㅂ).
-    ShiftHeldOnConsonants,
     /// JIS Korean's shortcuts: 1–5 for ㅃ ㅉ ㄸ ㄲ ㅆ, 6–0 for ㅟ ㅝ ㅚ ㅢ ㅘ (spec §3.1).
     DedicatedKeys,
 }
@@ -143,8 +141,6 @@ fn jamo_presses(jamo: char, style: Style) -> Vec<Press> {
         return [jamo_presses(a, style), jamo_presses(b, style)].concat();
     }
     let (code, shift) = key_of(jamo);
-    let shift_ignored = INITIALS.contains(jamo) && code.starts_with("Key");
-    let shift = shift || (matches!(style, Style::ShiftHeldOnConsonants) && shift_ignored);
     vec![(code, shift)]
 }
 
@@ -225,7 +221,7 @@ fn the_pangram_types_conventionally_in_every_mode() {
     // Every Korean mode: JIS English (spec §3.6.2) types English, not 2-set.
     for &mode in Mode::ALL.iter().filter(|m| m.is_korean()) {
         for symbols in [true, false] {
-            for style in [Style::Conventional, Style::ShiftHeldOnConsonants, Style::DedicatedKeys] {
+            for style in [Style::Conventional, Style::DedicatedKeys] {
                 let (presses, typable) = text_presses(PANGRAM, mode, symbols, style);
                 // Only ASCII punctuation may be left out, never Hangul or a space.
                 let left_out: String = PANGRAM.chars().filter(|c| !c.is_ascii_punctuation()).collect();
@@ -242,7 +238,7 @@ fn every_syllable_types_conventionally_in_every_mode() {
     for &mode in Mode::ALL.iter().filter(|m| m.is_korean()) {
         for symbols in [true, false] {
             for syllable in every_syllable() {
-                for style in [Style::Conventional, Style::ShiftHeldOnConsonants, Style::DedicatedKeys] {
+                for style in [Style::Conventional, Style::DedicatedKeys] {
                     let presses = syllable_presses(syllable, style);
                     assert_eq!(typed_with(mode, symbols, &presses), syllable.to_string(), "{mode:?} symbols {symbols} {presses:?}");
                 }
@@ -268,9 +264,11 @@ fn every_syllable_then_every_initial_types_both() {
 #[test]
 fn the_core_principle_examples() {
     let presses = |keys: &[Press]| keys.to_vec();
-    // ㅃ is on 1, and Shift+Q types ㅂ like Shift on any other consonant (docs/moonshot.md §9).
+    // ㅃ is on 1, and Shift+Q types 바 like Shift on any other consonant: the consonant and ㅏ
+    // (docs/moonshot.md §9).
     assert_eq!(typed(Mode::A, &presses(&[("Digit1", false), ("KeyK", false)])), "빠");
-    assert_eq!(typed(Mode::A, &presses(&[("KeyQ", true), ("KeyK", false)])), "바");
+    assert_eq!(typed(Mode::A, &presses(&[("KeyQ", true)])), "바");
+    assert_eq!(typed(Mode::A, &presses(&[("KeyQ", true), ("KeyS", false)])), "반");
     // ㅒ ㅖ are on : and ;, and Shift+O / Shift+P start a syllable on ㅇ like Shift on any vowel.
     assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("Quote", false)])), "걔");
     assert_eq!(typed(Mode::A, &presses(&[("KeyR", false), ("Semicolon", false)])), "계");

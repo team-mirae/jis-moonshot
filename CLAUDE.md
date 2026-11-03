@@ -21,11 +21,12 @@ reading. The owner doesn't expect it to become a usable product; it's an experim
 Every valid standard 2-set key and combination still types what it always did. Dedicated keys add
 shortcuts; they never remove anything. ㅗ+ㅏ is still ㅘ, and double finals still compose. The
 sanctioned exceptions are listed in spec §1: the implied ㅇ (ㅏ → 아) and Shift+vowel starting a
-syllable on ㅇ. Shift+Z is no longer F10: it's ㅋ (standard 2-set) again, and っ in kana.
+syllable on ㅇ. Shift+Z is no longer F10: it's 카 (Shift+consonant), and っ in kana.
 
 JIS Moonshot moved what standard 2-set puts on Shift (docs/moonshot.md §9, the owner's call,
-2026-11-02): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only and ㅒ ㅖ on `:` and `;`; Shift+Q W E R T type the plain
-consonant, and Shift on every vowel key, O and P included, starts a syllable on ㅇ. The baseline holds every other key to standard 2-set.
+2026-11-02): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only and ㅒ ㅖ on `:` and `;`; Shift on every vowel key, O and
+P included, starts a syllable on ㅇ. Since 2026-11-03 (§9.2) Shift on a consonant key types the
+consonant and ㅏ (Shift+R → 가), so Shift held over consonants no longer types 2-set. The baseline holds every other key to standard 2-set.
 
 ## Layout
 
@@ -72,6 +73,9 @@ iPhone are out of scope.
 - Kanji (docs/moonshot.md §5.1): `python3 engine/tools/kanji/build_kanji.py` fetches Mozc's
   open-source dictionary at a pinned commit (cached, gitignored) and writes `engine/predict/kanji.bin`,
   `LICENSE-mozc.txt` and `tests/data/kanji-evaluation.tsv`. `tests/kanji.rs` holds the accuracy floor.
+- Brands (docs/moonshot.md §5.4): `python3 -I engine/tools/brands/build_brands.py` queries Wikidata
+  (CC0) and writes `engine/predict/brands.tsv`, compiled into the engine; queries are cached in the
+  gitignored `corpora/brands/`.
 - Corpus tools (from the dropped Minecraft mod): `engine/tools/corpora/` (`fetch_corpora.py`,
   `build_ranker.py`, the Mirae word lists).
 - Windows: `tools/build.ps1` in `/windows` (x64 + x86, runs the shell tests),

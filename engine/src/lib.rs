@@ -4,6 +4,8 @@
 //! (`include/jis_korean.h`).
 
 mod engine;
+#[cfg(feature = "predict")]
+pub mod brands;
 pub mod ffi;
 mod hangul;
 #[cfg(feature = "predict")]
@@ -16,8 +18,10 @@ pub mod kana;
 mod key;
 mod layout;
 pub mod plan;
+pub mod punctuation;
 pub mod resolve;
 pub mod travel;
+pub mod width;
 #[cfg(feature = "predict")]
 pub mod learn;
 #[cfg(all(feature = "predict", not(feature = "legacy-predict")))]
@@ -27,6 +31,6 @@ pub mod predict;
 #[cfg(feature = "predict")]
 pub mod trust;
 
-pub use engine::{Candidate, Candidates, Engine, Output, PAGE_SIZE, Script, full_width, half_width};
+pub use engine::{Candidate, Candidates, Engine, HostEdit, Output, PAGE_SIZE, Script, full_width, half_width};
 pub use key::{Key, Mods};
 pub use layout::{Action, Layout, Mode, Out, Step, output, output_in, output_with};

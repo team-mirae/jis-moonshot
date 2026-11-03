@@ -72,7 +72,7 @@ pub fn type_keys(template: &Engine, presses: &[impl AsRef<str>]) -> Option<Strin
 /// above [`MAX_PRESSES`] is cut to it.
 ///
 /// The search follows key presses whose text heads toward `text` (its Hangul jamo, its letters as
-/// typed or converted with F9/F10), and keeps a combination only
+/// typed or converted with F10), and keeps a combination only
 /// when typing it really shows `text`.
 pub fn keys_for_output(template: &Engine, text: &str, min: i64, max: i64) -> Vec<Vec<String>> {
     if min < 1 || max < min || text.is_empty() {
@@ -181,7 +181,7 @@ fn search(
 
 /// The presses a search for `text` tries, plain before Shift: the keys whose character (in the
 /// mode's layout) or letter is part of `text`, Shift+Enter (commit, before a bare jamo), and only
-/// where `text` needs them F9 (full-width), F10 (letters), Space and Enter.
+/// where `text` needs them 半角/全角 (full-width), F10 (letters), Space and Enter.
 /// Backspace, Esc, the arrows and Tab are left out: they never shorten a way to type something.
 /// F6 and F7 switch to kana and F8 to kanji (docs/moonshot.md §4), which no Korean or English
 /// text needs.
@@ -198,6 +198,7 @@ fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> 
                     Step::Jamo(j) => part_of_text(j),
                     Step::Ieung(j) => part_of_text('ㅇ') && part_of_text(j),
                     Step::Break => true,
+                    Step::Blank => false,
                 })
         }
         _ => part_of_text(out.char()),
@@ -215,8 +216,9 @@ fn alphabet(template: &Engine, text: &str, targets: &[Vec<char>]) -> Vec<Press> 
     let has = |f: &dyn Fn(char) -> bool| text.chars().any(f);
     let mut keys = vec![];
     presses.push(Press { key: Key::Enter, shift: true });
+    // Full-width forms come from 半角/全角 (docs/moonshot.md §4.1).
     if has(&|c| crate::half_width(c) != c) {
-        keys.push(Key::F9);
+        keys.push(Key::Backquote);
     }
     if has(&|c| c.is_ascii_alphanumeric()) {
         keys.push(Key::F10);
@@ -251,7 +253,7 @@ impl Field {
     /// A key that types nothing in the current layout would pass through to the app, whose text
     /// we can't know: those aren't pressed.
     fn can_press(&self, p: Press) -> bool {
-        matches!(p.key, Key::F9 | Key::F10 | Key::Space | Key::Enter)
+        matches!(p.key, Key::Backquote | Key::F10 | Key::Space | Key::Enter)
             || output_with(self.engine.mode(), self.engine.dedicated_symbols(), Layout::JisKorean, p.key, p.shift).is_some()
     }
 
@@ -270,24 +272,28 @@ impl Field {
     }
 
     fn press(&mut self, p: Press) {
-        if matches!(p.key, Key::Space | Key::Enter) && self.shown_prediction().is_some() {
-            #[cfg(feature = "predict")]
-            {
-                self.committed += &self.engine.commit_prediction(0).commit;
-                if p.key == Key::Space {
-                    self.committed.push(' ');
-                    return;
-                }
-            }
-        }
-        let out = self.engine.key(p.key, if p.shift { Mods::SHIFTED } else { Mods::NONE });
+        let mods = if p.shift { Mods::SHIFTED } else { Mods::NONE };
+        // A key that commits takes the prediction on screen, as the shells do (jk_key_commits).
+        #[cfg(feature = "predict")]
+        let out = if self.engine.commits(p.key, mods) && self.shown_prediction().is_some() {
+            self.engine.key_after_prediction(0, p.key, mods)
+        } else {
+            self.engine.key(p.key, mods)
+        };
+        #[cfg(not(feature = "predict"))]
+        let out = self.engine.key(p.key, mods);
         self.committed += &out.commit;
-        if !out.consumed && p.key == Key::Enter {
-            self.committed.push('\n');
+        if !out.consumed {
+            match p.key {
+                Key::Enter => self.committed.push('\n'),
+                // Space with nothing staged is the app's (docs/moonshot.md §4).
+                Key::Space => self.committed.push(' '),
+                _ => {}
+            }
         }
     }
 
-    /// Whether a press changed nothing (Shift+Enter with nothing staged, F9 with no word, …): such presses
+    /// Whether a press changed nothing (Shift+Enter with nothing staged, F10 with nothing staged, …): such presses
     /// aren't a way to type anything, so searches skip them.
     fn same_as(&self, before: &Field) -> bool {
         self.committed == before.committed
@@ -304,7 +310,7 @@ impl Field {
     }
 
     /// Whether the field is on the way to one of the targets: its Korean, or its keys read as
-    /// letters (before F9/F10), lead into a target.
+    /// letters (before F10), lead into a target.
     fn heads_toward(&self, targets: &[Vec<char>]) -> bool {
         let korean = stream(&(self.committed.clone() + &self.engine.preedit()));
         let english = stream(&(self.committed.clone() + &self.engine.english()));

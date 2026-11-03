@@ -78,12 +78,13 @@ export interface Prediction {
 
 export type PredictionKind =
   | "korean" | "english" | "capitalized" | "upper" | "two-set" | "keep-finals" | "bare" | "mixed" | "implied-l"
-  | "kana" | "katakana" | "kanji";
+  | "kana" | "katakana" | "kanji" | "brand";
 /** Indexed by C ABI id (JK_PREDICTION_*): kana (10) and katakana (11) are the kana reading, kanji
- * (12) its conversions. 6 was hanja (gone): a hole, so the ids after it stay. */
+ * (12) its conversions, brand (14) a brand in its default script. 6 was hanja and 13 the ㄶ
+ * reading (both gone): holes, so the ids after them stay. */
 const KINDS: (PredictionKind | undefined)[] = [
   "korean", "english", "capitalized", "upper", "two-set", "keep-finals", undefined, "bare", "mixed", "implied-l",
-  "kana", "katakana", "kanji",
+  "kana", "katakana", "kanji", undefined, "brand",
 ];
 
 /** The Japanese readings: shown in a Japanese font, so kanji take their Japanese forms. */

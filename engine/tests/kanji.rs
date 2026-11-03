@@ -176,7 +176,7 @@ fn f8_puts_kanji_on_top_until_the_commit() {
     assert!(texts(&list).contains(&"한"), "{list:?}");
     // The top conversion commits; the next segment is Auto again.
     let top = list[0].0.clone();
-    let out = e.key_after_prediction(0, Key::Space, Mods::NONE);
+    let out = e.key_after_prediction(0, Key::Space, Mods::SHIFTED);
     assert_eq!(out.commit, format!("{top} "));
     assert!(!e.kanji_forced());
     press(&mut e, "KeyG KeyK KeyS");

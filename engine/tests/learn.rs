@@ -149,8 +149,8 @@ fn deleting_only_the_space_after_an_accepted_word_is_no_regret() {
     for c in "dkssud".chars() {
         e.key(Key::from_code(&format!("Key{}", c.to_ascii_uppercase())), Mods::NONE);
     }
-    // Space takes the top prediction and adds a space.
-    assert!(e.key_after_prediction(0, Key::Space, Mods::NONE).commit.ends_with(' '));
+    // Shift+Space takes the top prediction and adds a space.
+    assert!(e.key_after_prediction(0, Key::Space, Mods::SHIFTED).commit.ends_with(' '));
     let before = e.learner().clone();
     // The first Backspace only deletes the space…
     e.key(Key::Backspace, Mods::NONE);
@@ -217,7 +217,7 @@ fn a_commit_key_on_the_korean_top_is_an_accept_and_a_flush_is_no_choice() {
     e.set_predictor(Some(predictor()));
     e.set_learning(true);
     typed(&mut e);
-    assert_eq!(e.key(Key::Space, Mods::NONE).commit, "안녕 ");
+    assert_eq!(e.key(Key::Space, Mods::SHIFTED).commit, "안녕 ");
     assert_ne!(*e.learner(), Learner::default());
 
     let mut e = Engine::new();

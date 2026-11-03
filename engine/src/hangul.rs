@@ -92,6 +92,14 @@ impl Composer {
         Composer { options, ..Composer::default() }
     }
 
+    /// A jamo after the first of a key's action (the ㅏ of Shift+ㄱ's 가, docs/moonshot.md §9.3):
+    /// it composes like any jamo, but isn't a press, so the same vowel typed next isn't a double
+    /// press (하 + 가 + ㅏ → 하가아, not 학아).
+    pub fn part(&mut self, j: char) {
+        self.jamo(j);
+        self.moved = None;
+    }
+
     pub fn jamo(&mut self, j: char) {
         let moved = self.moved.take();
         if is_medial(j) {

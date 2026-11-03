@@ -1,7 +1,7 @@
 {
   "name": "jis-moonshot-web",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "wasm": "cargo build --manifest-path ../engine/Cargo.toml --release --target wasm32-unknown-unknown && node tools/copy-engine.mjs",

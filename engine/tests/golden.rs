@@ -76,10 +76,10 @@ fn doc(keys: &str, expected_doc: &str, expected_preedit: &str) {
 // §1 Core principle
 
 #[test]
-fn key_1_types_ssangbieup_and_shift_q_bieup() {
-    // docs/moonshot.md §9: the doubles are on 1–5; Shift on Q types ㅂ like Shift on any consonant.
+fn key_1_types_ssangbieup_and_shift_q_ba() {
+    // docs/moonshot.md §9: the doubles are on 1–5; Shift on Q types 바 like Shift on any consonant.
     pre("Digit1 KeyK", "빠");
-    pre("S-KeyQ KeyK", "바");
+    pre("S-KeyQ", "바");
 }
 
 #[test]
@@ -95,14 +95,21 @@ fn double_finals_compose() {
 }
 
 #[test]
-fn shift_on_q_w_e_r_t_types_the_plain_consonant() {
-    for letter in ["KeyQ", "KeyW", "KeyE", "KeyR", "KeyT"] {
+fn shift_on_a_consonant_types_it_with_a() {
+    // docs/moonshot.md §9.2: Shift+consonant is the consonant and ㅏ, as if both keys were pressed.
+    for letter in ["KeyQ", "KeyW", "KeyE", "KeyR", "KeyT", "KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyZ", "KeyX", "KeyC", "KeyV"] {
         let mut a = Host::new();
         let mut b = Host::new();
-        a.keys(&format!("{letter} KeyK {letter}"));
-        b.keys(&format!("S-{letter} KeyK S-{letter}"));
+        a.keys(&format!("KeyG {letter} KeyK KeyS"));
+        b.keys(&format!("KeyG S-{letter} KeyS"));
         assert_eq!(a.preedit, b.preedit, "{letter}");
     }
+    pre("S-KeyR S-KeyR", "가가");
+    pre("KeyG KeyK S-KeyS", "하나");
+    // A final before it moves, as before any ㅏ: 갑 + Shift+T → 갑사.
+    pre("KeyR KeyK KeyQ S-KeyT", "갑사");
+    // Backspace takes the key off whole.
+    pre("KeyG S-KeyS Backspace", "ㅎ");
 }
 
 #[test]
@@ -136,15 +143,6 @@ fn the_keys_right_of_0_type_their_actions() {
     pre("KeyE Minus", "돼");
     pre("KeyA KeyK KeyF Minus", "마뢔");
     pre("KeyA KeyK KeyF S-Minus", "말왜");
-    pre("KeyG KeyK Equal", "하다");
-    pre("KeyS KeyK S-Equal", "나도");
-    pre("KeyG KeyK IntlYen", "하나");
-    pre("KeyG KeyK S-IntlYen", "하니");
-    pre("KeyR BracketLeft", "글");
-    pre("KeyA KeyK BracketLeft", "마을");
-    pre("KeyA KeyK KeyF BracketLeft", "마를");
-    pre("KeyC KeyO KeyR S-BracketLeft", "책을");
-    pre("KeyA KeyK KeyF S-BracketLeft", "말을");
     pre("KeyR KeyK KeyF BracketRight KeyK", "갈아");
     pre("KeyR KeyK KeyF S-BracketRight KeyK", "갈아");
     pre("KeyR KeyK BracketRight KeyT", "가ㅅ");
@@ -152,40 +150,68 @@ fn the_keys_right_of_0_type_their_actions() {
     pre("KeyA KeyK KeyF S-Semicolon", "말예");
     pre("KeyR Quote", "걔");
     pre("S-Quote KeyR KeyL", "얘기");
-    pre("KeyS KeyK Backslash", "나무");
-    pre("KeyR KeyH KeyD S-Backslash", "공부");
     pre("KeyG Comma", "희");
-    pre("KeyD KeyJ Period", "없");
-    pre("Slash KeyD KeyL KeyF", "메일");
-    pre("KeyD KeyM IntlRo", "으로");
-    pre("IntlRo KeyR", "록");
-    pre("KeyD KeyM S-IntlRo KeyR", "으로ㄱ");
-    // Korean keeps , . · on Shift.
-    pre("S-Comma S-Period S-Slash", ",.·");
+    // 2026-11-03: ^ 가 / 께서, ¥ ·, @ ㅄ / ㄶ, ] ㄴ / ㄹ, . 을 / 를, / 서 / 에서, ろ 로 / 으로.
+    pre("KeyG KeyK Equal", "하가");
+    pre("KeyT KeyJ KeyS KeyT KeyO KeyD KeyS KeyL KeyA S-Equal", "선생님께서");
+    pre("KeyA KeyK KeyF IntlYen KeyR KeyK", "말·가");
+    pre("KeyD KeyJ BracketLeft", "없");
+    pre("KeyA KeyK S-BracketLeft KeyD KeyL", "많이");
+    pre("KeyR KeyK Backslash", "간");
+    pre("KeyR KeyK S-Backslash", "갈");
+    pre("KeyC KeyO KeyR Period", "책을");
+    pre("KeyT KeyK KeyR KeyH KeyK S-Period", "사과를");
+    pre("KeyD KeyJ KeyQ Slash", "업서");
+    pre("KeyG KeyK KeyR KeyR KeyY S-Slash", "학교에서");
+    pre("KeyT KeyJ KeyN KeyF IntlRo", "서울로");
+    pre("KeyW KeyL KeyQ S-IntlRo", "집으로");
+    // Korean keeps , on Shift.
+    pre("S-Comma", ",");
+}
+
+#[test]
+fn the_empty_slot_types_nothing() {
+    // docs/moonshot.md §9.2: Shift+¥ is the one slot left empty: nothing in Korean, and the
+    // syllable goes on across it.
+    pre("KeyG KeyK S-IntlYen KeyS", "한");
+    // Still a key: Backspace takes it off, and F10 reads it.
+    pre("KeyR KeyK S-IntlYen Backspace KeyS", "간");
+    pre("KeyR S-IntlYen F10", "r|");
+}
+
+#[test]
+fn a_break_typed_first_shows_as_arae_a() {
+    // docs/moonshot.md §9.1: a lone break is on screen as ㆍ (U+318D); anything typed after it
+    // reads as before.
+    pre("BracketRight", "\u{318D}");
+    pre("BracketRight BracketRight", "\u{318D}\u{318D}");
+    pre("BracketRight KeyK", "아");
+    pre("BracketRight KeyR KeyK", "가");
 }
 
 #[test]
 fn f10_reads_every_key_of_an_action_once() {
     // An action's parts belong to its key: ろ (로) converts to one \\, ^ (다) to one ^.
     pre("KeyI S-KeyP KeyH KeyO KeyN KeyE F10", "iPhone");
-    pre("KeyR Equal F10", "r^");
-    pre("KeyR IntlRo F10", "r\\");
+    pre("KeyR Minus F10", "r-");
+    pre("KeyR S-Semicolon F10", "r+");
 }
 
 #[test]
 fn backspace_takes_a_whole_key_off() {
     pre("KeyG KeyK Equal Backspace", "하");
-    pre("KeyD KeyM S-IntlRo Backspace", "으");
-    pre("KeyD KeyJ Period Backspace", "어");
-    pre("KeyA KeyK KeyF S-BracketLeft Backspace", "말");
+    pre("KeyW KeyL KeyQ S-IntlRo Backspace", "집");
+    pre("KeyD KeyJ BracketLeft Backspace", "어");
+    pre("KeyA KeyK S-BracketLeft Backspace", "마");
+    pre("KeyG KeyK S-Equal Backspace", "하");
 }
 
 #[test]
-fn f9_and_f10_convert_every_symbol_with_a_form_in_that_width() {
-    pre("S-Comma S-Period F9", "，．");
-    // A symbol with no other form stays, and the run goes on past it: · has none.
-    pre("S-Comma S-Slash S-Comma F9", "，·，");
-    pre("S-Comma S-Slash S-Comma F9 F10", ",·,");
+fn hankaku_zenkaku_converts_every_symbol_with_a_form_in_that_width() {
+    pre("S-Comma S-Comma Backquote", "，，");
+    // A symbol with no other form stays: · has none.
+    pre("S-Comma IntlYen S-Comma Backquote", "，·，");
+    pre("S-Comma IntlYen S-Comma Backquote S-Backquote", ",·,");
 }
 
 #[test]
@@ -194,16 +220,14 @@ fn shift_ignored_on_vowels_without_shifted_forms() {
 }
 
 #[test]
-fn shift_still_held_after_a_consonant_moves_it_like_any_final() {
-    // Shift on a consonant changes nothing, so a Shift+vowel right after it is Shift still held:
-    // the vowel takes the consonant, as after any final.
-    pre("KeyR KeyK S-KeyR S-KeyK KeyD KeyL", "가가이");
-    pre("KeyQ KeyL S-KeyT S-KeyK", "비사");
-    // After the dedicated ㅆ key, Shift is new: the vowel starts on ㅇ.
+fn shift_vowel_starts_on_ieung_after_a_final() {
+    // No Shift is "still held" over (docs/moonshot.md §9.3): Shift on a consonant types its ㅏ.
     pre("KeyD KeyL Digit5 S-KeyJ", "있어");
     pre("KeyD KeyL Digit5 KeyJ", "이써");
-    // Only right after the consonant: a Shift+vowel later still starts on ㅇ.
-    pre("KeyD KeyL S-KeyT S-KeyJ S-KeyK", "이서아");
+    pre("KeyD KeyL S-KeyT S-KeyJ", "이사어");
+    // A vowel that's part of a key's action isn't a press: the same vowel next is no double press.
+    pre("KeyG KeyK Equal KeyK", "하가아");
+    pre("KeyR KeyK S-KeyS KeyK", "가나아");
 }
 
 // §4.1 Automaton
@@ -300,14 +324,15 @@ fn backspace_removes_one_jamo_keystroke() {
 
 #[test]
 fn backspace_with_nothing_unconfirmed_passes_through() {
-    doc("KeyR KeyK Space Backspace Backspace", "", "");
+    doc("KeyR KeyK S-Space Backspace Backspace", "", "");
 }
 
 // §5 Commit
 
 #[test]
-fn space_commits_and_types_a_space() {
-    doc("KeyG KeyK KeyS Space", "한 ", "");
+fn shift_space_commits_and_types_a_space() {
+    // docs/moonshot.md §4 (2026-11-03): Shift+Space commits; plain Space stages a space.
+    doc("KeyG KeyK KeyS S-Space", "한 ", "");
 }
 
 #[test]
@@ -388,10 +413,10 @@ fn f8_changes_no_keys() {
     assert!(!e.is_escaped());
 }
 
-// §6.2 F9 / F10
+// §6.2 F9 한글 / F10 ABC (docs/moonshot.md §4)
 
 #[test]
-fn f9_f10_cycle() {
+fn f10_cycles_case_and_f9_goes_back_to_korean() {
     let mut h = Host::new();
     let mut step = |keys: &str, expected: &str| {
         h.keys(keys);
@@ -401,12 +426,55 @@ fn f9_f10_cycle() {
     step("F10", "gks");
     step("F10", "GKS");
     step("F10", "Gks");
-    step("F9", "Ｇｋｓ");
+    // F9 is the forced Korean reading (as 変換): it undoes F10. Nothing commits.
+    step("F9", "한");
+    assert_eq!(h.doc, "");
 }
 
 #[test]
-fn switching_width_keeps_case() {
-    pre("KeyG KeyK KeyS F10 F10 F9", "ＧＫＳ");
+fn f10_then_hankaku_zenkaku_is_full_width_letters() {
+    // Full-width letters are 半角/全角 on F10's letters (F9 no longer converts).
+    pre("KeyG KeyK KeyS F10 F10 Backquote", "ＧＫＳ");
+}
+
+#[test]
+fn shift_f9_forces_the_bare_reading() {
+    // ㅏ alone shows 아; Shift+F9 drops the implied ㅇ, as Shift+変換 does; F9 brings it back.
+    pre("KeyK S-F9", "ㅏ");
+    pre("KeyR KeyK KeyJ S-F9", "가ㅓ");
+    pre("KeyK S-F9 F9", "아");
+    // Typing goes on in the forced script, until the commit.
+    pre("KeyK S-F9 KeyJ", "ㅏㅓ");
+}
+
+#[test]
+fn f6_to_f10_never_commit() {
+    for key in ["F6", "F7", "F8", "F9", "S-F9", "F10"] {
+        doc(&format!("KeyG KeyK KeyS {key}"), "", match key {
+            "F6" => "きのと",
+            "F7" => "キノト",
+            "F10" => "gks",
+            _ => "한",
+        });
+    }
+}
+
+#[test]
+fn space_stages_a_space() {
+    // docs/moonshot.md §4: the space is staged, the words stay unconfirmed; Shift+Space commits all.
+    doc("KeyG KeyK KeyS Space KeyR KeyM KeyF", "", "한 글");
+    doc("KeyG KeyK KeyS Space KeyR KeyM KeyF S-Space", "한 글 ", "");
+    // Shift+Enter commits with no side effect; Enter commits and goes on to the app.
+    doc("KeyG KeyK KeyS Space KeyR KeyM KeyF S-Enter", "한 글", "");
+    // Backspace takes the staged space off; F10 reads the whole staged text.
+    pre("KeyG KeyK KeyS Space Backspace KeyK", "하나");
+    pre("KeyG KeyK KeyS Space KeyR KeyM KeyF F10", "gks rmf");
+    // With nothing staged it's the app's.
+    let mut e = Engine::new();
+    assert!(!e.key(Key::Space, Mods::NONE).consumed);
+    // It doesn't commit what shows: hosts send it to jk_key, not jk_key_after_prediction.
+    assert!(!e.commits(Key::Space, Mods::NONE));
+    assert!(e.commits(Key::Space, Mods::SHIFTED));
 }
 
 #[test]
@@ -417,15 +485,15 @@ fn conversion_uses_raw_keys() {
 }
 
 #[test]
-fn conversion_word_ends_at_symbols_and_commits() {
-    pre("KeyG KeyK KeyS S-Comma KeyG KeyK KeyS F10", "한,gks");
+fn conversion_takes_the_whole_staged_text() {
+    pre("KeyG KeyK KeyS S-Comma KeyG KeyK KeyS F10", "gks,gks");
     doc("KeyG KeyK S-Enter KeyG KeyK F10", "하", "gk");
 }
 
 #[test]
 fn conversion_with_no_word_is_a_no_op() {
     pre("F10", "");
-    doc("KeyG KeyK KeyS S-Enter F9", "한", "");
+    doc("KeyG KeyK KeyS S-Enter F10", "한", "");
 }
 
 #[test]
@@ -436,7 +504,7 @@ fn input_after_conversion_ends_it() {
 
 #[test]
 fn space_commits_converted_text() {
-    doc("KeyG KeyK KeyS F9 Space", "ｇｋｓ ", "");
+    doc("KeyG KeyK KeyS F10 S-Space", "gks ", "");
 }
 
 // English reading and clear (for hosts that rank Korean against English)
@@ -461,8 +529,8 @@ fn english_keeps_case_dedicated_digits_and_symbols() {
     for (code, shift) in [("KeyQ", true), ("Digit1", false), ("Minus", false), ("Slash", false), ("IntlYen", false)] {
         e.key(Key::from_code(code), if shift { Mods::SHIFTED } else { Mods::NONE });
     }
-    // Shift+Q is ㅂ, 1 ㅃ, − ㅙ, / 메, ¥ 나 (docs/moonshot.md §9); English reads the keys.
-    assert_eq!(e.preedit(), "ㅂ뽸메나");
+    // Shift+Q is 바, 1 ㅃ, − ㅙ, / 서, ¥ · (docs/moonshot.md §9); English reads the keys.
+    assert_eq!(e.preedit(), "바뽸서·");
     assert_eq!(e.english(), "Q1-/¥");
 }
 
@@ -520,9 +588,9 @@ fn shift_on_o_and_p_starts_a_syllable_on_ieung() {
 }
 
 #[test]
-fn shift_on_consonants_is_unchanged() {
-    pre("KeyR KeyK S-KeyS KeyK", "가나");
-    pre("KeyR KeyK S-KeyR KeyK", "가가");
+fn shift_on_consonants_adds_a() {
+    pre("KeyR KeyK S-KeyS", "가나");
+    pre("KeyR KeyK S-KeyR", "가가");
 }
 
 #[test]
@@ -535,9 +603,10 @@ fn english_reading_keeps_the_shifted_vowel_letter() {
 }
 
 #[test]
-fn shift_still_held_after_a_consonant_types_the_syllable() {
-    pre("S-KeyR S-KeyK", "가");
-    pre("S-KeyT S-KeyK S-KeyD", "상");
+fn shift_vowel_after_shift_consonant_starts_on_ieung() {
+    // Shift+consonant already has its ㅏ (docs/moonshot.md §9.2), so a Shift+vowel after it starts
+    // its own syllable on ㅇ.
+    pre("S-KeyR S-KeyK", "가아");
     pre("Digit4 S-KeyK", "까");
     pre("KeyR S-KeyK", "가");
 }
@@ -545,11 +614,11 @@ fn shift_still_held_after_a_consonant_types_the_syllable() {
 // Shift+Z is ㅋ (docs/moonshot.md §1: no longer F10)
 
 #[test]
-fn shift_z_types_kieuk() {
-    pre("S-KeyZ S-KeyZ", "ㅋㅋ");
-    pre("S-KeyZ KeyK", "카");
-    pre("KeyG KeyK KeyS S-KeyZ", "한ㅋ");
-    pre("KeyG KeyK KeyS S-KeyZ KeyK", "한카");
+fn shift_z_types_ka() {
+    // Shift+Z is 카 like Shift on any consonant (docs/moonshot.md §9.2), not F10.
+    pre("KeyZ KeyZ", "ㅋㅋ");
+    pre("S-KeyZ", "카");
+    pre("KeyG KeyK KeyS S-KeyZ", "한카");
     pre("KeyG KeyK KeyS S-KeyZ F10", "gksZ");
 }
 
@@ -562,13 +631,18 @@ fn plain_z_still_types_kieuk() {
 #[test]
 fn the_engine_says_which_keys_commit_what_stands() {
     let e = Engine::new();
-    for key in [Key::Space, Key::Enter, Key::Escape, Key::ArrowDown, Key::ArrowLeft, Key::Other, Key::IntlBackslash] {
+    for key in [Key::Enter, Key::Escape, Key::ArrowDown, Key::ArrowLeft, Key::Other, Key::IntlBackslash] {
         assert!(e.commits(key, Mods::NONE), "{key:?}");
     }
+    // Shift+Space commits; Space stages a space (docs/moonshot.md §4).
+    assert!(e.commits(Key::Space, Mods::SHIFTED));
+    assert!(!e.commits(Key::Space, Mods::NONE));
     assert!(e.commits(Key::KeyG, Mods { ctrl: true, ..Mods::NONE }));
-    for key in [Key::KeyG, Key::Digit1, Key::Minus, Key::Backquote, Key::Backspace, Key::F6, Key::F10, Key::Modifier] {
+    for key in [Key::KeyG, Key::Digit1, Key::Minus, Key::Backspace, Key::F6, Key::F10, Key::Modifier] {
         assert!(!e.commits(key, Mods::NONE), "{key:?}");
     }
+    // 半角/全角 takes the reading on screen, to convert it (docs/moonshot.md §4.1).
+    assert!(e.commits(Key::Backquote, Mods::NONE));
     // Shift+Z is ㅋ, not a commit.
     assert!(!e.commits(Key::KeyZ, Mods::SHIFTED));
 }

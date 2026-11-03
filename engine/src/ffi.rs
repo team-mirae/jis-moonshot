@@ -17,6 +17,8 @@ pub struct JkEngine {
     resolved: String,
     /// The last `jk_kana_*` answer.
     kana: String,
+    /// The last `jk_host_edit` answer: UTF-16 units to replace before and after the caret.
+    width_edit: (usize, usize),
     #[cfg(feature = "predict")]
     predictions: Vec<crate::predict::Prediction>,
     /// The learner's last export (spec §10.11).
@@ -61,6 +63,7 @@ pub extern "C" fn jk_new() -> *mut JkEngine {
         last: Output::default(),
         counts: Counts::default(),
         resolved: String::new(),
+            width_edit: (0, 0),
         kana: String::new(),
         #[cfg(feature = "predict")]
         predictions: Vec::new(),
@@ -160,6 +163,16 @@ pub extern "C" fn jk_script(handle: *mut JkEngine) -> u32 {
 pub extern "C" fn jk_kana_key(handle: *mut JkEngine) -> u32 {
     with_or(handle, 1, JK_RESULT_ERROR, |h| {
         h.last = h.engine.kana_key();
+        1
+    })
+}
+
+/// Shift+かな / Shift+変換 (docs/moonshot.md §4): `jk_kana_key`, with the staged keys forced bare
+/// (no implied ㅇ: ㅏ stays ㅏ). Returns 1, or [`JK_RESULT_ERROR`].
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_kana_key_bare(handle: *mut JkEngine) -> u32 {
+    with_or(handle, 1, JK_RESULT_ERROR, |h| {
+        h.last = h.engine.kana_key_bare();
         1
     })
 }
@@ -273,6 +286,71 @@ pub extern "C" fn jk_legend_in(key: u32, shift: u32, escaped: u32, mode: u32) ->
     let layout = if escaped != 0 { Layout::Escaped } else { Layout::JisKorean };
     let Some(mode) = Mode::from_id(mode) else { return 0 };
     output_in(mode, layout, Key::from_id(key), shift != 0).map_or(0, |o| o.char() as u32)
+}
+
+/// An edit of the app's text the last call asks the host for (docs/moonshot.md §4.1): 0 = none,
+/// 1 = to full-width, 2 = to half-width (半角/全角 with nothing staged). Then call `jk_host_edit`
+/// with the selection and the text around it.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_convert_host(handle: *mut JkEngine) -> u32 {
+    use crate::engine::HostEdit;
+    with(handle, 0, |h| match h.last.host_edit {
+        None => 0,
+        Some(HostEdit::Width(crate::width::Width::Full)) => 1,
+        Some(HostEdit::Width(crate::width::Width::Half)) => 2,
+    })
+}
+
+/// Applies the edit the last call asked for (`jk_convert_host`) to the app's text: `selected` is
+/// the selection (empty without one), `before` and `after` the text either side of it (UTF-8, as
+/// much as the host can read). Returns 1 and stores the edit when there's one: replace
+/// `jk_host_edit_before` UTF-16 units before the selection's start (or caret), the selection, and
+/// `jk_host_edit_after` units after its end, with `jk_resolved_*`. 0 when nothing changes.
+///
+/// # Safety
+/// Each pointer must point to its length's readable bytes (or be null).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn jk_host_edit(
+    handle: *mut JkEngine,
+    before: *const u8,
+    before_len: usize,
+    selected: *const u8,
+    selected_len: usize,
+    after: *const u8,
+    after_len: usize,
+) -> u32 {
+    // SAFETY: per the contract above.
+    let (before, selected, after) = unsafe { (utf8(before, before_len), utf8(selected, selected_len), utf8(after, after_len)) };
+    with(handle, 0, |h| {
+        let edit = h.last.host_edit.and_then(|edit| h.engine.host_edit(edit, &before, &selected, &after));
+        match edit {
+            Some(edit) => {
+                let units = |s: &mut dyn Iterator<Item = char>| s.map(char::len_utf16).sum::<usize>();
+                let b = units(&mut before.chars().rev().take(edit.before));
+                let a = units(&mut after.chars().take(edit.after));
+                h.width_edit = (b, a);
+                h.resolved = edit.text;
+                1
+            }
+            None => {
+                h.width_edit = (0, 0);
+                h.resolved.clear();
+                0
+            }
+        }
+    })
+}
+
+/// UTF-16 units before the caret the last `jk_host_edit` replaces.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_host_edit_before(handle: *mut JkEngine) -> usize {
+    with(handle, 0, |h| h.width_edit.0)
+}
+
+/// UTF-16 units after the caret the last `jk_host_edit` replaces.
+#[unsafe(no_mangle)]
+pub extern "C" fn jk_host_edit_after(handle: *mut JkEngine) -> usize {
+    with(handle, 0, |h| h.width_edit.1)
 }
 
 // --- Resolving keys and text (spec §8.3), on a copy of this engine: its mode and predictions

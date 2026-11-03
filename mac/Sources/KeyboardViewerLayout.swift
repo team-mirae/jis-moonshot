@@ -37,6 +37,30 @@ enum KeyboardViewerLayout {
         app.flatMap { named[$0] }
     }
 
+    /// Apps given the QWERTY layout for a held Cmd or Ctrl, until it's released there (or, after
+    /// Cmd+Tab released it in another app, until their next key without either).
+    private static var shortcutApps: Set<String> = []
+
+    /// The layout whose plain layer is QWERTY: JIS English's.
+    static let qwerty = "JISMoonshotEnglish"
+
+    /// Cmd or Ctrl went down or up (docs/moonshot.md §7). Apps that match shortcuts by
+    /// `charactersIgnoringModifiers` read the layout's plain layer, which in Mode A is jamo (Cmd+C
+    /// reads as ㅊ) and in JIS Dvorak Dvorak's letters. While either is held the app gets the QWERTY
+    /// layout, so every shortcut is the QWERTY key at that position; on release the named layout
+    /// comes back. `named` isn't changed, so syncMode doesn't undo it.
+    static func shortcutModifiers(down: Bool, for client: IMKTextInput) {
+        let app = client.bundleIdentifier() ?? ""
+        guard down != shortcutApps.contains(app) else { return }
+        if down {
+            shortcutApps.insert(app)
+            client.overrideKeyboard(withKeyboardNamed: qwerty)
+        } else {
+            shortcutApps.remove(app)
+            client.overrideKeyboard(withKeyboardNamed: named(to: app) ?? InputModes.current.keyboardViewerLayout)
+        }
+    }
+
     /// The input method was deactivated in `app`: macOS forgets the layout, and so does this.
     static func forget(_ app: String?) {
         if let app {

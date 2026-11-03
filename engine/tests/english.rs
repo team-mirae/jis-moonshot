@@ -191,7 +191,7 @@ fn a_list_left_open_by_a_mode_switch_keeps_its_letter_before_the_korean() {
         engine.key(key(code), Mods::NONE);
     }
     assert_eq!(engine.key(key("KeyS"), Mods::NONE).preedit, "e한");
-    let out = engine.key(key("Space"), Mods::NONE);
+    let out = engine.key(key("Space"), Mods::SHIFTED);
     assert_eq!(out.commit, "e한 ");
     assert!(engine.preedit().is_empty());
     assert_eq!(engine.key(key("KeyK"), Mods::NONE).preedit, "아");

@@ -195,7 +195,7 @@ fn scenario_bits(w: &Weights, kind: Kind, origin: Origin, readings: &Readings, t
         Kind::Korean => korean,
         Kind::TwoSet => korean + bits(Weight::TwoSet),
         Kind::KoreanKeepFinals => korean + bits(Weight::KeepFinals),
-        Kind::ImpliedL | Kind::Aspirated => korean + bits(Weight::ImpliedL),
+        Kind::ImpliedL => korean + bits(Weight::ImpliedL),
         Kind::BareVowels => {
             let two_set = if text == readings.two_set { bits(Weight::TwoSet) } else { 0.0 };
             korean - readings.implied as f64 * bits(Weight::Implied) + two_set
@@ -204,6 +204,8 @@ fn scenario_bits(w: &Weights, kind: Kind, origin: Origin, readings: &Readings, t
         Kind::Mixed => bits(Weight::Mixed),
         // Never featurized: the kana reading is merged after ranking (docs/moonshot.md §5).
         Kind::Kana | Kind::Katakana | Kind::Kanji => bits(Weight::Kana),
+        // Never featurized: brands are suggested after ranking (docs/moonshot.md §5.4).
+        Kind::Brand => 0.0,
     }
 }
 
@@ -384,7 +386,6 @@ fn origin_name(origin: Origin) -> &'static str {
         Origin::KeepFinals => "F",
         Origin::Kept => "k",
         Origin::ImpliedL => "L",
-        Origin::Aspirated => "N",
         Origin::Bare => "B",
         Origin::Mixed => "M",
         Origin::Head => "A",
@@ -542,7 +543,6 @@ fn features(f: &mut Features, p: &Predictor, readings: &Readings, keys: &Keys, c
     f.add(&["implied", o, &small(readings.implied, 4)], 1.0);
     f.add(&["kept variants", o, &small(keys.kept, 3)], 1.0);
     f.add(&["implied l variants", o, &small(readings.implied_l.len(), 2)], 1.0);
-    f.add(&["aspirated variants", o, &small(readings.aspirated.len(), 2)], 1.0);
     let jamo = chars.iter().filter(|&&c| predict::is_jamo(c)).count();
     f.add(&["jamo", o, &small(jamo, 4)], 1.0);
     if jamo > 0 && jamo == chars.len() {

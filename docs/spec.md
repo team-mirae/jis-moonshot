@@ -27,9 +27,11 @@ adds a shortcut; it never takes anything away.
 - Double finals (ㄹ+ㄱ → ㄺ etc.) compose as usual.
 
 JIS Moonshot moves the jamo standard 2-set puts on Shift (moonshot.md §9, 2026-11-02, the owner's
-call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only, and ㅒ ㅖ on `:` and `;`. Shift+Q W E R T type ㅂ ㅈ ㄷ ㄱ
-ㅅ, as Shift on every other consonant does, and Shift on every vowel key, O and P included, starts a syllable on ㅇ (§4.2). Everything else
-on the letter keys is standard 2-set, and `engine/tests/baseline.rs` holds it to that.
+call): ㅃ ㅉ ㄸ ㄲ ㅆ are on 1–5 only, and ㅒ ㅖ on `:` and `;`. Shift on a consonant key types the
+consonant and ㅏ (Shift+R → 가; moonshot.md §9.2, 2026-11-03, the owner's call), and Shift on every
+vowel key, O and P included, starts a syllable on ㅇ (§4.2). Everything else on the letter keys is
+standard 2-set, and `engine/tests/baseline.rs` holds it to that (Shift held over consonants is no
+longer tested: it no longer types 2-set).
 
 Two deliberate exceptions (§4.2):
 
@@ -39,8 +41,8 @@ Two deliberate exceptions (§4.2):
 - **Shift+vowel** (vowel keys whose Shift types nothing else: all but O and P) after a syllable
   starts a new syllable on ㅇ instead of acting like the plain vowel (마ㄹ+⇧ㅣ → 말이, not 마리).
 
-JIS Korean had a third, Shift+Z as F10. JIS Moonshot drops it: Shift+Z is ㅋ, as on standard 2-set
-(and っ in kana, moonshot.md §1).
+JIS Korean had a third, Shift+Z as F10. JIS Moonshot drops it: Shift+Z is 카, as Shift on any
+consonant (and っ in kana, moonshot.md §1).
 
 Any change that breaks this principle is a spec change, not an implementation detail.
 
@@ -94,37 +96,37 @@ except Hangul jamo, which go into the composition automaton (§4).
 | 8 | ㅚ | 8 | most frequent of ㅟ ㅝ ㅚ; middle finger |
 | 9 | ㅢ | 9 | placed for ergonomics |
 | 0 | ㅘ | 0 | JIS kana わ is on this key |
-| − ^ ¥ | ㅙ 다 나 | 왜 도 니 | moonshot.md §9.2 |
+| − ^ ¥ | ㅙ 가 · | 왜, 께서, nothing | moonshot.md §9.2 (Shift+¥ is empty) |
 
 Digits are on Shift, so numbers type with Shift held. The 12 keys right of 0 type the actions of
-moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ゜ breaks, §9.1); JIS Korean's symbols on them are gone.
+moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ㆍ breaks, §9.1); JIS Korean's symbols on them are gone.
 
 ### 3.2 Q row
 
 | Key | Unshifted | Shift | Notes |
 |---|---|---|---|
-| Q W E R T | ㅂ ㅈ ㄷ ㄱ ㅅ | same | Shift ignored, as on every consonant (the doubles are on 1–5, §1) |
+| Q W E R T | ㅂ ㅈ ㄷ ㄱ ㅅ | 바 자 다 가 사 | Shift+consonant: the consonant and ㅏ (moonshot.md §9.2; the doubles are on 1–5, §1) |
 | Y U I | ㅛ ㅕ ㅑ | ㅛ ㅕ ㅑ | standard 2-set (Shift: §4.2) |
 | O P | ㅐ ㅔ | ㅐ ㅔ | Shift: §4.2 (ㅒ ㅖ are on : and ;, moonshot.md §9.2) |
-| @ [ | ㅡㄹ ゜ | 을 ゜ | moonshot.md §9.2 |
+| @ [ | ㅄ, ㆍ (break) | ㄶ, ㆍ | moonshot.md §9.2 (ㅄ ㄶ type their two jamo) |
 
 ### 3.3 A row
 
 | Key | Unshifted | Shift | Notes |
 |---|---|---|---|
-| A S D F G | ㅁ ㄴ ㅇ ㄹ ㅎ | same | standard 2-set |
+| A S D F G | ㅁ ㄴ ㅇ ㄹ ㅎ | 마 나 아 라 하 | Shift+consonant (moonshot.md §9.2) |
 | H J K L | ㅗ ㅓ ㅏ ㅣ | same | standard 2-set |
-| ; : ] | ㅖ ㅒ 무 | 예 얘 부 | moonshot.md §9.2 |
+| ; : ] | ㅖ ㅒ ㄴ | 예 얘 ㄹ | moonshot.md §9.2 |
 
 ### 3.4 Z row
 
 | Key | Unshifted | Shift | Notes |
 |---|---|---|---|
-| Z | ㅋ | ㅋ | standard 2-set. JIS Korean made Shift+Z F10; JIS Moonshot doesn't (it's っ on the kana layout, moonshot.md §1) |
-| X C V | ㅌ ㅊ ㅍ | same | standard 2-set |
+| Z | ㅋ | 카 | Shift+consonant. JIS Korean made Shift+Z F10; JIS Moonshot doesn't (it's っ on the kana layout, moonshot.md §1) |
+| X C V | ㅌ ㅊ ㅍ | 타 차 파 | Shift+consonant (moonshot.md §9.2) |
 | B N M | ㅠ ㅜ ㅡ | same | standard 2-set |
-| , . / | ㅢ ㅂㅅ 메 | , . · | moonshot.md §9.2; Korean keeps , . · (U+00B7) on Shift |
-| ろ | 로 | 로゜ | moonshot.md §9.2 |
+| , . / | ㅢ 을 서 | , 를 에서 | moonshot.md §9.2; Korean keeps only , on Shift (· is on ¥) |
+| ろ | 로 | 으로 | moonshot.md §9.2 |
 
 ### 3.5 Keys outside this map
 
@@ -147,7 +149,7 @@ JIS Moonshot is **JIS only** (moonshot.md §2). JIS Korean's **Mode B** (US ANSI
 ISO), and their English modes `B_QWERTY` and `CJ_QWERTY`, are retired: their ids are never reused,
 `jk_set_mode` refuses them, and a saved setting naming one falls back to Mode A. The kana reading
 needs the JIS kana legends, which no other keyboard has. `Backquote` (the HHKB's `` ` `` key; 半角/全角
-on a full JIS board) types `` ` `` and `~` as on stock US keyboards, in every mode. `IntlBackslash`
+on a full JIS board) is 半角/全角 in every mode: full-width, Shift half-width (moonshot.md §4.1). `IntlBackslash`
 isn't in Mode A: it commits and passes through (§3.5).
 
 The stock keyboard (JIS) drives everything that reads keys as plain characters: the **English
@@ -457,8 +459,8 @@ whole Shift+vowel in one press. The English reading keeps the shifted letter (�
 While composing, Backspace removes the **last jamo keystroke** and recomposes:
 간 → 가 → ㄱ → (empty). A compound medial typed as a sequence comes apart one key at a time
 (과 → 고), and one typed with a dedicated key goes in one press (과 via 0 → ㄱ) *(from prototype)*.
-An implied ㅇ isn't a keystroke, so it goes with its vowel (가어 → 가). A key that types several
-jamo (moonshot.md §9: 다, ㅡㄹ, 로゜) comes off whole: 하다 → 하.
+An implied ㅇ isn't a keystroke, so it goes with its vowel (가어 → 가). A slot key (moonshot.md §9)
+comes off whole, as one key. None types several jamo since the 2026-11-03 slots were freed.
 With nothing unconfirmed, Backspace passes through to the app.
 
 ---
@@ -468,14 +470,15 @@ With nothing unconfirmed, Backspace passes through to the app.
 The engine keeps an **unconfirmed segment**: the text typed since the last commit, shown in the
 app as preedit (marked text / composition string). It holds composed Hangul, the syllable still
 being composed, and pending symbols (§5.3). This is closer to the Japanese IME than to a per-syllable
-Korean IME, and it is what F9/F10 need **[decide]**.
+Korean IME, and it is what F10 and the predictions need **[decide]**.
 
 ### 5.1 Commit triggers
 
 | Input | Effect |
 |---|---|
-| Space | Commit the segment, then type a space. Space **never converts** (unlike the Japanese kana IME). |
-| F6 / F7 | No commit: the staged keys show as hiragana / katakana, in JIS Kana (§6, moonshot.md §4). |
+| Space | No commit: a space is **staged** (moonshot.md §4, 2026-11-03); with nothing staged it's the app's. Space **never converts** (unlike the Japanese kana IME). |
+| Shift+Space | Commit the segment, then type a space. |
+| F6–F10 | No commit: they change the reading only (§6, moonshot.md §4). |
 | Shift+Enter | Commit the segment. Nothing else is typed. *(planned)* |
 | Enter | Default: commit the segment, then pass Enter to the app. Setting "Enter commits": commit only, as Shift+Enter does. *(planned)* **[decide]** |
 | Focus loss, app switch, IME switch | Commit the segment. |
@@ -485,22 +488,19 @@ Korean IME, and it is what F9/F10 need **[decide]**.
 
 ### 5.2 Words
 
-A **word**, for F9/F10, is the trailing run of jamo keystrokes in the segment that each came from a
-letter or digit key. A symbol, a digit typed with Shift or a conversion ends the
-run *(from prototype)*. Each keystroke keeps its **raw character**: the Latin letter of a letter
-key (uppercase when typed with Shift), or the digit of a number-row key (so key 1 = ㅃ has raw
-character `1`).
+Each keystroke keeps its **raw character**: the Latin letter of a letter key (uppercase when
+typed with Shift), or the digit of a number-row key (so key 1 = ㅃ has raw character `1`). F10
+converts the **whole staged text** to its raw characters (2026-11-03; it used to take the trailing
+word only).
 
-### 5.3 Symbols and digits with F9/F10
+### 5.3 Symbols and digits with F10 and 半角/全角
 
-Typed symbols and Shift+digits stay in the segment like everything else. When the segment **ends in
-a run of typed symbols or digits**, F9/F10 convert that run instead of a word: `2026` F9 →
-`２０２６`, 한! F9 → 한！. The run and a word never mix: a word ends at the first symbol, and a
-symbol run ends at the first jamo. Case cycling and F6 (restore and commit) work the same way.
+Typed symbols and Shift+digits stay in the segment like everything else. F10 turns them half-width
+with the rest; full-width comes from 半角/全角 (moonshot.md §4.1), which converts what shows.
 
-Symbols convert **as typed**, never as the stock key's character: F9 makes every character that
-has a full-width form full-width, and F10 every character that has a half-width form half-width.
-A character without one stays as it is (· and — have none: `!·!` F9 → `！·！`). The full-width form
+Symbols convert **as typed**, never as the stock key's character: 半角/全角 makes every character that
+has a full-width form full-width, and F10 (or Shift+半角/全角) every character that has a half-width form half-width.
+A character without one stays as it is (· and — have none: `!·!` 半角/全角 → `！·！`). The full-width form
 of U+0021–U+007E is the code point + 0xFEE0; space becomes U+3000; the Halfwidth and Fullwidth
 Forms pairs ¢ £ ¬ ¯ ¦ ¥ ₩ and ｡ ｢ ｣ ､ ･ (。「」、・ full-width) convert both ways, so 「 F10 → ｢.
 
@@ -510,12 +510,12 @@ Forms pairs ¢ £ ¬ ¯ ¦ ¥ ₩ and ｡ ｢ ｣ ､ ･ (。「」、・ full-
 
 | Key | Label | Behavior | Status |
 |---|---|---|---|
-| F6 | ひらがな | **Hiragana:** to JIS Kana (`A_KANA`), the staged keys read as kana and shown in hiragana; nothing is committed. Right after F9/F10 it undoes the conversion first; an open hanja list closes. With nothing staged it still switches (consumed). Shift+F6 with something staged does nothing (reserved). | moonshot.md §4 |
+| F6 | ひらがな | **Hiragana:** to JIS Kana (`A_KANA`), the staged keys read as kana and shown in hiragana; nothing is committed. Right after F10 it undoes the conversion first; an open hanja list closes. With nothing staged it still switches (consumed). Shift+F6 with something staged does nothing (reserved). | moonshot.md §4 |
 | F7 | カタカナ | **Katakana:** the same, shown in katakana. | moonshot.md §4 |
 | F8 | 漢字 | **Kanji:** the staged keys' kana reading converted, the conversions on top of the predictions until the next commit (§6.1). With nothing staged it's still taken (the next segment). | moonshot.md §4, §5.1 |
 | Shift+F8 | 漢字 | The same as F8 (the hanja list is gone, §7). | moonshot.md §4 |
-| F9 | 전각영숫자 | Convert the current word to full-width alphanumerics, from the raw characters (§5.2). | done in prototype |
-| F10 | 반각영숫자 | Same, half-width. (In JIS Korean Shift+Z did the same; in JIS Moonshot it's ㅋ, §3.4.) | done |
+| F9 | 한글 | **Force Korean**: the same as かな / 変換 (moonshot.md §4, 2026-11-03; it was full-width letters). Shift+F9: force bare Korean (no implied ㅇ), as Shift+変換. Undoes F10. | moonshot.md §4 |
+| F10 | ABC | The whole staged text as its raw characters (§5.2), half-width; staged. (In JIS Korean Shift+Z did the same; in JIS Moonshot it's 카, §3.4.) | done |
 
 **With nothing unconfirmed, F9, F10 and Shift+F6–F8 go to the app**: they act only on
 unconfirmed text. F6, F7 and F8 are the exception: they apply to the next segment even with nothing
@@ -532,18 +532,17 @@ the platform's English input source. The engine keeps each mode's stock keyboard
 and standard 2-set readings (§10.2). Since 2026-11-01 F8 is **kanji** (Shift+F8 too since the hanja list
 went, §7): moonshot.md §4 and §5.1 define it.
 
-### 6.2 F9 / F10 cycling *(from prototype)*
+### 6.2 F10 cycling *(from prototype)*
 
-- The first press converts the word as typed (raw case kept).
-- Repeated presses of the same key cycle **as typed → UPPER → Capitalized → as typed …**
-- Pressing the other key switches width and keeps the current case step.
-- F6 or F7 right after either key undoes the conversion, then shows the keys as kana (moonshot.md
-  §4); かな / 変換 undoes it and forces Korean.
+- The first press converts the staged text as typed (raw case kept).
+- Repeated presses cycle **as typed → UPPER → Capitalized → as typed …**
+- F6 or F7 right after it undoes the conversion, then shows the keys as kana (moonshot.md §4); F9
+  and かな / 変換 undo it and force Korean.
 - Any other input ends the conversion state. The converted text stays in the segment as plain
   characters.
-- With no word to convert, F9/F10 do nothing (with nothing unconfirmed they go to the app, §6).
+- With nothing unconfirmed, F10 goes to the app (§6).
 
-Example: ㅎ ㅏ ㄴ (keys G K S) → 한. F10 → `gks`. F10 → `GKS`. F10 → `Gks`. F9 → `Ｇｋｓ`. F6 → きのと.
+Example: ㅎ ㅏ ㄴ (keys G K S) → 한. F10 → `gks`. F10 → `GKS`. F10 → `Gks`. 半角/全角 → `Ｇｋｓ`. F9 → 한. F6 → きのと.
 
 ---
 
@@ -635,8 +634,8 @@ Raised by this spec:
    and users of Korean IMEs expect)?
 8. **Plain Enter default (§5.1).** Commit + newline by default, with "Enter commits" as the opt-in.
    Is that the intended reading?
-9. **Digits inside a word (§5.2).** Shift+digit ends the F9 word, so `abc123` converts as `abc`
-   then `123` (each with its own F9/F10, §5.3). Is that enough?
+9. ~~**Digits inside a word (§5.2).**~~ Settled 2026-11-03: F10 takes the whole staged text, digits
+   and symbols included, so there's no word boundary to choose.
 10. ~~**Arrows, Tab, Esc (§5.1).**~~ Settled 2026-10-27: with predictions showing, ↓ ↑ Tab move
     through them as on macOS; otherwise they commit and pass through, and Esc does too (it doesn't
     cancel). A top reading the user never means is avoided with §10.12 `avoid`.
@@ -721,9 +720,20 @@ Scores are in bits per key, positive leaning Korean:
    its Korean reading is a common word (a count of 20 or more, §10.9: 쓰 typed `5 ㅡ`, 빠 typed
    `1 ㅏ`; in JIS Moonshot ⇧T ⇧M is TM, since Shift on Q W E R T types no double, moonshot.md §9),
    and so is an English start of two capitals before a particle (KPI와).
+   **Shift+consonant** (moonshot.md §9.2, 2026-11-03) types the consonant and ㅏ, so a capital on a
+   consonant key can be Korean too (`KOREAN_SHIFTS`; the key model reads `R` as `r k` on the Korean
+   side). Two capitals in a row with a consonant among them are still an acronym (ESG, KPS), unless
+   the Korean reading is a known word; Shift+vowels in a row (분야의 as `q n s ⇧I ⇧M l`) stay Korean.
+   A Shift+vowel start that is no English word splits off as English (before a particle) only when
+   it's longer than two letters and the Korean reading isn't a known word: 오픈 typed `⇧H v m s` isn't
+   Hv은, while Kotlin은 still splits. An ending typed in full with its ㅇ (Claude + `d p`) keeps the
+   start whole: a start ending in d whose shorter twin has the same Korean ending (Clauded + `p`)
+   only wins when it's a known English word (Android에). The ending may also be a Japanese
+   particle read as kana (Claudeの, moonshot.md §5.3).
    **Korean-only keys:** a key right of 0 that typed Korean inside the word (ㅢ on `,`,
    moonshot.md §9.3) lifts Korean over these capital rules and adds 3 bits per key; the last key
-   counts only when the Korean reading is a known word.
+   counts only when the Korean reading is a known word, or when it typed a consonant first (ㄴ on
+   `]`, 가 on `^`): no habit types those characters after English the way `,` (hello,) or `.` is.
    After any key of the word, a number-row key included (있 as `l 5`), a capital on a vowel key is
    Shift+vowel. **Digits then a Korean counter** (개 년 월 일 원 명 건 억 조 배 개월 년간 분기 …,
    maybe with a particle: 3년간, 2개의) or a known Korean word are Korean, at least one step: 2개,
@@ -827,13 +837,10 @@ reading unless it's a known word, with word counts deciding between two known wo
 often valid (저녁, 전력), so it's a slider (default 1.0; 0.00 turns it off; macOS
 `Weight.ImpliedL`).
 
-**ㄶ by sound:** ㅎ then ㄱ, ㄷ or ㅈ sounds ㅋ, ㅌ or ㅊ, so 않고 is said [안코] and a typist going by
-sound types 안코 (`dkszh`). Where a ㄴ final is followed by ㅋ, ㅌ or ㅊ starting a syllable, the
-reading gets that ㄴ as ㄶ and the consonant as ㄱ, ㄷ or ㅈ: 안코 → 않고, 만타 → 많다, 괜찬치 → 괜찮지.
-One variant per place, and one with all of them when there are several. It's ranked like the
-implied ㄹ, so a known word goes **above the literal** (않고 over 안코) and a literal word stays on
-top (만큼, not 많금; 한테, not 핞데). It shares the implied ㄹ slider (`Weight.ImpliedL`): both spell
-what was heard, and 0 turns both off. Kind `Aspirated`.
+**ㄶ by sound (retired 2026-11-03):** a typist going by sound types 않고 as 안코 (`dkszh`), and
+the reading used to offer ㄶ where a ㄴ final met ㅋ, ㅌ or ㅊ (안코 → 않고, kind `Aspirated`, id 13).
+ㄶ now has its own key (Shift+`@`, moonshot.md §9.2), so the rule and the kind are gone; id 13
+isn't reused.
 
 Hosts store them per user: the web playground has sliders under "Tune predictions" (remembered
 in the browser); macOS reads `defaults write me.sjun.inputmethod.JISMoonshot Weight.<Scenario>`;
@@ -917,7 +924,7 @@ saved − bias), clamped to 2–98%.
 
 ### 10.10 Punctuation inside a word, and the trusting typist
 
-- **Typed punctuation stays as typed** in the English reading (a `;` typed is `;`). F9/F10 convert
+- **Typed punctuation stays as typed** in the English reading (a `;` typed is `;`). F10 and 半角/全角 convert
   it as typed too (§5.3): number-row jamo keys convert to their digits, typed symbols to their
   other width where they have one.
 - **Pieces:** punctuation typed inside a staged word (anything that isn't a letter or digit) splits
@@ -1206,7 +1213,7 @@ prediction unless that is the Korean reading, and Space and Enter commit what is
 tries the keys whose characters are part of the text (in the layout), F6,
 and F7, F9, F10, Space and Enter only where the text needs them; it skips presses that change
 nothing, and follows only key routes whose text heads toward the target (its jamo, its letters
-before F9/F10, a hanja's reading before F7). Every combination returned is checked by typing it.
+before F10, a hanja's reading before F7). Every combination returned is checked by typing it.
 
 ### 8.4 Windows: modes, 無変換 / 変換, 한/영 and settings
 

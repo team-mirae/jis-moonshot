@@ -119,12 +119,12 @@ fn every_mode_leaves_the_control_keys_alone() {
 }
 
 #[test]
-fn backquote_types_its_stock_characters_and_the_iso_key_passes_through_in_mode_a() {
+fn backquote_is_hankaku_zenkaku_and_the_iso_key_passes_through_in_mode_a() {
     let mut a = Engine::new();
-    // The HHKB's ` key types ` and ~, as stock.
-    a.key(Key::Backquote, Mods::NONE);
+    // The 半角/全角 key (the Backquote code) converts widths (docs/moonshot.md §4.1): it types no ` ~.
+    assert!(a.key(Key::Backquote, Mods::NONE).consumed);
     a.key(Key::Backquote, Mods::SHIFTED);
-    assert_eq!(a.preedit(), "`~");
+    assert_eq!(a.preedit(), "");
     assert!(!a.key(Key::IntlBackslash, Mods::NONE).consumed);
 }
 
@@ -134,8 +134,8 @@ fn mode_a_is_unchanged() {
     for (code, shift) in [("Digit2", true), ("BracketLeft", false), ("Equal", false)] {
         e.key(Key::from_code(code), if shift { Mods::SHIFTED } else { Mods::NONE });
     }
-    // docs/moonshot.md §9: @ is ㅡㄹ and ^ is 다; English still reads the stock keys.
-    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("2을다", "\"@^"));
+    // docs/moonshot.md §9: @ is ㅄ and ^ is 가; English still reads the stock keys.
+    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("2ㅂㅅ가", "\"@^"));
 }
 
 /// Spec §3.6.1 over the C ABI: modes are listed by position, and an unknown id is refused.
