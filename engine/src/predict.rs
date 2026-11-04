@@ -102,6 +102,18 @@ pub struct Readings {
     /// The last key was one of them and typed a consonant first (ㄴ on `]`, 가 on `^`): no habit
     /// types those characters after English, so it counts whether or not the word is known.
     pub korean_only_last_consonant: bool,
+    /// The keys read with the symbol keys at the end as punctuation (안녕하세요. for 안녕하세요을,
+    /// docs/moonshot.md §5.6): one option per number of such keys taken (the last one, the last
+    /// two). Empty when the last key isn't one, and inside an option.
+    pub punctuated: Vec<Punctuated>,
+}
+
+/// The staged keys before the symbol keys at the end, and the punctuation those keys stand for
+/// (docs/moonshot.md §5.6).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Punctuated {
+    pub readings: Readings,
+    pub punctuation: String,
 }
 
 /// A staged word read as a Korean start, an acronym and maybe more Korean (한전KPS은).
@@ -996,11 +1008,90 @@ impl Predictor {
         {
             let ranked = crate::learned::rank(self, model, readings, context);
             let ranked = self.with_kana(ranked, readings, context);
-            return self.with_kanji_conversions(ranked, readings, context);
+            let ranked = self.with_kanji_conversions(ranked, readings, context);
+            return self.with_punctuation(ranked, readings, context);
         }
         let ranked = self.predict_by_rules(readings, context);
         let ranked = self.with_kana(ranked, readings, context);
-        self.with_kanji_conversions(ranked, readings, context)
+        let ranked = self.with_kanji_conversions(ranked, readings, context);
+        self.with_punctuation(ranked, readings, context)
+    }
+
+    /// The Korean readings of the keys before the symbol keys at the end, with those keys as the
+    /// punctuation they stand for (docs/moonshot.md §5.6: 안녕하세요. for 안녕하세요을), placed
+    /// among `ranked` by probability. Each list's scores are read as log2 odds; a punctuated row's
+    /// share of its list counts times how often its ending takes the mark, against how often the
+    /// syllable the key types follows the same keys' Korean reading (`punctuation.tsv`, from the
+    /// corpora: 요 takes . far more than 을, 책 the other way). The order of `ranked` stays.
+    fn with_punctuation(&self, ranked: Vec<Prediction>, readings: &Readings, context: Context) -> Vec<Prediction> {
+        const PER_OPTION: usize = 3;
+        const NEAR_BEST: f64 = 3.0;
+        const EXTRA_MARK: f64 = 6.0;
+        if readings.punctuated.is_empty() || ranked.is_empty() {
+            return ranked;
+        }
+        // Each row's log2 share of its list; the base list kept in its order (a row never above
+        // one ranked over it).
+        let mut base = shares(&ranked);
+        for i in 1..base.len() {
+            base[i] = base[i].min(base[i - 1]);
+        }
+        let mut extra: Vec<Prediction> = Vec::new();
+        for option in &readings.punctuated {
+            let Some(mark) = option.punctuation.chars().next() else { continue };
+            // What the key typed instead, after the same keys' Korean reading (을 after 안녕하세요).
+            let before_korean = &option.readings.korean;
+            // When the key's vowel took the final before it (프로젝틍 + ㅢ is 프로젝트의), the whole
+            // reading's last syllable after the rest of it.
+            let last_syllable = || {
+                let last = readings.korean.chars().last()?;
+                crate::punctuation::follow_bits(readings.korean.strip_suffix(last)?, last)
+            };
+            let typed = readings
+                .korean
+                .strip_prefix(before_korean.as_str())
+                .and_then(|rest| rest.chars().next())
+                .and_then(|next| crate::punctuation::follow_bits(before_korean, next))
+                .or_else(last_syllable)
+                .unwrap_or_else(crate::punctuation::any_next_bits);
+            let before = self.predict(&option.readings, context);
+            let korean: Vec<(&Prediction, f64)> =
+                before.iter().zip(shares(&before)).filter(|(p, share)| p.kind.language() == Language::Korean && share.is_finite()).collect();
+            // Only readings near the best Korean one: a mark doesn't make a stray reading (안녕핫에요)
+            // worth a row.
+            let best = korean.first().map_or(f64::NEG_INFINITY, |(_, share)| *share);
+            let rows = korean
+                .into_iter()
+                .filter(|(_, share)| *share >= best - NEAR_BEST)
+                .filter_map(|(p, share)| {
+                    // A second mark (?!, ..) is rare: a cost of its own.
+                    let extra = EXTRA_MARK * (option.punctuation.chars().count() - 1) as f64;
+                    let bits = crate::punctuation::follow_bits(&p.text, mark)? - extra;
+                    Some(Prediction { text: format!("{}{}", p.text, option.punctuation), kind: p.kind, score: share + bits - typed })
+                })
+                .take(PER_OPTION);
+            // In the order the readings came: the mark places them, it doesn't reorder them.
+            let mut floor = f64::INFINITY;
+            extra.extend(rows.map(|mut p| {
+                p.score = p.score.min(floor);
+                floor = p.score;
+                p
+            }));
+        }
+        extra.sort_by(|a, b| b.score.total_cmp(&a.score));
+        let mut out: Vec<Prediction> = Vec::with_capacity(ranked.len() + extra.len());
+        let mut extra = extra.into_iter().peekable();
+        for (p, share) in ranked.iter().zip(&base) {
+            while let Some(e) = extra.next_if(|e| e.score > *share) {
+                out.push(e);
+            }
+            out.push(Prediction { score: *share, ..p.clone() });
+        }
+        out.extend(extra);
+        let mut seen = HashSet::new();
+        out.retain(|p| seen.insert(p.text.clone()));
+        out.truncate(ranked.len().max(MAX_PREDICTIONS));
+        out
     }
 
     /// A phrase staged with spaces between its words (docs/moonshot.md §5.5, spec §10.10): each
@@ -1025,20 +1116,21 @@ impl Predictor {
                 })
                 .clone()
         };
-        // (text so far, the last piece's language, total log2-probability)
-        let mut beam: Vec<(String, Option<Language>, f64)> = vec![(String::new(), context.previous, 0.0)];
+        // (text so far, the last piece's language, total log2-probability, every piece Korean)
+        let mut beam: Vec<(String, Option<Language>, f64, bool)> = vec![(String::new(), context.previous, 0.0, true)];
         for (i, piece) in readings.pieces.iter().enumerate() {
             let mut next = Vec::new();
-            for (text, previous, total) in &beam {
+            for (text, previous, total, korean) in &beam {
                 let choices = options(i, *previous);
                 if choices.is_empty() {
-                    next.push((format!("{text}{}", piece.separator), *previous, *total));
+                    next.push((format!("{text}{}", piece.separator), *previous, *total, *korean));
                     continue;
                 }
                 // No bonus for neighbours sharing a language: code-switching text switches often (a
                 // bonus of 1 bit or more cost words on the long-context benchmark).
                 for (word, kind, lp) in choices {
-                    next.push((format!("{text}{word}{}", piece.separator), Some(kind.language()), total + lp));
+                    let language = kind.language();
+                    next.push((format!("{text}{word}{}", piece.separator), Some(language), total + lp, *korean && language == Language::Korean));
                 }
             }
             next.sort_by(|a, b| b.2.total_cmp(&a.2));
@@ -1047,11 +1139,12 @@ impl Predictor {
             beam = next;
         }
         let mut out: Vec<Prediction> = Vec::new();
-        for (text, _, total) in beam {
+        for (text, _, total, korean) in beam {
             if out.iter().any(|p| p.text == text) {
                 continue;
             }
-            let kind = if text == readings.korean {
+            // Korean words throughout (안녕하세요. 반가워요. with the marks read, §5.6): Korean.
+            let kind = if text == readings.korean || korean {
                 Kind::Korean
             } else if text == readings.english {
                 Kind::English
@@ -1877,6 +1970,17 @@ fn total_of(text: &str, score: impl Fn(&[u8]) -> f64) -> f64 {
         }
     }
     total
+}
+
+/// Each prediction's log2 share of the list, its scores read as log2 odds (as a phrase's pieces
+/// are, [`Predictor::predict_phrase`]); −∞ for a row scored −∞.
+fn shares(list: &[Prediction]) -> Vec<f64> {
+    let max = list.iter().map(|p| p.score).filter(|s| s.is_finite()).fold(f64::NEG_INFINITY, f64::max);
+    if !max.is_finite() {
+        return vec![f64::NEG_INFINITY; list.len()];
+    }
+    let sum: f64 = list.iter().filter(|p| p.score.is_finite()).map(|p| (p.score - max).exp2()).sum();
+    list.iter().map(|p| if p.score.is_finite() { p.score - max - sum.log2() } else { f64::NEG_INFINITY }).collect()
 }
 
 fn log_probability(table: &[u8], order: usize, keys: &str) -> f64 {

@@ -767,8 +767,27 @@ impl Engine {
         readings
     }
 
+    /// The readings of `segment`, with the symbol keys at its end also read as punctuation
+    /// (docs/moonshot.md §5.6): the last one, and the last two.
     #[cfg(feature = "predict")]
     fn readings_of(&self, segment: &[Token]) -> Readings {
+        let mut readings = self.word_readings(segment);
+        let starts: Vec<usize> = (0..segment.len()).filter(|&k| !is_part(&segment[k])).collect();
+        let mut marks = String::new();
+        for &start in starts.iter().rev().take(2) {
+            let Some(mark) = symbol_of(&segment[start]).filter(|&c| crate::punctuation::MARKS.contains(c)) else { break };
+            marks.insert(0, mark);
+            // Something before the marks: the word they end.
+            if start == 0 {
+                break;
+            }
+            readings.punctuated.push(crate::predict::Punctuated { readings: self.word_readings(&segment[..start]), punctuation: marks.clone() });
+        }
+        readings
+    }
+
+    #[cfg(feature = "predict")]
+    fn word_readings(&self, segment: &[Token]) -> Readings {
         let korean = compose(segment);
         // Where each key's tokens start: an action's parts (docs/moonshot.md §9) belong to its key,
         // and every split and case change below falls between keys.
@@ -844,6 +863,7 @@ impl Engine {
             korean_only_last_consonant: count > 0
                 && korean_only_key(&segment[at(count - 1)])
                 && matches!(segment[at(count - 1)], Token::Jamo { jamo, .. } if !hangul::is_medial(jamo)),
+            punctuated: Vec::new(),
             // A symbol key (not a digit) typed before the last key: punctuation in Korean, kana here.
             kana_only: segment
                 .iter()
@@ -871,6 +891,11 @@ impl Engine {
                 let predicted = p.predict(&readings, self.prediction_context());
                 with_symbol_variants(crate::brands::with_suggestions(predicted, &readings, |k| p.is_ending(k)))
             }
+            // Forced Korean (かな / 変換, F9; docs/moonshot.md §4): the forced reading on top, then
+            // its symbol keys read as punctuation.
+            Some(_) if !self.segment.is_empty() && matches!(self.script, Script::Korean | Script::KoreanBare) && self.mode.is_korean() => {
+                self.forced_predictions()
+            }
             // JIS Kana after F8: the conversions, then the kana as typed (docs/moonshot.md §4).
             Some(p) if !self.segment.is_empty() && self.kanji && self.mode.is_kana() => {
                 let kanji = p.kanji_of(&kana_of(&self.segment));
@@ -886,6 +911,45 @@ impl Engine {
             }
             _ => Vec::new(),
         }
+    }
+
+    /// Forced Korean's rows (docs/moonshot.md §4): the forced reading, then the same keys with the
+    /// symbol keys at the end read as their symbols (안녕하세요. for 안녕하세요을), then with every
+    /// symbol key before a staged space or the end read so (안녕. 반가워.), each followed by its
+    /// symbol variants (§5.2: the forced reading's too, when it ends in a symbol typed as one).
+    /// Empty when that adds nothing to the forced reading.
+    #[cfg(feature = "predict")]
+    fn forced_predictions(&self) -> Vec<Prediction> {
+        let segment = &self.segment;
+        // Each key's first token and where its action ends (its parts belong to it, §9).
+        let starts: Vec<usize> = (0..segment.len()).filter(|&k| !is_part(&segment[k])).collect();
+        let end = |i: usize| starts.get(i + 1).copied().unwrap_or(segment.len());
+        let symbol = |i: usize| symbol_of(&segment[starts[i]]);
+        let space = |i: usize| matches!(segment[starts[i]], Token::Typed(c, ..) if c.is_whitespace());
+        let trailing: Vec<usize> = (0..starts.len()).rev().take_while(|&i| symbol(i).is_some()).collect();
+        // A symbol key is a clause's end when only symbol keys stand between it and a space or the end.
+        let before_space: Vec<usize> = (0..starts.len())
+            .filter(|&i| symbol(i).is_some() && (i + 1..starts.len()).find(|&j| symbol(j).is_none()).is_none_or(space))
+            .collect();
+        let read = |keys: &[usize]| -> Vec<Token> {
+            let mut out = Vec::with_capacity(segment.len());
+            for i in 0..starts.len() {
+                match symbol(i) {
+                    Some(c) if keys.contains(&i) => out.push(Token::Text(c)),
+                    _ => out.extend_from_slice(&segment[starts[i]..end(i)]),
+                }
+            }
+            out
+        };
+        let mut rows = vec![Prediction { text: self.preedit(), kind: Kind::Korean, score: 0.0 }];
+        for keys in [trailing, before_space] {
+            if !keys.is_empty() {
+                rows.push(Prediction { text: self.shown(&read(&keys)), kind: Kind::Korean, score: 0.0 });
+            }
+        }
+        // The forced reading alone is the preedit: no list.
+        let out = with_symbol_variants(rows);
+        if out.len() > 1 { out } else { Vec::new() }
     }
 
     #[cfg(feature = "predict")]
@@ -910,9 +974,13 @@ impl Engine {
     pub fn commit_prediction(&mut self, index: usize) -> Output {
         let shown = self.predictions();
         let Some(chosen) = shown.get(index).cloned() else { return self.unchanged(true) };
-        let kinds = shown.iter().map(|p| learn::scenario(p.kind)).collect();
-        self.learn(&Event::Chose { shown: kinds, chosen: index });
-        self.accepted = (index == 0 && self.learning).then(|| (learn::scenario(chosen.kind), 0));
+        // A forced script's rows aren't the predictor's: nothing to learn.
+        let auto = self.script == Script::Auto;
+        if auto {
+            let kinds = shown.iter().map(|p| learn::scenario(p.kind)).collect();
+            self.learn(&Event::Chose { shown: kinds, chosen: index });
+        }
+        self.accepted = (index == 0 && self.learning && auto).then(|| (learn::scenario(chosen.kind), 0));
         self.previous = Some(Language::of(chosen.kind));
         self.take_segment();
         Output { commit: chosen.text, consumed: true, ..Output::default() }
@@ -926,8 +994,11 @@ impl Engine {
     pub fn key_after_prediction(&mut self, index: usize, key: Key, mods: Mods) -> Output {
         let shown = self.predictions();
         let Some(chosen) = shown.get(index).cloned() else { return self.key(key, mods) };
-        let kinds = shown.iter().map(|p| learn::scenario(p.kind)).collect();
-        self.learn(&Event::Chose { shown: kinds, chosen: index });
+        let auto = self.script == Script::Auto;
+        if auto {
+            let kinds = shown.iter().map(|p| learn::scenario(p.kind)).collect();
+            self.learn(&Event::Chose { shown: kinds, chosen: index });
+        }
         self.previous = Some(Language::of(chosen.kind));
         self.conversion = None;
         self.segment = chosen.text.chars().map(Token::Text).collect();
@@ -938,7 +1009,7 @@ impl Engine {
         // After the key, which clears what was accepted before it and sets the context. What the
         // key typed after the word (Space's space, a passed-on Enter) goes before regret can.
         let after = out.commit.chars().count().saturating_sub(chosen.text.chars().count()) + !out.consumed as usize;
-        self.accepted = (index == 0 && self.learning).then(|| (learn::scenario(chosen.kind), after));
+        self.accepted = (index == 0 && self.learning && auto).then(|| (learn::scenario(chosen.kind), after));
         self.previous = Some(Language::of(chosen.kind));
         out
     }
@@ -1248,6 +1319,25 @@ fn korean_only_key(token: &Token) -> bool {
     match *token {
         Token::Jamo { raw: Some(c), .. } | Token::IeungVowel { raw: Some(c), .. } | Token::Break { raw: Some(c), .. } => !c.is_alphanumeric(),
         _ => false,
+    }
+}
+
+/// The punctuation a key right of 0 stands for when it typed Korean (the . of 을, docs/moonshot.md
+/// §4, §9): its stock JIS symbol, from its first token, except that Shift+`,` and Shift+`.` (의 and
+/// 를) are a comma and a period, as in JIS kana (、 。), not < and >. None for any other key.
+#[cfg(feature = "predict")]
+fn symbol_of(token: &Token) -> Option<char> {
+    match *token {
+        Token::Jamo { raw: Some(c), .. } | Token::IeungVowel { raw: Some(c), .. } | Token::Break { raw: Some(c), .. } | Token::Blank { raw: Some(c), .. }
+            if !c.is_alphanumeric() =>
+        {
+            Some(match c {
+                '<' => ',',
+                '>' => '.',
+                c => c,
+            })
+        }
+        _ => None,
     }
 }
 

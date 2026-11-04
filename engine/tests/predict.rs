@@ -786,3 +786,105 @@ fn space_keeps_a_chosen_row_and_stages_a_space_after_it() {
     // Letters don't keep a choice: they type on (spec §5.1).
     assert!(!e.keeps_choice(Key::KeyG, Mods::NONE));
 }
+
+/// Types keys like [`typed`], with `HENKAN` for かな / 変換 (force Korean).
+fn typed_forced(keys: &str) -> Engine {
+    let mut e = typed("");
+    for token in keys.split_whitespace() {
+        if token == "HENKAN" {
+            e.kana_key();
+            continue;
+        }
+        let (mods, code) = match token.strip_prefix("S-") {
+            Some(code) => (Mods::SHIFTED, code),
+            None => (Mods::NONE, token),
+        };
+        e.key(Key::from_code(code), mods);
+    }
+    e
+}
+
+#[test]
+fn forced_korean_offers_its_symbol_keys_as_punctuation() {
+    // docs/moonshot.md §4: 안녕하세요 + 変換 + . shows 안녕하세요을, and the period below it, with its
+    // variants (§5.2); 変換 before or after the key.
+    let texts = |keys: &str| typed_forced(keys).predictions().into_iter().map(|p| p.text).collect::<Vec<_>>();
+    let period = ["안녕하세요을", "안녕하세요.", "안녕하세요。", "안녕하세요…", "안녕하세요...", "안녕하세요．"];
+    assert_eq!(texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY HENKAN Period"), period);
+    assert_eq!(texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period HENKAN"), period);
+    // Shift+. (를) is a period, as in JIS kana (。), not >.
+    assert_eq!(texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY HENKAN S-Period")[..2], ["안녕하세요를", "안녕하세요."]);
+    // Shift+, types a comma in Mode A already: its variants.
+    assert_eq!(texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY HENKAN S-Comma"), ["안녕하세요,", "안녕하세요、", "안녕하세요，"]);
+    // Shift+変換 (bare) too.
+    let mut e = typed("KeyD KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period");
+    e.kana_key_bare();
+    assert_eq!(e.predictions()[1].text, "안녕하세요.");
+    // A symbol key before a staged space is offered as punctuation too, after the end's alone.
+    assert_eq!(
+        texts("KeyK KeyS KeyS Period Space KeyR KeyK HENKAN Slash"),
+        ["안늘 가서", "안늘 가/", "안늘 가・", "안늘 가／", "안ㄴ. 가/", "안ㄴ. 가・", "안ㄴ. 가／"]
+    );
+    // No symbol key at the end or before a space: no list, only the forced reading as the preedit.
+    assert!(texts("KeyG KeyK KeyS HENKAN").is_empty());
+    // Choosing the period commits it; forced rows teach the ranker nothing.
+    let mut e = typed_forced("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY HENKAN Period");
+    e.set_learning(true);
+    let learner = e.learner().clone();
+    assert_eq!(e.commit_prediction(1).commit, "안녕하세요.");
+    assert_eq!(*e.learner(), learner);
+}
+
+/// Types `words` (each the cheapest JIS Moonshot way, or `#` and key codes with `_` for spaces)
+/// into an engine with the predictor.
+fn typed_words(words: &str) -> Engine {
+    let mut e = typed("");
+    for part in words.split(' ') {
+        let keys = match part.strip_prefix('#') {
+            Some(codes) => jis_korean::plan::parse_keys(&codes.replace('_', " ")).unwrap(),
+            None => jis_korean::plan::keys_for_word(part).unwrap(),
+        };
+        for p in keys {
+            e.key(p.key, if p.shift { Mods::SHIFTED } else { Mods::NONE });
+        }
+    }
+    e
+}
+
+fn texts_of(words: &str) -> Vec<String> {
+    typed_words(words).predictions().into_iter().map(|p| p.text).collect()
+}
+
+#[test]
+fn korean_readings_take_the_symbol_keys_as_punctuation() {
+    // docs/moonshot.md §5.6: a final ending takes the mark (. ? ,), with its variants after it.
+    let list = texts_of("안녕하세요 #Period");
+    assert_eq!(list[..5], ["안녕하세요.", "안녕하세요。", "안녕하세요…", "안녕하세요...", "안녕하세요．"]);
+    assert!(list.contains(&"안녕하세요을".to_string()), "{list:?}");
+    assert_eq!(top_of("안녕하세요 #S-Period"), ("안녕하세요.".into(), Kind::Korean));
+    assert_eq!(top_of("감사합니다 #Period").0, "감사합니다.");
+    assert_eq!(top_of("먹었다 #Period").0, "먹었다.");
+    assert_eq!(top_of("뭐해요 #S-Slash").0, "뭐해요?");
+    assert_eq!(top_of("그렇고 #Comma").0, "그렇고,");
+    assert_eq!(top_of("했는데 #Comma").0, "했는데,");
+    // A noun takes the particle the key types; the mark is offered below it.
+    for (keys, want) in [("책 #Period", "책을"), ("사과 #S-Period", "사과를"), ("회 #Comma", "회의"), ("가 #Slash", "가서"), ("서울 #Slash", "서울서")] {
+        assert_eq!(top_of(keys).0, want, "{keys}");
+    }
+    assert!(texts_of("책 #Period").contains(&"책.".to_string()));
+    // Two marks cost more than one (운송의 typed with ㅇ then ㅢ, not 운송,,).
+    assert_eq!(top_of("합니다 #Period_Period").0, "합니다..");
+}
+
+#[test]
+fn a_phrase_takes_punctuation_word_by_word() {
+    // §5.5's pieces: each word between spaces takes its own mark.
+    assert_eq!(top_of("안녕하세요 #Period_Space 반가워요 #Period"), ("안녕하세요. 반가워요.".into(), Kind::Korean));
+    assert_eq!(top_of("밥 #Space 먹었어요 #S-Slash").0, "밥 먹었어요?");
+    assert_eq!(top_of("책 #Period_Space 읽어요").0, "책을 읽어요");
+}
+
+fn top_of(words: &str) -> (String, Kind) {
+    let p = typed_words(words).predictions();
+    (p[0].text.clone(), p[0].kind)
+}

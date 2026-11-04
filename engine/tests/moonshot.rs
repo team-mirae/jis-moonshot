@@ -443,6 +443,7 @@ mod predictions {
         e.set_predictor(Some(predictor()));
         press(&mut e, "KeyB KeyY KeyI KeyA KeyF");
         assert!(!e.predictions().is_empty());
+        // Forced Korean lists only punctuation readings (docs/moonshot.md §4): none here.
         e.kana_key();
         assert!(e.predictions().is_empty());
         e.key(Key::F6, Mods::NONE);

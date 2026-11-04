@@ -94,7 +94,7 @@ Each engine has a **script**, how the staged keys are shown and committed:
 | Script | Shown as | Predictions |
 |---|---|---|
 | Auto | the top prediction (Korean, English or kana) | yes |
-| Korean | JIS Korean as composed (forced) | no |
+| Korean | JIS Korean as composed (forced) | only punctuation (below) |
 | Hiragana / Katakana | the kana reading, `A_KANA` | no |
 
 Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
@@ -124,6 +124,14 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   it's the app's. A row chosen with ↓ / Tab is kept by Space, which stages the space after it
   (`jk_key_keeps_choice`); the top reading nobody chose stays open to the words after it. With nothing staged F6–F10 still go to the app (F6–F8 apply to the next
   segment, as before). The English modes are untouched: 英数 / 無変換 there does nothing.
+- **Punctuation when forced** (2026-11-05): a forced Korean reading (かな / 変換, F9, and their
+  Shift forms) gets a short list instead of none: the forced reading on top (what shows), then
+  the symbol keys at the end read as their stock symbols, then every symbol key before a staged
+  space or the end read so, each with its §5.2 variants. So 안녕하세요 `.` + 変換 shows 안녕하세요을,
+  then 안녕하세요. 안녕하세요。 안녕하세요… 안녕하세요... 안녕하세요．. Shift+`.` (를) reads as a period,
+  as in JIS kana (。), not >. A symbol typed as one (Shift+`,` types ,) gets its variants on the
+  forced reading itself. With nothing to offer there's no list, as before. The rows aren't the
+  predictor's: choosing one teaches the ranker nothing.
 - **F9 한글 / F10 ABC.** F9 used to be full-width letters; full-width now comes from 半角/全角
   (§4.1), so F9 forces the Korean reading like 変換 (which stays), Shift+F9 the bare one. F10
   shows the whole staged text as its keys and cycles case on repeat; F9, F6 or F7 undo it.
@@ -368,6 +376,37 @@ phrases exact) without retraining, but broke the owner's corpus limits, the avoi
 bare-vowel tests in both builds: the rarer words bring noise (keystrings, rare forms). **[decide]**
 whether to clean a larger list, recalibrate the rules to it and retrain the learned ranker.
 
+### 5.6 Punctuation in Korean readings
+
+Mode A's symbol keys type Korean (§9.2: `.` 을, Shift+`.` 를, `/` 서, Shift+`/` 에서, `,` ㅢ), so a
+period after Korean has no key of its own. The Korean readings read it from those keys instead
+(2026-11-05, the owner's call): when the staged keys end in one, the keys before it are read
+again and each of their Korean readings is offered with the key's mark, the stock JIS symbol
+(Shift+`.` is a period, as JIS kana's 。, not >; the last key, and the last two). So
+안녕하세요 `.` → **안녕하세요.**, with 안녕하세요을 below it; 뭐해요 Shift+`/` → 뭐해요?; 그렇고 `,`
+→ 그렇고,; and then each mark's variants (§5.2: 안녕하세요。 안녕하세요…).
+
+Which way it goes is learned from the corpora, since Korean punctuation follows the ending
+closely: a final ending (다 요 까 니다 세요) takes . or ?, a connective one (고 는데 지만) a comma, a
+particle (을 를 의) almost never anything. `engine/predict/punctuation.tsv` (compiled in; built by
+`engine/tools/corpora/build_punctuation.py` from `corpora/derived/*/ko.txt`, the evaluation texts
+left out) counts, after each syllable and each pair of syllables, how often each mark (`. , ? / ;
+: - ~`) comes next and how often each syllable the symbol keys type (을 를 의 서 에 로 으 가 께 왜 예 얘).
+A punctuated row's chance is its share of the readings of the keys before the mark, times how often
+its ending takes the mark, against how often the syllable the key types follows the same reading
+(요 is followed by . 27% of the time and by 을 almost never; 책 by 을 18% and by . 0.7%). So nouns
+keep their particle (책을, 사과를, 회의, 가서) with the mark below, and endings take the mark.
+
+- Only readings within 3 bits of the best Korean one are punctuated, at most three, in the order
+  they were ranked: a mark places them, it doesn't reorder them.
+- A second mark costs 6 bits more (합니다.. is offered, 운송,, for 운송의 isn't on top). After a
+  syllable the table doesn't have (seen too rarely: 틍) a mark is an eighth as likely, after a
+  bare jamo a sixty-fourth.
+- In a staged phrase (§5.5) each word takes its own: 안녕하세요 `.` Space 반가워요 `.` → 안녕하세요.
+  반가워요. A phrase of Korean words is of kind Korean.
+- The English reading needs none of this: its keys are the stock ones (hello.). Forced Korean
+  (かな / 変換, §4) lists its own punctuation rows.
+
 ## 6. Predictive typing must be accepted
 
 Predictions are always on; there is no switch and no lite build in the shells. The first time JIS
@@ -438,7 +477,7 @@ of 0 as 24 slots.
 **Refilled** (2026-11-03, the owner's call): 다 도, 나 니, ㅡㄹ 을, 무 부, ㅂㅅ, 메 and 로 로゜ were
 little used, so the slots were freed and refilled with particles, endings and finals (§9.2). Shift+`.`
 and Shift+`/` went with them, so Mode A has **no `.` or `·` on Shift** any more: · is on `¥`, and
-a period comes from English (無変換) or ⌥`.` (。). Shift+`¥` is left **empty**: it types nothing in
+a period comes from the Korean readings (§5.6), English (無変換) or ⌥`.` (。). Shift+`¥` is left **empty**: it types nothing in
 Korean (the syllable goes on across it), but it's still a key: the kana reading and JIS Kana read
 it as ー, the English reading as `|`, F10 converts it, and Backspace takes it off.
 
