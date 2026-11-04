@@ -289,16 +289,18 @@ fn hankaku_zenkaku_converts_what_is_staged() {
 
 #[test]
 fn the_slot_keys_still_type_kana_in_jis_kana() {
-    // docs/moonshot.md §9.2: the keys right of 0 type Korean in Mode A, but JIS Kana and the kana
-    // reading read them by key, the empty Shift+¥ too.
+    // docs/moonshot.md §9.2: the keys right of 0 type Korean or their symbols in Mode A, but JIS
+    // Kana and the kana reading read them by key.
     let mut e = Engine::new();
     e.set_mode(Mode::AKana);
     press(&mut e, "Equal IntlYen Backslash Period Slash IntlRo");
     assert_eq!(e.preedit(), "へーむるめろ");
-    let mut a = typed("KeyG KeyK Equal");
-    assert_eq!((a.preedit().as_str(), a.kana().as_str()), ("하가", "きのへ"));
+    let mut a = typed("KeyG KeyK Semicolon");
+    assert_eq!((a.preedit().as_str(), a.kana().as_str()), ("하예", "きのれ"));
     a.key(Key::F6, Mods::NONE);
-    assert_eq!(a.preedit(), "きのへ");
+    assert_eq!(a.preedit(), "きのれ");
+    let a = typed("KeyG KeyK Period");
+    assert_eq!((a.preedit().as_str(), a.kana().as_str()), ("하.", "きのる"));
 }
 
 #[test]
@@ -395,6 +397,26 @@ mod predictions {
     }
 
     #[test]
+    fn kana_readings_take_the_symbol_keys_as_punctuation() {
+        // docs/moonshot.md §5.6: `.` `,` `/` read as 。、？ after kana when the ending takes them
+        // (ます。), as る ね め when the kana does (たべる, そうですね), with the other offered.
+        let texts = |keys: &str| predicted(keys).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        assert_eq!(top("Digit3 KeyL KeyT BracketLeft KeyS Digit4 Period"), ("ありがとう。".into(), Kind::Kana));
+        assert_eq!(top("Digit3 KeyL KeyT BracketLeft KeyS Digit4 KeyB BracketLeft KeyX BracketLeft KeyE KeyJ KeyR Period").0, "ありがとうございます。");
+        assert_eq!(top("KeyB KeyY KeyI KeyA KeyF Comma").0, "こんにちは、");
+        let eat = texts("KeyQ Equal BracketLeft Period");
+        assert_eq!(eat[0], "たべる");
+        assert!(eat.contains(&"たべ。".to_string()), "{eat:?}");
+        let so = texts("KeyC Digit4 KeyW BracketLeft KeyR Comma");
+        assert_eq!(so[0], "そうですね");
+        assert!(so.contains(&"そうです、".to_string()), "{so:?}");
+        // `.` types itself in Korean (§9.2): 안녕하세요. and its variants first, no stray kana
+        // reading of the Korean keys above them.
+        let hello = texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period");
+        assert_eq!(hello[..5], ["안녕하세요.", "안녕하세요。", "안녕하세요…", "안녕하세요...", "안녕하세요．"]);
+    }
+
+    #[test]
     fn japanese_words_read_as_kana() {
         assert_eq!(top("KeyB KeyY KeyI KeyA KeyF"), ("こんにちは".into(), Kind::Kana));
         assert_eq!(top("Digit3 KeyL KeyT BracketLeft KeyS Digit4"), ("ありがとう".into(), Kind::Kana));
@@ -443,6 +465,7 @@ mod predictions {
         e.set_predictor(Some(predictor()));
         press(&mut e, "KeyB KeyY KeyI KeyA KeyF");
         assert!(!e.predictions().is_empty());
+        // Forced Korean lists only punctuation readings (docs/moonshot.md §4): none here.
         e.kana_key();
         assert!(e.predictions().is_empty());
         e.key(Key::F6, Mods::NONE);

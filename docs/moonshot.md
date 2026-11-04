@@ -94,7 +94,7 @@ Each engine has a **script**, how the staged keys are shown and committed:
 | Script | Shown as | Predictions |
 |---|---|---|
 | Auto | the top prediction (Korean, English or kana) | yes |
-| Korean | JIS Korean as composed (forced) | no |
+| Korean | JIS Korean as composed (forced) | only punctuation (below) |
 | Hiragana / Katakana | the kana reading, `A_KANA` | no |
 
 Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
@@ -124,6 +124,13 @@ Mode A starts every segment in Auto. `A_KANA` remembers hiragana or katakana.
   it's the app's. A row chosen with ↓ / Tab is kept by Space, which stages the space after it
   (`jk_key_keeps_choice`); the top reading nobody chose stays open to the words after it. With nothing staged F6–F10 still go to the app (F6–F8 apply to the next
   segment, as before). The English modes are untouched: 英数 / 無変換 there does nothing.
+- **Punctuation when forced** (2026-11-05): a forced Korean reading (かな / 変換, F9, and their
+  Shift forms) gets a short list instead of none: the forced reading on top (what shows), then
+  the symbol keys at the end read as their stock symbols, then every symbol key before a staged
+  space or the end read so, each with its §5.2 variants. So 그렇고 `,` + 変換 shows 그렇고의, then
+  그렇고, 그렇고、 그렇고，. A symbol typed as one (`.` and Shift+`,` type themselves) gets its
+  variants on the forced reading itself: 안녕하세요. 안녕하세요。… With nothing to offer there's no list, as before. The rows aren't the
+  predictor's: choosing one teaches the ranker nothing.
 - **F9 한글 / F10 ABC.** F9 used to be full-width letters; full-width now comes from 半角/全角
   (§4.1), so F9 forces the Korean reading like 変換 (which stays), Shift+F9 the bare one. F10
   shows the whole staged text as its keys and cycles case on repeat; F9, F6 or F7 undo it.
@@ -285,13 +292,14 @@ last thing typed. The table is `engine/src/punctuation.rs`:
 | , | 、 ， |
 | . | 。 … ... ． |
 | / and · | ・ ／ (/) and ・ ･ (·) |
+| ¥ | · ・ ￥ \ (· was on the ¥ key until 2026-11-05, §9.2) |
 | [ ] | 「 『 【 ［ 〔 and 」 』 】 ］ 〕 |
 | 「 」 『 』 | each other, 【 】, [ ] |
 | ( ) { } < > | full-width, and 〈 《 « / 〉 》 » for < > |
 | ! ? : ; ~ - ' " | full-width, 〜 for ~, ー — – for -, curly quotes |
 
-Shift+`,` → , 、 ，; 한 + Shift+`,` → 한, 한、 한，; `¥` → · ・ ･; `h e l l o .` → hello. hello。 hello…
-hello... (the English reading's period: `.` types 을 in Korean, §9.2).
+Shift+`,` → , 、 ，; 한 + Shift+`,` → 한, 한、 한，; `¥` → ¥ · ・ ￥; `h e l l o .` → hello. hello。
+hello… hello....
 
 ### 5.3 Japanese particles after English
 
@@ -313,6 +321,24 @@ A reading that spells a brand, in any script, also offers the brand in its **def
 2. A name ending in "Japan" (구글재팬 → Google Japan): English.
 3. Else a company registered or operating mainly in Korea: Korean; in Japan: Japanese; anywhere
    else: English.
+
+**Which brands** (2026-11-05, the owner's bar): companies and their brands only (not people,
+places, schools, clubs, parties, governments or nonprofits; nothing dissolved), and of those only
+ones that are
+
+- **in a major stock index** (S&P 500, NASDAQ-100, Dow Jones, KOSPI 200, Nikkei 225, FTSE 100,
+  DAX, CAC 40, EURO STOXX 50, SMI, Hang Seng) **or big enough to pass that bar easily** (market
+  value or revenue over the country's bar: $20B / $10B in the US and elsewhere, $2B / $3B in Korea,
+  $7B / $7B in Japan), or
+- **known by the name alone**: searched without context, the name is the brand. Measured on
+  Wikipedia: the article at the bare name (English, Korean or Japanese) is the brand's or
+  redirects to it, or is read less than the brand's, and the brand's is widely read (60 days:
+  30,000 views in English, 12,000 in Japanese, 3,000 in Korean; four times that when the bare name
+  is a disambiguation page).
+
+`engine/tools/brands/build_brands.py` and `admission.py` build it (2,021 brands, from 18,012
+before); every candidate's verdict and reason is in the gitignored `corpora/brands/admission.tsv`.
+Sola Municipality (そら → Sola, Norway) and Sora Aoi are out; Google, Uniqlo, IKEA and Coupang in.
 
 So 스타벅스 offers Starbucks, 구글 Google, 소니 / sony ソニー, honda / 혼다 ホンダ, 도요타 トヨタ, kakao
 카카오, and before a particle the particle stays (스타벅스에 → Starbucks에). It's **only a
@@ -367,6 +393,57 @@ generated words, up from 14,000 and 34,000) lifted the benchmark to 98.7% of wor
 phrases exact) without retraining, but broke the owner's corpus limits, the avoid list and the
 bare-vowel tests in both builds: the rarer words bring noise (keystrings, rare forms). **[decide]**
 whether to clean a larger list, recalibrate the rules to it and retrain the learned ranker.
+
+### 5.6 Punctuation in Korean and kana readings
+
+Four of Mode A's symbol keys type Korean (§9.2: `−` ㅙ, `;` ㅖ, `:` ㅒ, `,` ㅢ), so their marks
+have no key of their own in Korean: a comma after a word is Shift+`,`, but `,` alone is ㅢ. The
+Korean readings read the mark from those keys too (2026-11-05, the owner's call): when the staged
+keys end in one, the keys before it are read again and each of their Korean readings is offered
+with the key's stock JIS symbol (the last key, and the last two). So 그렇고 `,` → **그렇고,**, with
+그렇고의 below it; 했는데 `,` → 했는데,; and then each mark's variants (§5.2: 그렇고、). `.` and `/`
+type themselves since §9.2's change of the same day (안녕하세요 `.` → 안녕하세요.); until then they
+typed 을 and 서, and this section decided between 안녕하세요. and 안녕하세요을 the same way.
+
+Which way it goes is learned from the corpora, since Korean punctuation follows the ending
+closely: a final ending (다 요 까 니다 세요) takes . or ?, a connective one (고 는데 지만) a comma, a
+particle (을 를 의) almost never anything. `engine/predict/punctuation.tsv` (compiled in; built by
+`engine/tools/corpora/build_punctuation.py` from `corpora/derived/*/ko.txt`, the evaluation texts
+left out) counts, after each syllable and each pair of syllables, how often each mark (`. , ? / ;
+: - ~`) comes next and how often each syllable the symbol keys type (을 를 의 서 에 로 으 가 께 왜 예 얘).
+A punctuated row's chance is its share of the readings of the keys before the mark, times how often
+its ending takes the mark, against how often the syllable the key types follows the same reading
+(고 is followed by , 9% of the time and by 의 0.6%; 회 by 의 10% and by , 1.4%). So nouns keep the
+syllable the key types (회의) with the mark below, and endings take the mark. The table still has
+the columns of the syllables the retired slots typed (을 를 서 …): rebuilding keeps them.
+
+- Only readings with an eighth or more of the probability among the keys before the mark are
+  punctuated (not 안녕핫에요., nor a stray kana reading of Korean keys), at most three a language,
+  in the order they were ranked: a mark places them, it doesn't reorder them. A mark lifts a
+  reading at most 8 bits over the typed one, however unlikely what the key typed is.
+- A second mark costs 6 bits more (운송,, for 운송의 typed d `,` `,` isn't on top). After a
+  syllable the table doesn't have (seen too rarely: 틍) a mark is an eighth as likely, after a
+  bare jamo a sixty-fourth.
+- In a staged phrase (§5.5) each word takes its own: 안녕하세요 `.` Space 반가워요 `.` → 안녕하세요.
+  반가워요. A phrase of Korean words is of kind Korean.
+- The English reading needs none of this: its keys are the stock ones (hello.). Forced Korean
+  (かな / 変換, §4) lists its own punctuation rows.
+
+**Kana** (2026-11-05) works the same way. On the JIS kana layout `.` `,` `/` are る ね め, while a
+romaji typist's `.` `,` `/` give 。、？, so the kana readings of the keys before such a key are also
+offered with 。、？ (Shift+`.` and Shift+`,` are 。 and 、 already). The counts come from Tatoeba's
+Japanese sentences (`corpora/jpn_sentences.tsv.bz2`, fetched by `fetch_corpora.py`; katakana
+counted as hiragana): after each kana and pair of kana, how often 。、？・ come next and how often
+る ね め. So ありがとう `.` → ありがとう。, ありがとうございます。 (る after ます never comes), こんにちは
+`,` → こんにちは、; and the kana stays where it's the word: たべ `.` → たべる (る after べ 13%, 。
+0.1%), そうです `,` → そうですね, each with the mark offered below. A kanji row takes the mark too
+(有難う。), weighed by the kana typed.
+
+**[decide] Kana against Korean.** The tests that measure Korean (`tests/corpora.rs`,
+`tests/long_context.rs`) load no Japanese words or kanji, which the shells do. With them, as
+shipped, the corpora's weighted failure rate is 12.1% against 0.04% (12 of the owner's 115 words:
+사과 reads かのすわ, 회 きゆ, 책 そらす; measured after §9.2's change of 2026-11-05 and retraining). The marks above change none of it; the kana reading
+does (§5).
 
 ## 6. Predictive typing must be accepted
 
@@ -438,9 +515,14 @@ of 0 as 24 slots.
 **Refilled** (2026-11-03, the owner's call): 다 도, 나 니, ㅡㄹ 을, 무 부, ㅂㅅ, 메 and 로 로゜ were
 little used, so the slots were freed and refilled with particles, endings and finals (§9.2). Shift+`.`
 and Shift+`/` went with them, so Mode A has **no `.` or `·` on Shift** any more: · is on `¥`, and
-a period comes from English (無変換) or ⌥`.` (。). Shift+`¥` is left **empty**: it types nothing in
-Korean (the syllable goes on across it), but it's still a key: the kana reading and JIS Kana read
-it as ー, the English reading as `|`, F10 converts it, and Backspace takes it off.
+a period came from English (無変換) or ⌥`.` (。). Shift+`¥` was left empty.
+
+**Symbols back** (2026-11-05, the owner's call): with `.` 을/를 and `/` 서/에서, Shift+`,` `.` `/`
+couldn't type punctuation. So `^` `¥` `@` `[` `]` `.` `/` `ろ` type their **stock JIS symbols**
+again, alone and with Shift (^ ~, ¥ |, @ `, [ {, ] }, . >, / ?, \ _), and Korean keeps only `−`
+`;` `:` `,`. The slots that went: 가 께서, ·, ㅄ ㄶ, the ㆍ break, ㄴ ㄹ, 을 를, 서 에서, 로 으로, all
+typed the 2-set way again (ㅂ ㅅ, ㄴ ㅎ, ㅇ ㅡ ㄹ …). · is a symbol variant of ¥ (§5.2). The kana
+reading and JIS Kana still read every key by its kana (`.` is る).
 
 ### 9.1 Notation
 
@@ -451,32 +533,29 @@ written says how it types:
 |---|---|---|
 | (none) | a bare vowel, written without ㅇ: it joins the consonant before it like a vowel key, and gets the usual implied ㅇ with nothing before it | ㄷ + ㅙ → 돼; 말 + ㅙ → 마뢔 |
 | (written with ㅇ) | the ㅇ is real: typed as an initial, so the action starts its own syllable (what Shift+vowel already does, spec §4.2) | 말 + 왜 (Shift+`−`) → 말왜 |
-| ㆍ | the syllable break: ends the syllable with no final, so the next consonant starts a syllable and a vowel after it gets an implied ㅇ. Typed with nothing else staged it shows as ㆍ (U+318D, arae-a, an archaic jamo no modern text uses), so it's on screen and is a reading of its own; anything typed after it reads as before | 갈 + ㆍ + ㅏ → 갈아 (not 가라); ㆍ alone → ㆍ |
 
 ### 9.2 The keys
 
 | Key | Alone | Shift | Was (JIS Korean) |
 |---|---|---|---|
 | `−` | ㅙ | 왜 | ! ? |
-| `^` | 가 | 께서 | ( ) |
-| `¥` | · (U+00B7) | (empty) | — ^ |
-| `@` | ㅄ (ㅂㅅ) | ㄶ (ㄴㅎ) | ' " |
-| `[` | ㆍ (break) | ㆍ (break) | [ 「 |
+| `^` | ^ | ~ | ( ) |
+| `¥` | ¥ | \| | — ^ |
+| `@` | @ | ` | ' " |
+| `[` | [ | { | [ 「 |
 | `;` | ㅖ | 예 | ~ - |
 | `:` | ㅒ | 얘 | : ; |
-| `]` | ㄴ | ㄹ | ] 」 |
+| `]` | ] | } | ] 」 |
 | `,` | ㅢ | , | , , |
-| `.` | 을 | 를 | . . |
-| `/` | 서 | 에서 | · · |
-| `ろ` | 로 | 으로 | \ _ |
+| `.` | . | > | . . |
+| `/` | / | ? | · · |
+| `ろ` | \ | _ | \ _ |
 
-Legends write a double final as the compatibility jamo it makes (ㅄ, not ㅂㅅ): the keys type its
-two jamo.
+The symbol keys are the stock JIS ones since 2026-11-05 (above); from 2026-11-03 to then they
+typed 가/께서, ·/(empty), ㅄ/ㄶ, ㆍ, ㄴ/ㄹ, 을/를, 서/에서 and 로/으로.
 
-Examples: ㄷ + `−` → 돼; 말 + Shift+`−` → 말왜; 갈 + `[` + ㅏ → 갈아; ㄱ + `;` → 계; 말 + Shift+`;` → 말예;
-하 + `^` → 하가; 선생님 + Shift+`^` → 선생님께서; 어 + `@` → 없; 마 + Shift+`@` → 많; 가 + `]` → 간;
-책 + `.` → 책을; 사과 + Shift+`.` → 사과를; 업 + `/` → 업서; 학교 + Shift+`/` → 학교에서; 서울 + `ろ` →
-서울로; 집 + Shift+`ろ` → 집으로.
+Examples: ㄷ + `−` → 돼; 말 + Shift+`−` → 말왜; ㄱ + `;` → 계; 말 + Shift+`;` → 말예; ㅎ + `,` → 희;
+안녕하세요 + `.` → 안녕하세요.; 뭐해요 + Shift+`/` → 뭐해요?.
 
 The letter keys change on Shift only:
 
@@ -494,7 +573,7 @@ reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ ther
 ### 9.3 How the engine types an action
 
 - **Keys, not jamo.** An action's first jamo carries the key (its stock JIS character, or the
-  letter); the rest are parts of it. **Backspace takes the whole key off** (an empty slot too),
+  letter); the rest are parts of it. **Backspace takes the whole key off**,
   as the kana reading counts keys. F10 reads each key once (`i` ⇧P `h o n e` F10 → iPhone).
 - **No Shift held over.** Shift on a consonant types its ㅏ, so a Shift+vowel after it starts its
   own syllable on ㅇ like any Shift+vowel (⇧ㄱ ⇧ㅏ → 가아). (Until 2026-11-03 Shift on a consonant
@@ -513,13 +592,16 @@ reading still reads every key by its kana legend (`@` is ゛ and `[` is ゜ ther
   Korean Shifts (`KOREAN_SHIFTS`): a capital may be a Korean syllable (⇧R → 가), and acronyms (ESG,
   CRM) compete with that reading. The key model scores a capital consonant as its key and ㅏ's
   (`R` as `r k`) on the Korean side.
-- **Legends.** `examples/legends.rs` (the macOS Keyboard Viewer) prints actions in full (왜,
-  께서, ㅄ, ㆍ; nothing for an empty slot). `jk_legend` / `jk_legend_in` return one code point, the legend's first (왜, 께; a space for an empty slot),
+- **Legends.** `examples/legends.rs` (the macOS Keyboard Viewer) prints actions in full (왜, 예).
+  `jk_legend` / `jk_legend_in` return one code point, the legend's first (왜, 예),
   so the web playground's board shows that until it gets a string legend.
 
 ### 9.4 Open questions
 
 - **[decide]** A string legend in the C ABI (`jk_legend_text_in`) for the web board and Windows.
-- The learned ranker (`learned.bin`) was retrained on these keys on 2026-11-03, from the jis-korean
-  checkout's extracted corpora (`corpora/derived`, `corpora/eval`).
+- The key model (`ranker.bin`, whose Korean class still typed the slots of before 2026-11-03) and the
+  learned ranker (`learned.bin`) were retrained on these keys on 2026-11-05, after the brand table
+  (§5.4). Validation top-1: 95.73% learned against 95.47% by the rules. The corpora's weighted
+  failure rate went from 0.08% to 0.04%; the long-context benchmark from 98.3% of words (89.9% of
+  phrases exact) to 98.2% (89.5%).
 

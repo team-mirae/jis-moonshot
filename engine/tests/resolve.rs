@@ -18,15 +18,14 @@ fn has(found: &[Vec<String>], keys: &str) -> bool {
 fn a_key_alone_types_its_character_in_the_mode() {
     let a = in_mode(Mode::A);
     assert_eq!(key_input(&a, "KeyG").as_deref(), Some("ㅎ"));
-    // docs/moonshot.md §9: Shift+Q is 바 (Shift+consonant), and the keys right of 0 show their
-    // actions; the double finals as the jamo they make, the break as ㆍ.
+    // docs/moonshot.md §9: Shift+Q is 바 (Shift+consonant), the keys right of 0 show their actions
+    // or, since 2026-11-05, their stock JIS symbols.
     assert_eq!(key_input(&a, "S-KeyQ").as_deref(), Some("바"));
     assert_eq!(key_input(&a, "S-Minus").as_deref(), Some("왜"));
-    assert_eq!(key_input(&a, "BracketRight").as_deref(), Some("\u{318D}"));
-    assert_eq!(key_input(&a, "BracketLeft").as_deref(), Some("ㅄ"));
-    assert_eq!(key_input(&a, "S-Equal").as_deref(), Some("께서"));
-    // The one empty slot (docs/moonshot.md §9.2) has no legend.
-    assert_eq!(key_input(&a, "S-IntlYen").as_deref(), Some(""));
+    assert_eq!(key_input(&a, "BracketRight").as_deref(), Some("["));
+    assert_eq!(key_input(&a, "BracketLeft").as_deref(), Some("@"));
+    assert_eq!(key_input(&a, "S-Equal").as_deref(), Some("~"));
+    assert_eq!(key_input(&a, "S-IntlYen").as_deref(), Some("|"));
     // Shift+Z is no longer F10 (docs/moonshot.md §1): 카, like Shift on any consonant.
     assert_eq!(key_input(&a, "S-KeyZ").as_deref(), Some("카"));
     // Not characters: F-keys, Space, unknown keys.

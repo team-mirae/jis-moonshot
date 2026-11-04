@@ -3,12 +3,15 @@
 
     python3 -I engine/tools/brands/build_brands.py [--min-sitelinks N]
 
-Companies and brands with an English name and a Korean or Japanese one, and their country. Each
+Companies and brands with an English name and a Korean or Japanese one, and their country, kept
+when they are in a major stock index (or big enough to be) or known by their name alone
+(admission.py, the owner's bar of 2026-11-05). Each
 line: the brand's default name, then every spelling it is typed as (normalized: Korean and kana
 without spaces, kana as katakana, English lower-cased letters and digits only). The default name
 follows the country of origin (docs/moonshot.md §5.4): a name ending in "Korea" is Korean, one
 ending in "Japan" English; else a Korean company Korean, a Japanese one Japanese, any other
-English. The raw query results are cached in corpora/brands/ (gitignored).
+English. The raw query results are cached in corpora/brands/ (gitignored), with admission.tsv:
+every candidate and why it was kept or left out.
 """
 
 import argparse
@@ -21,12 +24,15 @@ import unicodedata
 import urllib.parse
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import admission  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 CACHE = os.path.join(ROOT, "corpora", "brands")
 OUT = os.path.join(ROOT, "engine", "predict", "brands.tsv")
 ENDPOINT = "https://query.wikidata.org/sparql"
-AGENT = "jis-moonshot-brands/0.1 (https://github.com/team-mirae/jis-korean)"
+AGENT = "jis-moonshot-brands/0.2 (https://github.com/team-mirae/jis-moonshot)"
 
 # Kinds of company or brand, queried one at a time so no query times out.
 CLASSES = {
@@ -185,21 +191,33 @@ def default_script(en, country):
     return {"KR": "ko", "JP": "ja"}.get(country, "en")
 
 
+def country_of(e):
+    """A brand of several countries: Korea, then Japan, else the first."""
+    countries = e["countries"]
+    return "KR" if "KR" in countries else "JP" if "JP" in countries else (sorted(countries)[0] if countries else "")
+
+
+def bare_names(e):
+    """The names a brand is searched by alone, by language: its labels without their legal form."""
+    return {lang: [plain(e[lang])] if e[lang] else [] for lang in ("en", "ko", "ja")}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--min-sitelinks", type=int, default=8)
     args = ap.parse_args()
     items = {}
-    queries = [(f"{cls}-{args.min_sitelinks}", QUERY % {"cls": cls, "min": args.min_sitelinks}, name) for cls, name in CLASSES.items()]
-    queries += [(f"industry-{lo}-{hi}", INDUSTRY % {"lo": max(lo, args.min_sitelinks), "hi": hi}, f"industry {lo}-{hi}") for lo, hi in SLICES]
-    for key, query, name in queries:
+    queries = [(f"{cls}-{args.min_sitelinks}", QUERY % {"cls": cls, "min": args.min_sitelinks}, name, True) for cls, name in CLASSES.items()]
+    queries += [(f"industry-{lo}-{hi}", INDUSTRY % {"lo": max(lo, args.min_sitelinks), "hi": hi}, f"industry {lo}-{hi}", False) for lo, hi in SLICES]
+    for key, query, name, by_class in queries:
         rows = fetch(key, query)
         print(f"{name:26} {len(rows):6} rows", file=sys.stderr)
         for r in rows:
             v = lambda k: r.get(k, {}).get("value", "")  # noqa: E731
             item = v("item")
             entry = items.setdefault(item, {"links": int(v("links") or 0), "en": v("en"), "ko": v("ko"), "ja": v("ja"),
-                                            "kana": set(), "countries": set(), "alts": set()})
+                                            "kana": set(), "countries": set(), "alts": set(), "by_class": False})
+            entry["by_class"] = entry["by_class"] or by_class
             for lang in ("en", "ko", "ja"):
                 if not entry[lang] and v(lang):
                     entry[lang] = v(lang)
@@ -211,11 +229,13 @@ def main():
                 for alt in v(lang + "Alts").split("|"):
                     if alt:
                         entry["alts"].add((lang, alt))
+    admitted = admission.admit(CACHE, items, country_of, bare_names)
+    print(f"{len(admitted)} of {len(items)} candidates admitted (corpora/brands/admission.tsv)", file=sys.stderr)
     lines = []
     for item, e in sorted(items.items(), key=lambda kv: -kv[1]["links"]):
-        countries = e["countries"]
-        # A brand of several countries: Korea, then Japan, else the first.
-        country = "KR" if "KR" in countries else "JP" if "JP" in countries else (sorted(countries)[0] if countries else "")
+        if item.rsplit("/", 1)[-1] not in admitted:
+            continue
+        country = country_of(e)
         script = default_script(e["en"], country)
         if script != "en" and not e[script]:
             script = "en"

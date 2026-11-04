@@ -131,11 +131,11 @@ fn backquote_is_hankaku_zenkaku_and_the_iso_key_passes_through_in_mode_a() {
 #[test]
 fn mode_a_is_unchanged() {
     let mut e = Engine::new();
-    for (code, shift) in [("Digit2", true), ("BracketLeft", false), ("Equal", false)] {
+    for (code, shift) in [("Digit2", true), ("Semicolon", false), ("Equal", false)] {
         e.key(Key::from_code(code), if shift { Mods::SHIFTED } else { Mods::NONE });
     }
-    // docs/moonshot.md §9: @ is ㅄ and ^ is 가; English still reads the stock keys.
-    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("2ㅂㅅ가", "\"@^"));
+    // docs/moonshot.md §9: ; is ㅖ (예 on its own) and ^ itself; English still reads the stock keys.
+    assert_eq!((e.preedit().as_str(), e.english().as_str()), ("2예^", "\";^"));
 }
 
 /// Spec §3.6.1 over the C ABI: modes are listed by position, and an unknown id is refused.

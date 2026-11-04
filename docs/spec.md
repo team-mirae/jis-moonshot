@@ -96,10 +96,12 @@ except Hangul jamo, which go into the composition automaton (§4).
 | 8 | ㅚ | 8 | most frequent of ㅟ ㅝ ㅚ; middle finger |
 | 9 | ㅢ | 9 | placed for ergonomics |
 | 0 | ㅘ | 0 | JIS kana わ is on this key |
-| − ^ ¥ | ㅙ 가 · | 왜, 께서, nothing | moonshot.md §9.2 (Shift+¥ is empty) |
+| − | ㅙ | 왜 | moonshot.md §9.2 |
+| ^ ¥ | ^ ¥ | ~ \| | stock JIS symbols (moonshot.md §9.2, 2026-11-05) |
 
-Digits are on Shift, so numbers type with Shift held. The 12 keys right of 0 type the actions of
-moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ㆍ breaks, §9.1); JIS Korean's symbols on them are gone.
+Digits are on Shift, so numbers type with Shift held. Of the 12 keys right of 0, − ; : , type the
+Korean of moonshot.md §9.2 (jamo and real-ㅇ syllables, §9.1); the other eight type their stock JIS
+symbols, alone and with Shift (2026-11-05).
 
 ### 3.2 Q row
 
@@ -108,7 +110,7 @@ moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ㆍ breaks, §9.1)
 | Q W E R T | ㅂ ㅈ ㄷ ㄱ ㅅ | 바 자 다 가 사 | Shift+consonant: the consonant and ㅏ (moonshot.md §9.2; the doubles are on 1–5, §1) |
 | Y U I | ㅛ ㅕ ㅑ | ㅛ ㅕ ㅑ | standard 2-set (Shift: §4.2) |
 | O P | ㅐ ㅔ | ㅐ ㅔ | Shift: §4.2 (ㅒ ㅖ are on : and ;, moonshot.md §9.2) |
-| @ [ | ㅄ, ㆍ (break) | ㄶ, ㆍ | moonshot.md §9.2 (ㅄ ㄶ type their two jamo) |
+| @ [ | @ [ | ` { | stock JIS symbols (moonshot.md §9.2) |
 
 ### 3.3 A row
 
@@ -116,7 +118,8 @@ moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ㆍ breaks, §9.1)
 |---|---|---|---|
 | A S D F G | ㅁ ㄴ ㅇ ㄹ ㅎ | 마 나 아 라 하 | Shift+consonant (moonshot.md §9.2) |
 | H J K L | ㅗ ㅓ ㅏ ㅣ | same | standard 2-set |
-| ; : ] | ㅖ ㅒ ㄴ | 예 얘 ㄹ | moonshot.md §9.2 |
+| ; : | ㅖ ㅒ | 예 얘 | moonshot.md §9.2 |
+| ] | ] | } | stock JIS symbol (moonshot.md §9.2) |
 
 ### 3.4 Z row
 
@@ -125,8 +128,8 @@ moonshot.md §9.2 (short runs of jamo, real-ㅇ syllables and ㆍ breaks, §9.1)
 | Z | ㅋ | 카 | Shift+consonant. JIS Korean made Shift+Z F10; JIS Moonshot doesn't (it's っ on the kana layout, moonshot.md §1) |
 | X C V | ㅌ ㅊ ㅍ | 타 차 파 | Shift+consonant (moonshot.md §9.2) |
 | B N M | ㅠ ㅜ ㅡ | same | standard 2-set |
-| , . / | ㅢ 을 서 | , 를 에서 | moonshot.md §9.2; Korean keeps only , on Shift (· is on ¥) |
-| ろ | 로 | 으로 | moonshot.md §9.2 |
+| , | ㅢ | , | moonshot.md §9.2 |
+| . / ろ | . / \ | > ? _ | stock JIS symbols (moonshot.md §9.2) |
 
 ### 3.5 Keys outside this map
 

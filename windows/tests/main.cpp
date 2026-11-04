@@ -169,8 +169,10 @@ int main() {
     Check((Type(0, {{0x5A, 0x2C, true}}, &preedit), preedit == "카"), "Shift+Z → 카");
     // Number row: 1 → ㅃ.
     Check((Type(0, {{0x31, 0x02}}, &preedit), preedit == "ㅃ"), "1 → ㅃ");
-    // Mode A: the @ key (US [) types ㅄ's two jamo (docs/moonshot.md §9.2).
-    Check((Type(0, {{0xDB, 0x1A}}, &preedit), preedit == "ㅂㅅ"), "Mode A @ → ㅂㅅ");
+    // Mode A: the @ key (US [) types @ again, its stock JIS symbol (docs/moonshot.md §9.2,
+    // 2026-11-05); ; still types ㅖ (예 alone).
+    Check((Type(0, {{0xDB, 0x1A}}, &preedit), preedit == "@"), "Mode A @ → @");
+    Check((Type(0, {{0xBB, 0x27}}, &preedit), preedit == "예"), "Mode A ; → 예");
     // The key left of 1 (半角/全角 on a full JIS board) makes what's staged full-width
     // (docs/moonshot.md §4.1): Shift+1 → 1 → １.
     Check((Type(0, {{0x31, 0x02, true}, {0xC0, 0x29}}, &preedit), preedit == "１"), "Mode A 1 半角/全角 → １");
