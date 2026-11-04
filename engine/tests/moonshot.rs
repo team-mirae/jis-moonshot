@@ -289,16 +289,18 @@ fn hankaku_zenkaku_converts_what_is_staged() {
 
 #[test]
 fn the_slot_keys_still_type_kana_in_jis_kana() {
-    // docs/moonshot.md §9.2: the keys right of 0 type Korean in Mode A, but JIS Kana and the kana
-    // reading read them by key, the empty Shift+¥ too.
+    // docs/moonshot.md §9.2: the keys right of 0 type Korean or their symbols in Mode A, but JIS
+    // Kana and the kana reading read them by key.
     let mut e = Engine::new();
     e.set_mode(Mode::AKana);
     press(&mut e, "Equal IntlYen Backslash Period Slash IntlRo");
     assert_eq!(e.preedit(), "へーむるめろ");
-    let mut a = typed("KeyG KeyK Equal");
-    assert_eq!((a.preedit().as_str(), a.kana().as_str()), ("하가", "きのへ"));
+    let mut a = typed("KeyG KeyK Semicolon");
+    assert_eq!((a.preedit().as_str(), a.kana().as_str()), ("하예", "きのれ"));
     a.key(Key::F6, Mods::NONE);
-    assert_eq!(a.preedit(), "きのへ");
+    assert_eq!(a.preedit(), "きのれ");
+    let a = typed("KeyG KeyK Period");
+    assert_eq!((a.preedit().as_str(), a.kana().as_str()), ("하.", "きのる"));
 }
 
 #[test]
@@ -408,12 +410,10 @@ mod predictions {
         let so = texts("KeyC Digit4 KeyW BracketLeft KeyR Comma");
         assert_eq!(so[0], "そうですね");
         assert!(so.contains(&"そうです、".to_string()), "{so:?}");
-        // Not a stray kana reading of Korean keys above the Korean ones (안녕하세요 + `.`).
+        // `.` types itself in Korean (§9.2): 안녕하세요. and its variants first, no stray kana
+        // reading of the Korean keys above them.
         let hello = texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period");
-        assert_eq!(hello[0], "안녕하세요.");
-        let korean = hello.iter().position(|t| t == "안녕하세요을").unwrap();
-        let kana = |t: &String| t.chars().any(|c| ('\u{3041}'..='\u{30FF}').contains(&c) && !"。、・".contains(c));
-        assert!(!hello[..korean].iter().any(kana), "{hello:?}");
+        assert_eq!(hello[..5], ["안녕하세요.", "안녕하세요。", "안녕하세요…", "안녕하세요...", "안녕하세요．"]);
     }
 
     #[test]

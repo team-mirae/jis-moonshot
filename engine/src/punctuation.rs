@@ -34,7 +34,8 @@ pub fn alternatives(c: char) -> &'static [&'static str] {
         '-' => &["ー", "—", "–", "－"],
         '\'' => &["’", "‘"],
         '"' => &["“", "”"],
-        '¥' => &["￥", "\\"],
+        // The ¥ key typed · until 2026-11-05 (docs/moonshot.md §9.2): the middle dots first.
+        '¥' => &["·", "・", "￥", "\\"],
         '\\' => &["¥", "＼"],
         '_' => &["＿"],
         '^' => &["＾"],

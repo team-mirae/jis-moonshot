@@ -23,21 +23,19 @@ pub enum Step {
     /// legend is the syllable (왜, 을), where a bare vowel's is the jamo (ㅙ).
     Ieung(char),
     /// ゜: the syllable ends with no final; the next consonant starts one, a vowel gets an implied ㅇ.
+    /// No key has it since `[` types its symbol again (docs/moonshot.md §9.2, 2026-11-05); the
+    /// engine still reads it.
+    #[allow(dead_code)]
     Break,
     /// Nothing in Korean: a freed slot (docs/moonshot.md §9.2). The key still counts for the kana
-    /// and English readings, F9/F10 and Backspace, as any key does.
+    /// and English readings, F9/F10 and Backspace, as any key does. No key has it since 2026-11-05.
+    #[allow(dead_code)]
     Blank,
 }
-
-/// A freed slot's action (docs/moonshot.md §9.2): it types nothing in Korean.
-pub const BLANK: Action = Action { legend: "", steps: &[Step::Blank] };
 
 /// What a syllable break shows as, alone (docs/moonshot.md §9.1): ㆍ (U+318D, arae-a, an archaic
 /// jamo no modern text uses), so a break typed first is on screen and is a reading of its own.
 pub const BREAK_MARK: char = '\u{318D}';
-
-/// The [ key's action: the syllable break (docs/moonshot.md §9.1).
-pub const BREAK: Action = Action { legend: "\u{318D}", steps: &[Step::Break] };
 
 /// A key's action: its legend (how docs/moonshot.md §9.2 writes it) and its steps.
 #[derive(Debug, PartialEq, Eq)]
@@ -357,12 +355,12 @@ fn consonant_a(consonant: char) -> Option<&'static Action> {
     })
 }
 
-/// Mode A's non-letter keys: the number row (spec §3.1) and JIS Moonshot's 12 keys right of 0
-/// (docs/moonshot.md §9.2): (unshifted, shifted). The freed slots type nothing ([`BLANK`]).
+/// Mode A's non-letter keys: the number row (spec §3.1) and the 12 keys right of 0 (docs/moonshot.md
+/// §9.2): (unshifted, shifted). Since 2026-11-05 only − ; : , type Korean there.
 fn jis_korean(key: Key) -> Option<(Out, Out)> {
     use Key::*;
     use Out::{Char as C, Jamo as J, Keys as K};
-    use Step::{Ieung as I, Jamo as S};
+    use Step::Ieung as I;
     let pair = match key {
         Digit1 => (J('ㅃ'), C('1')),
         Digit2 => (J('ㅉ'), C('2')),
@@ -375,19 +373,15 @@ fn jis_korean(key: Key) -> Option<(Out, Out)> {
         Digit9 => (J('ㅢ'), C('9')),
         Digit0 => (J('ㅘ'), C('0')),
         Minus => (J('ㅙ'), K(&Action { legend: "왜", steps: &[I('ㅙ')] })),
-        // docs/moonshot.md §9.2 (2026-11-03).
-        Equal => (K(&Action { legend: "가", steps: &[S('ㄱ'), S('ㅏ')] }), K(&Action { legend: "께서", steps: &[S('ㄲ'), S('ㅔ'), S('ㅅ'), S('ㅓ')] })),
-        IntlYen => (C('\u{00B7}'), K(&BLANK)),
-        // Double finals, written as the compatibility jamo they make (ㅄ ㄶ).
-        BracketLeft => (K(&Action { legend: "ㅄ", steps: &[S('ㅂ'), S('ㅅ')] }), K(&Action { legend: "ㄶ", steps: &[S('ㄴ'), S('ㅎ')] })),
-        BracketRight => (K(&BREAK), K(&BREAK)),
+        // docs/moonshot.md §9.2 (2026-11-05, the owner's call): ^ ¥ @ [ ] . / ろ type their stock JIS
+        // symbols again, on both layers, so punctuation has its keys.
+        Equal | IntlYen | BracketLeft | BracketRight | Backslash | Period | Slash | IntlRo => {
+            let (alone, shifted) = stock_jis(key)?;
+            (C(alone), C(shifted))
+        }
         Semicolon => (J('ㅖ'), K(&Action { legend: "예", steps: &[I('ㅖ')] })),
         Quote => (J('ㅒ'), K(&Action { legend: "얘", steps: &[I('ㅒ')] })),
-        Backslash => (J('ㄴ'), J('ㄹ')),
         Comma => (J('ㅢ'), C(',')),
-        Period => (K(&Action { legend: "을", steps: &[I('ㅡ'), S('ㄹ')] }), K(&Action { legend: "를", steps: &[S('ㄹ'), S('ㅡ'), S('ㄹ')] })),
-        Slash => (K(&Action { legend: "서", steps: &[S('ㅅ'), S('ㅓ')] }), K(&Action { legend: "에서", steps: &[I('ㅔ'), S('ㅅ'), S('ㅓ')] })),
-        IntlRo => (K(&Action { legend: "로", steps: &[S('ㄹ'), S('ㅗ')] }), K(&Action { legend: "으로", steps: &[I('ㅡ'), S('ㄹ'), S('ㅗ')] })),
         _ => return None,
     };
     Some(pair)

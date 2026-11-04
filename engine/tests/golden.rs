@@ -138,80 +138,56 @@ fn phone_numbers_type_with_shift_held() {
 
 #[test]
 fn the_keys_right_of_0_type_their_actions() {
-    // docs/moonshot.md §9.2: each action as if its 2-set keys were pressed, real ㅇ and ゜ included.
+    // docs/moonshot.md §9.2: each action as if its 2-set keys were pressed, real ㅇ included.
     pre("Minus S-Minus", "왜왜");
     pre("KeyE Minus", "돼");
     pre("KeyA KeyK KeyF Minus", "마뢔");
     pre("KeyA KeyK KeyF S-Minus", "말왜");
-    pre("KeyR KeyK KeyF BracketRight KeyK", "갈아");
-    pre("KeyR KeyK KeyF S-BracketRight KeyK", "갈아");
-    pre("KeyR KeyK BracketRight KeyT", "가ㅅ");
     pre("KeyR Semicolon", "계");
     pre("KeyA KeyK KeyF S-Semicolon", "말예");
     pre("KeyR Quote", "걔");
     pre("S-Quote KeyR KeyL", "얘기");
     pre("KeyG Comma", "희");
-    // 2026-11-03: ^ 가 / 께서, ¥ ·, @ ㅄ / ㄶ, ] ㄴ / ㄹ, . 을 / 를, / 서 / 에서, ろ 로 / 으로.
-    pre("KeyG KeyK Equal", "하가");
-    pre("KeyT KeyJ KeyS KeyT KeyO KeyD KeyS KeyL KeyA S-Equal", "선생님께서");
-    pre("KeyA KeyK KeyF IntlYen KeyR KeyK", "말·가");
-    pre("KeyD KeyJ BracketLeft", "없");
-    pre("KeyA KeyK S-BracketLeft KeyD KeyL", "많이");
-    pre("KeyR KeyK Backslash", "간");
-    pre("KeyR KeyK S-Backslash", "갈");
-    pre("KeyC KeyO KeyR Period", "책을");
-    pre("KeyT KeyK KeyR KeyH KeyK S-Period", "사과를");
-    pre("KeyD KeyJ KeyQ Slash", "업서");
-    pre("KeyG KeyK KeyR KeyR KeyY S-Slash", "학교에서");
-    pre("KeyT KeyJ KeyN KeyF IntlRo", "서울로");
-    pre("KeyW KeyL KeyQ S-IntlRo", "집으로");
     // Korean keeps , on Shift.
     pre("S-Comma", ",");
 }
 
 #[test]
-fn the_empty_slot_types_nothing() {
-    // docs/moonshot.md §9.2: Shift+¥ is the one slot left empty: nothing in Korean, and the
-    // syllable goes on across it.
-    pre("KeyG KeyK S-IntlYen KeyS", "한");
-    // Still a key: Backspace takes it off, and F10 reads it.
-    pre("KeyR KeyK S-IntlYen Backspace KeyS", "간");
-    pre("KeyR S-IntlYen F10", "r|");
-}
-
-#[test]
-fn a_break_typed_first_shows_as_arae_a() {
-    // docs/moonshot.md §9.1: a lone break is on screen as ㆍ (U+318D); anything typed after it
-    // reads as before.
-    pre("BracketRight", "\u{318D}");
-    pre("BracketRight BracketRight", "\u{318D}\u{318D}");
-    pre("BracketRight KeyK", "아");
-    pre("BracketRight KeyR KeyK", "가");
+fn the_symbol_keys_type_their_jis_symbols() {
+    // docs/moonshot.md §9.2 (2026-11-05): ^ ¥ @ [ ] . / ろ type their stock JIS symbols, alone and
+    // with Shift, and end the syllable before them.
+    pre("Equal S-Equal IntlYen S-IntlYen BracketLeft S-BracketLeft", "^~¥|@`");
+    pre("BracketRight S-BracketRight Backslash S-Backslash", "[{]}");
+    pre("Period S-Period Slash S-Slash IntlRo S-IntlRo", ".>/?\\_");
+    pre("KeyD KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period", "안녕하세요.");
+    pre("KeyA KeyN KeyJ KeyG KeyO KeyD KeyY S-Slash", "뭐해요?");
+    pre("KeyG KeyK KeyS Period KeyR KeyK", "한.가");
 }
 
 #[test]
 fn f10_reads_every_key_of_an_action_once() {
-    // An action's parts belong to its key: ろ (로) converts to one \\, ^ (다) to one ^.
+    // An action's parts belong to its key: Shift+; (예) converts to one +, Shift+− (왜) to one =.
     pre("KeyI S-KeyP KeyH KeyO KeyN KeyE F10", "iPhone");
     pre("KeyR Minus F10", "r-");
     pre("KeyR S-Semicolon F10", "r+");
+    pre("KeyR S-Minus F10", "r=");
 }
 
 #[test]
 fn backspace_takes_a_whole_key_off() {
-    pre("KeyG KeyK Equal Backspace", "하");
-    pre("KeyW KeyL KeyQ S-IntlRo Backspace", "집");
-    pre("KeyD KeyJ BracketLeft Backspace", "어");
-    pre("KeyA KeyK S-BracketLeft Backspace", "마");
-    pre("KeyG KeyK S-Equal Backspace", "하");
+    pre("KeyA KeyK KeyF S-Minus Backspace", "말");
+    pre("KeyA KeyK KeyF S-Semicolon Backspace", "말");
+    pre("KeyW KeyL KeyQ Period Backspace", "집");
 }
 
 #[test]
 fn hankaku_zenkaku_converts_every_symbol_with_a_form_in_that_width() {
     pre("S-Comma S-Comma Backquote", "，，");
-    // A symbol with no other form stays: · has none.
-    pre("S-Comma IntlYen S-Comma Backquote", "，·，");
-    pre("S-Comma IntlYen S-Comma Backquote S-Backquote", ",·,");
+    // ¥ (the ¥ key) has a full-width form too.
+    pre("S-Comma IntlYen S-Comma Backquote", "，￥，");
+    pre("S-Comma IntlYen S-Comma Backquote S-Backquote", ",¥,");
+    // A character with no other form stays: 한 has none.
+    pre("KeyG KeyK KeyS S-Comma Backquote", "한，");
 }
 
 #[test]
@@ -226,7 +202,6 @@ fn shift_vowel_starts_on_ieung_after_a_final() {
     pre("KeyD KeyL Digit5 KeyJ", "이써");
     pre("KeyD KeyL S-KeyT S-KeyJ", "이사어");
     // A vowel that's part of a key's action isn't a press: the same vowel next is no double press.
-    pre("KeyG KeyK Equal KeyK", "하가아");
     pre("KeyR KeyK S-KeyS KeyK", "가나아");
 }
 
@@ -529,8 +504,8 @@ fn english_keeps_case_dedicated_digits_and_symbols() {
     for (code, shift) in [("KeyQ", true), ("Digit1", false), ("Minus", false), ("Slash", false), ("IntlYen", false)] {
         e.key(Key::from_code(code), if shift { Mods::SHIFTED } else { Mods::NONE });
     }
-    // Shift+Q is 바, 1 ㅃ, − ㅙ, / 서, ¥ · (docs/moonshot.md §9); English reads the keys.
-    assert_eq!(e.preedit(), "바뽸서·");
+    // Shift+Q is 바, 1 ㅃ, − ㅙ, / and ¥ themselves (docs/moonshot.md §9); English reads the keys.
+    assert_eq!(e.preedit(), "바뽸/¥");
     assert_eq!(e.english(), "Q1-/¥");
 }
 

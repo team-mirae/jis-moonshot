@@ -792,6 +792,25 @@ impl Engine {
                 kana_punctuation: kana_marks.clone().unwrap_or_default(),
             });
         }
+        // Symbol keys that typed their symbol (. / since 2026-11-05, §9.2): the Korean and English
+        // readings show it already, but the kana reading reads る め: the kana before them with
+        // 。 ？ too.
+        if readings.punctuated.is_empty() {
+            let mut kana_marks = String::new();
+            for &start in starts.iter().rev().take(2) {
+                let Token::Typed(_, stock, _) = segment[start] else { break };
+                let Some(mark) = crate::punctuation::kana_mark(stock) else { break };
+                kana_marks.insert(0, mark);
+                if start == 0 {
+                    break;
+                }
+                readings.punctuated.push(crate::predict::Punctuated {
+                    readings: self.word_readings(&segment[..start]),
+                    punctuation: String::new(),
+                    kana_punctuation: kana_marks.clone(),
+                });
+            }
+        }
         readings
     }
 

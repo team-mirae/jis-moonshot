@@ -559,13 +559,14 @@ fn an_implied_l_after_n_is_offered_and_its_weight_0_turns_it_off() {
     assert!(typed("KeyT KeyK KeyF KeyK KeyA").predictions().iter().all(|x| x.kind != Kind::ImpliedL));
 }
 
-// ㄶ by sound is retired (spec §10.5): ㄶ has its own key (Shift+@, docs/moonshot.md §9.2)
+// ㄶ by sound is retired (spec §10.5): ㄶ is typed ㄴ ㅎ, as in 2-set
 
 #[test]
 fn n_and_an_aspirated_consonant_stay_as_typed() {
-    // ㅇ ㅏ ㄴ ㅋ ㅗ is 안코: no 않고 reading any more; ㅇ ㅏ Shift+@ ㄱ ㅗ types 않고.
+    // ㅇ ㅏ ㄴ ㅋ ㅗ is 안코: no 않고 reading any more; ㅇ ㅏ ㄴ ㅎ ㄱ ㅗ types 않고 (2-set's way: Shift+@
+    // typed ㄶ until 2026-11-05).
     assert!(!texts("KeyD KeyK KeyS KeyZ KeyH").iter().any(|t| t == "않고"));
-    assert_eq!(typed("KeyD KeyK S-BracketLeft KeyR KeyH").preedit(), "않고");
+    assert_eq!(typed("KeyD KeyK KeyS KeyG KeyR KeyH").preedit(), "않고");
 }
 
 /// The standard 2-set reading (spec §10.2) types the stock JIS symbol: Shift+2 is ".
@@ -672,9 +673,9 @@ fn a_word_in_capitals_is_an_acronym() {
 
 #[test]
 fn a_lone_capital_beside_latin_pieces_is_a_letter() {
-    // Mode A's punctuation is , and · (on ¥, docs/moonshot.md §9).
-    assert_eq!(top("S-KeyK IntlYen S-KeyI S-KeyF S-KeyR S-KeyS").0, "K·IFRS");
-    assert_eq!(top("S-KeyC S-KeyT IntlYen S-KeyP S-Digit1 S-Digit3").0, "CT·P13");
+    // Punctuation between them (/ types itself, docs/moonshot.md §9.2).
+    assert_eq!(top("S-KeyK Slash S-KeyI S-KeyF S-KeyR S-KeyS").0, "K/IFRS");
+    assert_eq!(top("S-KeyC S-KeyT Slash S-KeyP S-Digit1 S-Digit3").0, "CT/P13");
     // A lowercase one stays Korean: USD,에.
     assert_eq!(top("S-KeyU S-KeyS S-KeyD S-Comma KeyP").0, "USD,에");
 }
@@ -715,8 +716,9 @@ fn a_reading_ending_in_a_symbol_offers_its_variants() {
     // Every reading, not only the top one; never the standard 2-set reading's stock symbols.
     assert!(after.iter().any(|t| t == "gks、"), "{after:?}");
     assert!(!after.iter().any(|t| t == "한＜"), "{after:?}");
-    // · on ¥ offers the Japanese middle dots; the English reading's period offers 。 … and ...
-    assert_eq!(texts("IntlYen")[..3], ["·", "・", "･"]);
+    // ¥ offers the middle dots it used to type (§9.2) and ￥; the English reading's period offers
+    // 。 … and ...
+    assert_eq!(texts("IntlYen")[..4], ["¥", "·", "・", "￥"]);
     let hello = texts("KeyH KeyE KeyL KeyL KeyO Period");
     for want in ["hello.", "hello。", "hello…", "hello..."] {
         assert!(hello.iter().any(|t| t == want), "{want}: {hello:?}");
@@ -806,32 +808,30 @@ fn typed_forced(keys: &str) -> Engine {
 
 #[test]
 fn forced_korean_offers_its_symbol_keys_as_punctuation() {
-    // docs/moonshot.md §4: 안녕하세요 + 変換 + . shows 안녕하세요을, and the period below it, with its
+    // docs/moonshot.md §4: 그렇고 + 変換 + , shows 그렇고의, and the comma below it, with its
     // variants (§5.2); 変換 before or after the key.
     let texts = |keys: &str| typed_forced(keys).predictions().into_iter().map(|p| p.text).collect::<Vec<_>>();
-    let period = ["안녕하세요을", "안녕하세요.", "안녕하세요。", "안녕하세요…", "안녕하세요...", "안녕하세요．"];
-    assert_eq!(texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY HENKAN Period"), period);
-    assert_eq!(texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period HENKAN"), period);
-    // Shift+. (를) is a period, as in JIS kana (。), not >.
-    assert_eq!(texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY HENKAN S-Period")[..2], ["안녕하세요를", "안녕하세요."]);
-    // Shift+, types a comma in Mode A already: its variants.
-    assert_eq!(texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY HENKAN S-Comma"), ["안녕하세요,", "안녕하세요、", "안녕하세요，"]);
+    let comma = ["그렇고의", "그렇고,", "그렇고、", "그렇고，"];
+    assert_eq!(texts("KeyR KeyM KeyF KeyJ KeyG KeyR KeyH HENKAN Comma"), comma);
+    assert_eq!(texts("KeyR KeyM KeyF KeyJ KeyG KeyR KeyH Comma HENKAN"), comma);
     // Shift+変換 (bare) too.
-    let mut e = typed("KeyD KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period");
+    let mut e = typed("KeyR KeyM KeyF KeyJ KeyG KeyR KeyH Comma");
     e.kana_key_bare();
-    assert_eq!(e.predictions()[1].text, "안녕하세요.");
+    assert_eq!(e.predictions()[1].text, "그렇고,");
+    // A symbol typed as one (. since 2026-11-05, §9.2): the forced reading's own variants.
+    assert_eq!(texts("KeyD KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period HENKAN")[..2], ["안녕하세요.", "안녕하세요。"]);
     // A symbol key before a staged space is offered as punctuation too, after the end's alone.
     assert_eq!(
-        texts("KeyK KeyS KeyS Period Space KeyR KeyK HENKAN Slash"),
-        ["안늘 가서", "안늘 가/", "안늘 가・", "안늘 가／", "안ㄴ. 가/", "안ㄴ. 가・", "안ㄴ. 가／"]
+        texts("KeyR KeyH Comma Space KeyR KeyK HENKAN Comma"),
+        ["고의 가의", "고의 가,", "고의 가、", "고의 가，", "고, 가,", "고, 가、", "고, 가，"]
     );
     // No symbol key at the end or before a space: no list, only the forced reading as the preedit.
     assert!(texts("KeyG KeyK KeyS HENKAN").is_empty());
-    // Choosing the period commits it; forced rows teach the ranker nothing.
-    let mut e = typed_forced("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY HENKAN Period");
+    // Choosing the comma commits it; forced rows teach the ranker nothing.
+    let mut e = typed_forced("KeyR KeyM KeyF KeyJ KeyG KeyR KeyH HENKAN Comma");
     e.set_learning(true);
     let learner = e.learner().clone();
-    assert_eq!(e.commit_prediction(1).commit, "안녕하세요.");
+    assert_eq!(e.commit_prediction(1).commit, "그렇고,");
     assert_eq!(*e.learner(), learner);
 }
 
@@ -857,23 +857,20 @@ fn texts_of(words: &str) -> Vec<String> {
 
 #[test]
 fn korean_readings_take_the_symbol_keys_as_punctuation() {
-    // docs/moonshot.md §5.6: a final ending takes the mark (. ? ,), with its variants after it.
-    let list = texts_of("안녕하세요 #Period");
-    assert_eq!(list[..5], ["안녕하세요.", "안녕하세요。", "안녕하세요…", "안녕하세요...", "안녕하세요．"]);
-    assert!(list.contains(&"안녕하세요을".to_string()), "{list:?}");
-    assert_eq!(top_of("안녕하세요 #S-Period"), ("안녕하세요.".into(), Kind::Korean));
+    // docs/moonshot.md §5.6: the comma key types ㅢ; a connective ending takes the comma instead,
+    // with its variants after it.
+    let list = texts_of("그렇고 #Comma");
+    assert_eq!(list[..3], ["그렇고,", "그렇고、", "그렇고，"]);
+    assert!(list.contains(&"그렇고의".to_string()), "{list:?}");
+    assert_eq!(top_of("했는데 #Comma"), ("했는데,".into(), Kind::Korean));
+    assert_eq!(top_of("먹었지만 #Comma").0, "먹었지만,");
+    // A noun takes the 의 the key types; the comma is offered below it.
+    assert_eq!(top_of("회 #Comma").0, "회의");
+    assert!(texts_of("회 #Comma").contains(&"회,".to_string()));
+    // . / type themselves (§9.2): the sentence's end as typed.
+    assert_eq!(top_of("안녕하세요 #Period"), ("안녕하세요.".into(), Kind::Korean));
     assert_eq!(top_of("감사합니다 #Period").0, "감사합니다.");
-    assert_eq!(top_of("먹었다 #Period").0, "먹었다.");
     assert_eq!(top_of("뭐해요 #S-Slash").0, "뭐해요?");
-    assert_eq!(top_of("그렇고 #Comma").0, "그렇고,");
-    assert_eq!(top_of("했는데 #Comma").0, "했는데,");
-    // A noun takes the particle the key types; the mark is offered below it.
-    for (keys, want) in [("책 #Period", "책을"), ("사과 #S-Period", "사과를"), ("회 #Comma", "회의"), ("가 #Slash", "가서"), ("서울 #Slash", "서울서")] {
-        assert_eq!(top_of(keys).0, want, "{keys}");
-    }
-    assert!(texts_of("책 #Period").contains(&"책.".to_string()));
-    // Two marks cost more than one (운송의 typed with ㅇ then ㅢ, not 운송,,).
-    assert_eq!(top_of("합니다 #Period_Period").0, "합니다..");
 }
 
 #[test]
@@ -881,7 +878,7 @@ fn a_phrase_takes_punctuation_word_by_word() {
     // §5.5's pieces: each word between spaces takes its own mark.
     assert_eq!(top_of("안녕하세요 #Period_Space 반가워요 #Period"), ("안녕하세요. 반가워요.".into(), Kind::Korean));
     assert_eq!(top_of("밥 #Space 먹었어요 #S-Slash").0, "밥 먹었어요?");
-    assert_eq!(top_of("책 #Period_Space 읽어요").0, "책을 읽어요");
+    assert_eq!(top_of("그렇고 #Comma_Space 했는데 #Comma").0, "그렇고, 했는데,");
 }
 
 fn top_of(words: &str) -> (String, Kind) {

@@ -85,10 +85,9 @@ INIT = {j: DOUBLES.get(j, k.lower()) for j, k in B.INITIAL_KEYS.items()}
 MED = {j: {"ㅒ": ":", "ㅖ": ";"}.get(j, k.lower()) for j, k in B.MEDIAL_KEYS.items()}
 FIN = {j: DOUBLES.get(j, k.lower()) for j, k in B.FINAL_KEYS.items()}
 JAMO = {**INIT, **MED, **FIN}
-# Slot keys (§9.2), Shift dropped: whole open syllables, and parts.
-SLOT_SYLLABLE = {("ㄷ", "ㅏ"): "^", ("ㄷ", "ㅗ"): "^", ("ㄴ", "ㅏ"): "\\", ("ㄴ", "ㅣ"): "\\",
-                 ("ㅁ", "ㅜ"): "]", ("ㅂ", "ㅜ"): "]", ("ㅁ", "ㅔ"): "/", ("ㄹ", "ㅗ"): "_",
-                 ("ㅇ", "ㅙ"): "-", ("ㅇ", "ㅖ"): ";", ("ㅇ", "ㅒ"): ":"}
+# Slot keys (§9.2, 2026-11-05: only − ; : , type Korean), Shift dropped: a syllable on a real ㅇ
+# (Shift+− 왜, Shift+; 예, Shift+: 얘), and the bare vowels.
+SLOT_SYLLABLE = {("ㅇ", "ㅙ"): "-", ("ㅇ", "ㅖ"): ";", ("ㅇ", "ㅒ"): ":"}
 SLOT_MEDIAL = {"ㅙ": "-", "ㅢ": ","}
 
 
@@ -106,10 +105,6 @@ def korean_keys(word, jis, rng=None, slots=0.0):
             keys.append(SLOT_SYLLABLE[(initial, medial)])
             prev = (initial, medial, final)
             continue
-        if use and initial == "ㅇ" and medial == "ㅡ" and final == "ㄹ":
-            keys.append("@")  # 을
-            prev = (initial, medial, final)
-            continue
         vowel = MED[medial]
         if initial == "ㅇ" and jis:
             if prev and prev[2]:
@@ -120,12 +115,9 @@ def korean_keys(word, jis, rng=None, slots=0.0):
                 keys.append("d")
         else:
             keys.append(INIT[initial])
-        if use and medial == "ㅡ" and final == "ㄹ":
-            keys.append("@")
-        else:
-            keys.append(SLOT_MEDIAL[medial] if use and medial in SLOT_MEDIAL else vowel)
-            if final:
-                keys.append("." if use and final == "ㅄ" else FIN[final])
+        keys.append(SLOT_MEDIAL[medial] if use and medial in SLOT_MEDIAL else vowel)
+        if final:
+            keys.append(FIN[final])
         prev = (initial, medial, final)
     return "".join(keys)
 

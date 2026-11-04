@@ -59,14 +59,12 @@ fn count_compares_jis_korean_with_conventional() {
 
 #[test]
 fn symbols_off_the_legends_cost_three_on_both_layouts() {
-    // @ is on stock JIS but not on the JIS Moonshot legends; · is the reverse (¥,
-    // docs/moonshot.md §9).
-    assert_eq!(jis_korean::plan::count("@").jis, 3);
+    // ! is on stock JIS (Shift+1) but not on the JIS Moonshot legends (Shift+1 is 1); @ is on
+    // both since 2026-11-05 (docs/moonshot.md §9.2).
+    assert_eq!(jis_korean::plan::count("!").jis, 3);
+    assert_eq!(jis_korean::plan::conventional("!"), 2);
+    assert_eq!(jis_korean::plan::count("@").jis, 1);
     assert_eq!(jis_korean::plan::conventional("@"), 1);
-    assert_eq!(jis_korean::plan::count("·").jis, 1);
-    assert_eq!(jis_korean::plan::conventional("·"), 3);
-    // Digits after an @ still cost Shift+digit: the escape doesn't linger.
-    assert_eq!(jis_korean::plan::count("@1").jis, 5);
     // ( ) have no key in JIS Moonshot's Mode A (docs/moonshot.md §9): three each; stock JIS has
     // them on Shift+8 / Shift+9.
     assert_eq!(jis_korean::plan::count("()").jis, 6);
