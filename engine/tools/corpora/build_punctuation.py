@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Builds engine/predict/punctuation.tsv (docs/moonshot.md §5.6): what follows a Korean
-syllable, a punctuation mark or one of the syllables the symbol keys type, from the open corpora.
+syllable or a kana, a punctuation mark or what the symbol keys type, from the open corpora.
 
     python3 -I engine/tools/corpora/build_punctuation.py [--cap-mb N] [--min-count N]
 
@@ -13,6 +13,11 @@ context is that syllable and the two ending there; what comes right after it is 
 is a mark in MARKS or a syllable in NEXT (a word's end before a space isn't either). Lines of the
 evaluation texts are left out (as engine/tools/train_learned.py does).
 
+Japanese the same way, from Tatoeba's Japanese sentences (corpora/jpn_sentences.tsv.bz2, fetched by
+fetch_corpora.py; katakana counted as hiragana): after each kana and each two, how often a mark in
+JA_MARKS (。、？・, what a romaji typist's . , / give) or a kana in JA_NEXT (る ね め, what the same
+keys type on the JIS kana layout) comes next. Kanji end a context.
+
 Each line: language, context ("" for every syllable), how often it occurred, then one count per
 mark in MARKS and per syllable in NEXT (weighted, rounded). Two-syllable contexts seen less than
 --min-count times are dropped (one syllable: a tenth of that), and two-syllable ones that say no
@@ -21,6 +26,7 @@ backs off from two syllables to one to none. Deterministic: sorted output.
 """
 
 import argparse
+import bz2
 import glob
 import json
 import os
@@ -39,6 +45,15 @@ MARKS = ".,?/;:-~"
 # The first syllables the symbol keys type at a word's end (을 를 의 서 에서 로 으로 가 께서 왜 예 얘).
 NEXT = "을를의서에로으가께왜예얘"
 COLUMNS = MARKS + NEXT
+
+# Japanese (the kana reading, docs/moonshot.md §5.6): the marks a romaji typist's `.` `,` `/` give
+# (and ・), then the kana those keys type on the JIS kana layout (る ね め).
+JA_MARKS = "。、？・"
+JA_NEXT = "るねめ"
+JA_COLUMNS = JA_MARKS + JA_NEXT
+# Half-width and ASCII forms counted as the marks.
+JA_SAME = {"?": "？", "．": "。", "，": "、", "､": "、", "｡": "。", "･": "・"}
+JA_SENTENCES = os.path.join(CORPORA, "jpn_sentences.tsv.bz2")
 
 HANGUL_RUN = re.compile(r"[가-힣]+")
 
@@ -89,6 +104,64 @@ def count_korean(cap, seen, follows, excluded):
         print(f"  {os.path.basename(os.path.dirname(path))}: {syllables} syllables", file=sys.stderr)
 
 
+def hiragana(c):
+    """A katakana letter as hiragana (ー stays); anything else as it is."""
+    return chr(ord(c) - 0x60) if "\u30a1" <= c <= "\u30f6" else c
+
+
+def is_kana(c):
+    return "\u3041" <= c <= "\u3096" or c == "ー"
+
+
+def count_japanese(seen, follows, excluded):
+    """Tatoeba's Japanese sentences (fetch_corpora.py): after each kana, and each two, what comes
+    next, when it's a mark in JA_MARKS or a kana in JA_NEXT. Kanji end a context: the kana reading
+    of what's typed is kana throughout."""
+    lines = 0
+    with bz2.open(JA_SENTENCES, "rt", encoding="utf-8") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 3 or " ".join(parts[2].split()) in excluded:
+                continue
+            text = [JA_SAME.get(c, hiragana(c)) for c in parts[2]]
+            lines += 1
+            for i, c in enumerate(text):
+                if not is_kana(c):
+                    continue
+                nxt = text[i + 1] if i + 1 < len(text) else ""
+                column = JA_COLUMNS.find(nxt) if nxt else -1
+                pair = text[i - 1] + c if i and is_kana(text[i - 1]) else None
+                for ctx in ("", c, pair):
+                    if ctx is None:
+                        continue
+                    seen[ctx] = seen.get(ctx, 0.0) + 1
+                    if column >= 0:
+                        row = follows.setdefault(ctx, [0.0] * len(JA_COLUMNS))
+                        row[column] += 1
+    print(f"  tatoeba jpn: {lines} sentences", file=sys.stderr)
+
+
+def rows(language, seen, follows, width, min_count):
+    """The table's lines for one language (see the module docstring)."""
+    out = []
+    for ctx in sorted(seen, key=lambda c: (len(c), c)):
+        n = seen[ctx]
+        # One character is kept when seen at all often: one missing reads as rare (the engine
+        # lowers a mark after it).
+        if ctx and n < (min_count if len(ctx) == 2 else min_count / 10):
+            continue
+        row = follows.get(ctx, [0.0] * width)
+        # A two-character context only where it says more than its last character does: the
+        # engine backs off to that.
+        if len(ctx) == 2 and ctx[1:] in seen:
+            base_n = seen[ctx[1:]]
+            base = follows.get(ctx[1:], [0.0] * width)
+            if all(abs(r / n - b / base_n) < 0.02 for r, b in zip(row, base)):
+                continue
+        out.append("\t".join([language, ctx, str(round(n))] + [str(round(r)) for r in row]))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--cap-mb", type=float, default=12.0, help="MB read per source (times its weight)")
@@ -104,26 +177,17 @@ def main():
     seen, follows = {}, {}
     count_korean(args.cap_mb, seen, follows, excluded)
 
+    ja_seen, ja_follows = {}, {}
+    count_japanese(ja_seen, ja_follows, excluded)
+
     lines = [
-        "# Which punctuation follows a word's ending (docs/moonshot.md §5.6), from the open corpora.",
-        "# Built by engine/tools/corpora/build_punctuation.py: language, context, times seen, then",
-        "# the counts of " + " ".join(COLUMNS) + " right after it.",
+        "# What follows a word's ending (docs/moonshot.md §5.6), from the open corpora. Built by",
+        "# engine/tools/corpora/build_punctuation.py: language, context, times seen, then the counts",
+        "# right after it of, in Korean, " + " ".join(COLUMNS) + "; in Japanese, " + " ".join(JA_COLUMNS) + ".",
     ]
-    for ctx in sorted(seen, key=lambda c: (len(c), c)):
-        n = seen[ctx]
-        # One syllable is kept when seen at all often: one missing reads as rare (the engine
-        # lowers a mark after it).
-        if ctx and n < (args.min_count if len(ctx) == 2 else args.min_count / 10):
-            continue
-        row = follows.get(ctx, [0.0] * len(COLUMNS))
-        # A two-syllable context only where it says more than its last syllable does: the engine
-        # backs off to that.
-        if len(ctx) == 2 and ctx[1:] in seen:
-            base_n = seen[ctx[1:]]
-            base = follows.get(ctx[1:], [0.0] * len(COLUMNS))
-            if all(abs(r / n - b / base_n) < 0.02 for r, b in zip(row, base)):
-                continue
-        lines.append("\t".join(["ko", ctx, str(round(n))] + [str(round(r)) for r in row]))
+    lines += rows("ko", seen, follows, len(COLUMNS), args.min_count)
+    # Tatoeba is far smaller than the Korean corpora: a tenth of the minimum.
+    lines += rows("ja", ja_seen, ja_follows, len(JA_COLUMNS), args.min_count / 10)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print(f"wrote {args.out}: {len(lines) - 3} contexts", file=sys.stderr)

@@ -16,6 +16,10 @@ Korean, colloquial
 English, colloquial
 - Tatoeba (https://tatoeba.org), English sentences. Licensed under CC BY 2.0 FR
   (https://creativecommons.org/licenses/by/2.0/fr/).
+
+Japanese (what follows a kana ending, punctuation.tsv; counts only)
+- Tatoeba (https://tatoeba.org), Japanese sentences. Licensed under CC BY 2.0 FR
+  (https://creativecommons.org/licenses/by/2.0/fr/).
 - Taskmaster-1 (2019), Google Research, by Bill Byrne et al.
   https://github.com/google-research-datasets/Taskmaster. Licensed under CC BY 4.0
   (https://creativecommons.org/licenses/by/4.0/).

@@ -395,6 +395,28 @@ mod predictions {
     }
 
     #[test]
+    fn kana_readings_take_the_symbol_keys_as_punctuation() {
+        // docs/moonshot.md §5.6: `.` `,` `/` read as 。、？ after kana when the ending takes them
+        // (ます。), as る ね め when the kana does (たべる, そうですね), with the other offered.
+        let texts = |keys: &str| predicted(keys).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        assert_eq!(top("Digit3 KeyL KeyT BracketLeft KeyS Digit4 Period"), ("ありがとう。".into(), Kind::Kana));
+        assert_eq!(top("Digit3 KeyL KeyT BracketLeft KeyS Digit4 KeyB BracketLeft KeyX BracketLeft KeyE KeyJ KeyR Period").0, "ありがとうございます。");
+        assert_eq!(top("KeyB KeyY KeyI KeyA KeyF Comma").0, "こんにちは、");
+        let eat = texts("KeyQ Equal BracketLeft Period");
+        assert_eq!(eat[0], "たべる");
+        assert!(eat.contains(&"たべ。".to_string()), "{eat:?}");
+        let so = texts("KeyC Digit4 KeyW BracketLeft KeyR Comma");
+        assert_eq!(so[0], "そうですね");
+        assert!(so.contains(&"そうです、".to_string()), "{so:?}");
+        // Not a stray kana reading of Korean keys above the Korean ones (안녕하세요 + `.`).
+        let hello = texts("KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period");
+        assert_eq!(hello[0], "안녕하세요.");
+        let korean = hello.iter().position(|t| t == "안녕하세요을").unwrap();
+        let kana = |t: &String| t.chars().any(|c| ('\u{3041}'..='\u{30FF}').contains(&c) && !"。、・".contains(c));
+        assert!(!hello[..korean].iter().any(kana), "{hello:?}");
+    }
+
+    #[test]
     fn japanese_words_read_as_kana() {
         assert_eq!(top("KeyB KeyY KeyI KeyA KeyF"), ("こんにちは".into(), Kind::Kana));
         assert_eq!(top("Digit3 KeyL KeyT BracketLeft KeyS Digit4"), ("ありがとう".into(), Kind::Kana));

@@ -77,8 +77,9 @@ iPhone are out of scope.
   (CC0) and writes `engine/predict/brands.tsv`, compiled into the engine; queries are cached in the
   gitignored `corpora/brands/`.
 - Punctuation (docs/moonshot.md §5.6): `python3 -I engine/tools/corpora/build_punctuation.py`
-  counts what follows each Korean syllable in the gitignored corpora and writes
-  `engine/predict/punctuation.tsv`, compiled into the engine.
+  counts what follows each Korean syllable (the gitignored corpora) and each kana (Tatoeba's
+  Japanese sentences, from `fetch_corpora.py`) and writes `engine/predict/punctuation.tsv`,
+  compiled into the engine.
 - Corpus tools (from the dropped Minecraft mod): `engine/tools/corpora/` (`fetch_corpora.py`,
   `build_ranker.py`, the Mirae word lists).
 - Windows: `tools/build.ps1` in `/windows` (x64 + x86, runs the shell tests),

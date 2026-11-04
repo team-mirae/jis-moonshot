@@ -767,21 +767,30 @@ impl Engine {
         readings
     }
 
-    /// The readings of `segment`, with the symbol keys at its end also read as punctuation
-    /// (docs/moonshot.md §5.6): the last one, and the last two.
+    /// The readings of `segment`, with the symbol keys at its end also read as punctuation, in
+    /// Korean and in Japanese (docs/moonshot.md §5.6): the last one, and the last two.
     #[cfg(feature = "predict")]
     fn readings_of(&self, segment: &[Token]) -> Readings {
         let mut readings = self.word_readings(segment);
         let starts: Vec<usize> = (0..segment.len()).filter(|&k| !is_part(&segment[k])).collect();
-        let mut marks = String::new();
+        let (mut marks, mut kana_marks) = (String::new(), Some(String::new()));
         for &start in starts.iter().rev().take(2) {
             let Some(mark) = symbol_of(&segment[start]).filter(|&c| crate::punctuation::MARKS.contains(c)) else { break };
             marks.insert(0, mark);
+            // In Japanese, 。、？ (every key's, or none).
+            kana_marks = kana_marks.zip(crate::punctuation::kana_mark(mark)).map(|(mut m, k)| {
+                m.insert(0, k);
+                m
+            });
             // Something before the marks: the word they end.
             if start == 0 {
                 break;
             }
-            readings.punctuated.push(crate::predict::Punctuated { readings: self.word_readings(&segment[..start]), punctuation: marks.clone() });
+            readings.punctuated.push(crate::predict::Punctuated {
+                readings: self.word_readings(&segment[..start]),
+                punctuation: marks.clone(),
+                kana_punctuation: kana_marks.clone().unwrap_or_default(),
+            });
         }
         readings
     }

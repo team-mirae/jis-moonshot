@@ -376,7 +376,7 @@ phrases exact) without retraining, but broke the owner's corpus limits, the avoi
 bare-vowel tests in both builds: the rarer words bring noise (keystrings, rare forms). **[decide]**
 whether to clean a larger list, recalibrate the rules to it and retrain the learned ranker.
 
-### 5.6 Punctuation in Korean readings
+### 5.6 Punctuation in Korean and kana readings
 
 Mode A's symbol keys type Korean (§9.2: `.` 을, Shift+`.` 를, `/` 서, Shift+`/` 에서, `,` ㅢ), so a
 period after Korean has no key of its own. The Korean readings read it from those keys instead
@@ -397,8 +397,10 @@ its ending takes the mark, against how often the syllable the key types follows 
 (요 is followed by . 27% of the time and by 을 almost never; 책 by 을 18% and by . 0.7%). So nouns
 keep their particle (책을, 사과를, 회의, 가서) with the mark below, and endings take the mark.
 
-- Only readings within 3 bits of the best Korean one are punctuated, at most three, in the order
-  they were ranked: a mark places them, it doesn't reorder them.
+- Only readings with an eighth or more of the probability among the keys before the mark are
+  punctuated (not 안녕핫에요., nor a stray kana reading of Korean keys), at most three a language,
+  in the order they were ranked: a mark places them, it doesn't reorder them. A mark lifts a
+  reading at most 8 bits over the typed one, however unlikely what the key typed is.
 - A second mark costs 6 bits more (합니다.. is offered, 운송,, for 운송의 isn't on top). After a
   syllable the table doesn't have (seen too rarely: 틍) a mark is an eighth as likely, after a
   bare jamo a sixty-fourth.
@@ -406,6 +408,22 @@ keep their particle (책을, 사과를, 회의, 가서) with the mark below, and
   반가워요. A phrase of Korean words is of kind Korean.
 - The English reading needs none of this: its keys are the stock ones (hello.). Forced Korean
   (かな / 変換, §4) lists its own punctuation rows.
+
+**Kana** (2026-11-05) works the same way. On the JIS kana layout `.` `,` `/` are る ね め, while a
+romaji typist's `.` `,` `/` give 。、？, so the kana readings of the keys before such a key are also
+offered with 。、？ (Shift+`.` and Shift+`,` are 。 and 、 already). The counts come from Tatoeba's
+Japanese sentences (`corpora/jpn_sentences.tsv.bz2`, fetched by `fetch_corpora.py`; katakana
+counted as hiragana): after each kana and pair of kana, how often 。、？・ come next and how often
+る ね め. So ありがとう `.` → ありがとう。, ありがとうございます。 (る after ます never comes), こんにちは
+`,` → こんにちは、; and the kana stays where it's the word: たべ `.` → たべる (る after べ 13%, 。
+0.1%), そうです `,` → そうですね, each with the mark offered below. A kanji row takes the mark too
+(有難う。), weighed by the kana typed.
+
+**[decide] Kana against Korean.** The tests that measure Korean (`tests/corpora.rs`,
+`tests/long_context.rs`) load no Japanese words or kanji, which the shells do. With them, as
+shipped, the corpora's weighted failure rate is 11.0% against 0.08% (12 of the owner's 115 words:
+사과 reads かのすわ, 회 きゆ, 책을 そらする). The marks above change none of it; the kana reading
+does (§5).
 
 ## 6. Predictive typing must be accepted
 

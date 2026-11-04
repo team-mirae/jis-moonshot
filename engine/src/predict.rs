@@ -109,11 +109,14 @@ pub struct Readings {
 }
 
 /// The staged keys before the symbol keys at the end, and the punctuation those keys stand for
-/// (docs/moonshot.md §5.6).
+/// in Korean and in Japanese (docs/moonshot.md §5.6).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Punctuated {
     pub readings: Readings,
+    /// The marks after Korean (. , ? /: the keys' stock characters).
     pub punctuation: String,
+    /// The marks after kana (。、？), empty when a key has none.
+    pub kana_punctuation: String,
 }
 
 /// A staged word read as a Korean start, an acronym and maybe more Korean (한전KPS은).
@@ -1017,16 +1020,19 @@ impl Predictor {
         self.with_punctuation(ranked, readings, context)
     }
 
-    /// The Korean readings of the keys before the symbol keys at the end, with those keys as the
-    /// punctuation they stand for (docs/moonshot.md §5.6: 안녕하세요. for 안녕하세요을), placed
-    /// among `ranked` by probability. Each list's scores are read as log2 odds; a punctuated row's
-    /// share of its list counts times how often its ending takes the mark, against how often the
-    /// syllable the key types follows the same keys' Korean reading (`punctuation.tsv`, from the
-    /// corpora: 요 takes . far more than 을, 책 the other way). The order of `ranked` stays.
+    /// The Korean and Japanese readings of the keys before the symbol keys at the end, with those
+    /// keys as the punctuation they stand for (docs/moonshot.md §5.6: 안녕하세요. for 안녕하세요을,
+    /// ありがとう。 for ありがとうる), placed among `ranked` by probability. Each list's scores are
+    /// read as log2 odds; a punctuated row's share of its list counts times how often its ending
+    /// takes the mark, against how often what the key types follows the same reading
+    /// (`punctuation.tsv`, from the corpora: 요 takes . far more than 을, 책 the other way; ます
+    /// takes 。, たべ る). The order of `ranked` stays.
     fn with_punctuation(&self, ranked: Vec<Prediction>, readings: &Readings, context: Context) -> Vec<Prediction> {
+        use crate::punctuation::{Language as Marks, any_next_bits, follow_bits};
         const PER_OPTION: usize = 3;
         const NEAR_BEST: f64 = 3.0;
         const EXTRA_MARK: f64 = 6.0;
+        const MAX_LIFT: f64 = 8.0;
         if readings.punctuated.is_empty() || ranked.is_empty() {
             return ranked;
         }
@@ -1038,45 +1044,45 @@ impl Predictor {
         }
         let mut extra: Vec<Prediction> = Vec::new();
         for option in &readings.punctuated {
-            let Some(mark) = option.punctuation.chars().next() else { continue };
-            // What the key typed instead, after the same keys' Korean reading (을 after 안녕하세요).
-            let before_korean = &option.readings.korean;
-            // When the key's vowel took the final before it (프로젝틍 + ㅢ is 프로젝트의), the whole
-            // reading's last syllable after the rest of it.
-            let last_syllable = || {
-                let last = readings.korean.chars().last()?;
-                crate::punctuation::follow_bits(readings.korean.strip_suffix(last)?, last)
-            };
-            let typed = readings
-                .korean
-                .strip_prefix(before_korean.as_str())
-                .and_then(|rest| rest.chars().next())
-                .and_then(|next| crate::punctuation::follow_bits(before_korean, next))
-                .or_else(last_syllable)
-                .unwrap_or_else(crate::punctuation::any_next_bits);
             let before = self.predict(&option.readings, context);
-            let korean: Vec<(&Prediction, f64)> =
-                before.iter().zip(shares(&before)).filter(|(p, share)| p.kind.language() == Language::Korean && share.is_finite()).collect();
-            // Only readings near the best Korean one: a mark doesn't make a stray reading (안녕핫에요)
-            // worth a row.
-            let best = korean.first().map_or(f64::NEG_INFINITY, |(_, share)| *share);
-            let rows = korean
-                .into_iter()
-                .filter(|(_, share)| *share >= best - NEAR_BEST)
-                .filter_map(|(p, share)| {
-                    // A second mark (?!, ..) is rare: a cost of its own.
-                    let extra = EXTRA_MARK * (option.punctuation.chars().count() - 1) as f64;
-                    let bits = crate::punctuation::follow_bits(&p.text, mark)? - extra;
-                    Some(Prediction { text: format!("{}{}", p.text, option.punctuation), kind: p.kind, score: share + bits - typed })
-                })
-                .take(PER_OPTION);
-            // In the order the readings came: the mark places them, it doesn't reorder them.
-            let mut floor = f64::INFINITY;
-            extra.extend(rows.map(|mut p| {
-                p.score = p.score.min(floor);
-                floor = p.score;
-                p
-            }));
+            let shared: Vec<(&Prediction, f64)> = before.iter().zip(shares(&before)).filter(|(_, share)| share.is_finite()).collect();
+            for (language, marks) in [(Language::Korean, &option.punctuation), (Language::Japanese, &option.kana_punctuation)] {
+                let Some(mark) = marks.chars().next() else { continue };
+                let (table, whole, part) = match language {
+                    Language::Japanese => (Marks::Japanese, &readings.kana, &option.readings.kana),
+                    _ => (Marks::Korean, &readings.korean, &option.readings.korean),
+                };
+                // What the key typed instead, after the same keys' reading (을 after 안녕하세요, る
+                // after ありがとう); when the key's vowel took the final before it (프로젝틍 + ㅢ is
+                // 프로젝트의), the whole reading's last character after the rest of it.
+                let last_character = || {
+                    let last = whole.chars().last()?;
+                    follow_bits(table, whole.strip_suffix(last)?, last)
+                };
+                let typed = whole
+                    .strip_prefix(part.as_str())
+                    .and_then(|rest| rest.chars().next())
+                    .and_then(|next| follow_bits(table, part, next))
+                    .or_else(last_character)
+                    .unwrap_or_else(|| any_next_bits(table));
+                // A second mark (?!, ..) is rare: a cost of its own.
+                let more = EXTRA_MARK * (marks.chars().count() - 1) as f64;
+                let rows: Vec<&(&Prediction, f64)> = shared.iter().filter(|(p, _)| p.kind.language() == language).collect();
+                // Only readings that count among the keys' readings (an eighth of them or more): a
+                // mark doesn't make a stray reading (안녕핫에요, のととなしき… for 안녕하세요) worth a
+                // row.
+                // In the order the readings came: the mark places them, it doesn't reorder them.
+                let mut floor = f64::INFINITY;
+                for (p, share) in rows.into_iter().filter(|(_, share)| *share >= -NEAR_BEST).take(PER_OPTION) {
+                    // Kana rows by the kana typed (a kanji row's 今日 is read きょう).
+                    let ending = if language == Language::Japanese { part } else { &p.text };
+                    let Some(bits) = follow_bits(table, ending, mark) else { continue };
+                    // At most MAX_LIFT, however unlikely the typed character is.
+                    let score = (share + (bits - typed).min(MAX_LIFT) - more).min(floor);
+                    floor = score;
+                    extra.push(Prediction { text: format!("{}{marks}", p.text), kind: p.kind, score });
+                }
+            }
         }
         extra.sort_by(|a, b| b.score.total_cmp(&a.score));
         let mut out: Vec<Prediction> = Vec::with_capacity(ranked.len() + extra.len());

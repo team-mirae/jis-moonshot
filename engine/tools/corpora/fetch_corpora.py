@@ -16,6 +16,8 @@ FILES = {
     "nsmc-ratings.txt": "https://raw.githubusercontent.com/e9t/nsmc/master/ratings.txt",
     "ChatbotData.csv": "https://raw.githubusercontent.com/songys/Chatbot_data/master/ChatbotData.csv",
     "eng_sentences.tsv.bz2": "https://downloads.tatoeba.org/exports/per_language/eng/eng_sentences.tsv.bz2",
+    # Japanese sentences: what follows a kana ending (build_punctuation.py, docs/moonshot.md §5.6).
+    "jpn_sentences.tsv.bz2": "https://downloads.tatoeba.org/exports/per_language/jpn/jpn_sentences.tsv.bz2",
     "tm1-self-dialogs.json": "https://raw.githubusercontent.com/google-research-datasets/Taskmaster/master/TM-1-2019/self-dialogs.json",
     "fibo.tar.gz": "https://codeload.github.com/edmcouncil/fibo/tar.gz/refs/heads/master",
     "std-terms.csv": "https://www.data.go.kr/cmm/cmm/fileDownload.do?atchFileId=FILE_000000003563657&fileDetailSn=1&insertDataPrcus=N",
