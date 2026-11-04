@@ -63,6 +63,27 @@ pub fn variants(text: &str) -> Vec<String> {
 }
 
 
+/// Korean text with the symbol keys between two syllables read as the middle dot · (U+00B7,
+/// 가운뎃점; docs/moonshot.md §5.6), as the kana reading reads Shift+`/` as ・: `?` (Shift+`/`, ・
+/// on the JIS kana layout), and `/` too. Whether the dotted text goes above the text as typed: yes
+/// unless a `/` is all it changes (남/여 is written so too).
+/// None when no such symbol stands between two syllables.
+pub fn middle_dotted(text: &str) -> Option<(String, bool)> {
+    let syllable = |c: Option<&char>| c.is_some_and(|c| ('\u{AC00}'..='\u{D7A3}').contains(c));
+    let chars: Vec<char> = text.chars().collect();
+    let (mut out, mut changed, mut above) = (String::with_capacity(text.len()), false, false);
+    for (i, &c) in chars.iter().enumerate() {
+        if matches!(c, '?' | '/') && i > 0 && syllable(chars.get(i - 1)) && syllable(chars.get(i + 1)) {
+            out.push('·');
+            changed = true;
+            above |= c != '/';
+        } else {
+            out.push(c);
+        }
+    }
+    changed.then_some((out, above))
+}
+
 /// The marks the symbol keys stand for after a Korean word (docs/moonshot.md §5.6), then the
 /// first syllables those keys type at a word's end (을 를 의 서 에서 로 으로 가 께서 왜 예 얘): the
 /// Korean columns of `predict/punctuation.tsv`, in order.
@@ -222,5 +243,16 @@ mod tests {
         assert_eq!(variants("a[b["), ["a[b「", "a[b『", "a[b【", "a[b［", "a[b〔"]);
         assert!(variants("한").is_empty());
         assert!(variants("").is_empty());
+    }
+
+    #[test]
+    fn symbols_between_syllables_read_as_middle_dots() {
+        assert_eq!(middle_dotted("가?나?다"), Some(("가·나·다".into(), true)));
+        assert_eq!(middle_dotted("가¥나"), None);
+        assert_eq!(middle_dotted("남/여"), Some(("남·여".into(), false)));
+        // Not at a word's end, before a space or next to anything else.
+        assert_eq!(middle_dotted("뭐해요?"), None);
+        assert_eq!(middle_dotted("뭐해요? 응"), None);
+        assert_eq!(middle_dotted("a/b"), None);
     }
 }

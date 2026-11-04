@@ -1239,21 +1239,40 @@ fn without_kana(mut readings: Readings) -> Readings {
 
 /// Each reading that ends in a symbol, followed by the same reading with that symbol's variants
 /// (docs/moonshot.md §5.2: 、 and ， after a reading ending in a comma, … after one ending in a
-/// period, 「 『 after one ending in [), each just below it and of its kind. Duplicates go.
+/// period, 「 『 after one ending in [), each just below it and of its kind; a Korean reading with
+/// symbol keys between syllables also with middle dots (§5.6, [`crate::punctuation::middle_dotted`]).
+/// Duplicates go.
 #[cfg(feature = "predict")]
 fn with_symbol_variants(predictions: Vec<Prediction>) -> Vec<Prediction> {
     let mut out: Vec<Prediction> = Vec::with_capacity(predictions.len());
     let mut seen = std::collections::HashSet::new();
     for p in predictions {
         // Not the standard 2-set reading's: its symbols are the stock keys' (< for Shift+,).
-        let variants = if p.kind == Kind::TwoSet { Vec::new() } else { crate::punctuation::variants(&p.text) };
-        let (kind, score) = (p.kind, p.score);
-        if seen.insert(p.text.clone()) {
-            out.push(p);
+        if p.kind == Kind::TwoSet {
+            if seen.insert(p.text.clone()) {
+                out.push(p);
+            }
+            continue;
         }
-        for (i, text) in variants.into_iter().enumerate() {
-            if seen.insert(text.clone()) {
-                out.push(Prediction { text, kind, score: score - 0.001 * (i + 1) as f64 });
+        // A Korean reading with symbol keys between syllables: also with middle dots (가·나·다,
+        // §5.6), above it or just below.
+        let mut rows = vec![p];
+        if rows[0].kind == Kind::Korean
+            && let Some((text, above)) = crate::punctuation::middle_dotted(&rows[0].text)
+        {
+            let dotted = Prediction { text, kind: Kind::Korean, score: rows[0].score };
+            if above { rows.insert(0, dotted) } else { rows.push(dotted) }
+        }
+        for p in rows {
+            let variants = crate::punctuation::variants(&p.text);
+            let (kind, score) = (p.kind, p.score);
+            if seen.insert(p.text.clone()) {
+                out.push(p);
+            }
+            for (i, text) in variants.into_iter().enumerate() {
+                if seen.insert(text.clone()) {
+                    out.push(Prediction { text, kind, score: score - 0.001 * (i + 1) as f64 });
+                }
             }
         }
     }

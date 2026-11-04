@@ -874,6 +874,22 @@ fn korean_readings_take_the_symbol_keys_as_punctuation() {
 }
 
 #[test]
+fn symbols_between_syllables_read_as_middle_dots() {
+    // docs/moonshot.md §5.6: Shift+/ (・ in the kana reading) between syllables is · in Korean,
+    // above the text as typed; / is · just below it (남/여 is written so too).
+    let list = texts_of("가 #S-Slash 나 #S-Slash 다");
+    let at = |t: &str| list.iter().position(|x| x == t).unwrap_or_else(|| panic!("{t} not in {list:?}"));
+    assert!(at("가·나·다") < at("가?나?다"));
+    // Not ¥.
+    assert!(!texts_of("가 #IntlYen 나").contains(&"가·나".to_string()));
+    let list = texts_of("남 #Slash 여");
+    assert!(list.iter().position(|x| x == "남/여").unwrap() < list.iter().position(|x| x == "남·여").unwrap(), "{list:?}");
+    // Forced Korean (変換) offers it too.
+    let texts: Vec<String> = typed_forced("KeyR KeyK S-Slash KeyS KeyK HENKAN").predictions().into_iter().map(|p| p.text).collect();
+    assert_eq!(texts, ["가·나", "가?나"]);
+}
+
+#[test]
 fn a_phrase_takes_punctuation_word_by_word() {
     // §5.5's pieces: each word between spaces takes its own mark.
     assert_eq!(top_of("안녕하세요 #Period_Space 반가워요 #Period"), ("안녕하세요. 반가워요.".into(), Kind::Korean));
