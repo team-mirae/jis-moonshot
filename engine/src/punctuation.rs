@@ -63,13 +63,14 @@ pub fn variants(text: &str) -> Vec<String> {
 }
 
 
-/// Korean text with the symbol keys between two syllables read as the middle dot · (U+00B7,
+/// Korean text with the symbol keys between two letters read as the middle dot · (U+00B7,
 /// 가운뎃점; docs/moonshot.md §5.6), as the kana reading reads Shift+`/` as ・: `?` (Shift+`/`, ・
-/// on the JIS kana layout), and `/` too. Whether the dotted text goes above the text as typed: yes
+/// on the JIS kana layout), and `/` too. A letter is a syllable, a jamo (가?ㄴ while 나 is typed)
+/// or a Latin letter (a mixed reading's). Whether the dotted text goes above the text as typed: yes
 /// unless a `/` is all it changes (남/여 is written so too).
-/// None when no such symbol stands between two syllables.
+/// None when no such symbol stands between two letters (뭐해요? 응: a space follows).
 pub fn middle_dotted(text: &str) -> Option<(String, bool)> {
-    let syllable = |c: Option<&char>| c.is_some_and(|c| ('\u{AC00}'..='\u{D7A3}').contains(c));
+    let syllable = |c: Option<&char>| c.is_some_and(|c| c.is_alphabetic());
     let chars: Vec<char> = text.chars().collect();
     let (mut out, mut changed, mut above) = (String::with_capacity(text.len()), false, false);
     for (i, &c) in chars.iter().enumerate() {
@@ -249,10 +250,11 @@ mod tests {
     fn symbols_between_syllables_read_as_middle_dots() {
         assert_eq!(middle_dotted("가?나?다"), Some(("가·나·다".into(), true)));
         assert_eq!(middle_dotted("가¥나"), None);
+        assert_eq!(middle_dotted("가?ㄴ"), Some(("가·ㄴ".into(), true)));
+        assert_eq!(middle_dotted("가?s"), Some(("가·s".into(), true)));
         assert_eq!(middle_dotted("남/여"), Some(("남·여".into(), false)));
         // Not at a word's end, before a space or next to anything else.
         assert_eq!(middle_dotted("뭐해요?"), None);
         assert_eq!(middle_dotted("뭐해요? 응"), None);
-        assert_eq!(middle_dotted("a/b"), None);
     }
 }

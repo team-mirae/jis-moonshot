@@ -1254,13 +1254,13 @@ fn with_symbol_variants(predictions: Vec<Prediction>) -> Vec<Prediction> {
             }
             continue;
         }
-        // A Korean reading with symbol keys between syllables: also with middle dots (가·나·다,
-        // §5.6), above it or just below.
+        // A Korean or mixed reading with symbol keys between letters: also with middle dots
+        // (가·나·다, §5.6), above it or just below.
         let mut rows = vec![p];
-        if rows[0].kind == Kind::Korean
+        if matches!(rows[0].kind, Kind::Korean | Kind::Mixed)
             && let Some((text, above)) = crate::punctuation::middle_dotted(&rows[0].text)
         {
-            let dotted = Prediction { text, kind: Kind::Korean, score: rows[0].score };
+            let dotted = Prediction { text, kind: rows[0].kind, score: rows[0].score };
             if above { rows.insert(0, dotted) } else { rows.push(dotted) }
         }
         for p in rows {

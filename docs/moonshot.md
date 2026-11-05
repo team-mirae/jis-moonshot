@@ -427,8 +427,8 @@ the columns of the syllables the retired slots typed (을 를 서 …): rebuildi
 - In a staged phrase (§5.5) each word takes its own: 안녕하세요 `.` Space 반가워요 `.` → 안녕하세요.
   반가워요. A phrase of Korean words is of kind Korean.
 - **The middle dot** (2026-11-05): the kana reading reads Shift+`/` as ・, and Korean writes a
-  list with · (U+00B7, 가운뎃점: 가·나·다). So a Korean reading with `?` (Shift+`/`) or `/` between
-  two syllables is also offered with · there: above the text as typed for `?` (가 Shift+`/` 나
+  list with · (U+00B7, 가운뎃점: 가·나·다). So a Korean or mixed reading with `?` (Shift+`/`) or `/`
+  between two letters (syllables, jamo, Latin: 가?ㄴ while 나 is typed) is also offered with · there: above the text as typed for `?` (가 Shift+`/` 나
   Shift+`/` 다 → 가·나·다, 가?나?다 below it), just below it when only `/` changes (남/여, then
   남·여). Forced Korean offers it too. `¥` isn't read so (가¥나 stays).
 - The English reading needs none of this: its keys are the stock ones (hello.). Forced Korean
