@@ -60,9 +60,9 @@ final class JKInputController: IMKInputController {
     /// The row chosen with ↓ / Tab, or nil while nothing is chosen (the top reading applies).
     private var chosen: Int?
     /// The reading shown as the marked text in place of the Korean one: the chosen row, or the top
-    /// prediction when it isn't the Korean reading as typed. Nil: the engine's own preedit shows.
+    /// suggestion. Nil: the engine's own preedit shows (there are no suggestions).
     private var shown: String?
-    /// What shows while no row is chosen: the top prediction when it isn't the Korean reading as typed.
+    /// What shows while no row is chosen: the first suggestion.
     private var topShown: String?
     /// The bundle identifier of the app this controller types into (for the per-app settings).
     private var clientApp: String?
@@ -648,11 +648,10 @@ final class JKInputController: IMKInputController {
             predictions = (0..<count).map { text(jk_prediction_ptr(engine, $0), jk_prediction_len(engine, $0)) }
             let japaneseKinds = [JK_PREDICTION_KANA, JK_PREDICTION_KATAKANA, JK_PREDICTION_KANJI].map { UInt32($0) }
             japanese = (0..<count).map { japaneseKinds.contains(jk_prediction_kind(engine, $0)) }
-            // The top row shows unless it's the Korean reading as typed: a Korean row can differ
-            // from it too (안녕하세요. for 안녕하세요을, 한·미·일 for 한?미?일, docs/moonshot.md §5.6).
-            let topIsPreedit = count == 0 || predictions[0] == preedit
+            // What's marked is the first suggestion, always (한·미·일 for 한?미?일,
+            // docs/moonshot.md §5.6): the engine's preedit only while there are none.
             if let chosen, chosen >= count { self.chosen = nil }
-            topShown = topIsPreedit ? nil : predictions.first
+            topShown = predictions.first
         } else {
             chosen = nil
             topShown = nil

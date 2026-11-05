@@ -856,7 +856,7 @@ Windows reads `HKCU\Software\JIS Moonshot`, value `Weight.<Scenario>` (§8.4).
 - The Minecraft mod still has its own Java copy of the ranker; it should move to this layer
   (through the wasm engine) so there's one implementation.
 - Hosts so far: the web playground (predictions on by default, picker under the caret, Space
-  commits the top reading) and macOS (marked text shows the top reading, committing keys take it
+  commits the top reading) and macOS (marked text shows the top reading, the first suggestion whatever its kind, committing keys take it
   and then act on it as on the Korean reading (`Engine::key_after_prediction`): Space adds a space,
   Shift+Enter and the "Enter commits" setting (§5.1) only commit, plain Enter goes on to the app;
   "Predictions" menu item; `make PREDICT=0` strips the layer). macOS has no picker yet: the other

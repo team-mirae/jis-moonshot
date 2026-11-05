@@ -718,14 +718,12 @@ void TextService::Apply(ITfContext* context) {
             japanese_.push_back(kind == JK_PREDICTION_KANA || kind == JK_PREDICTION_KATAKANA ||
                                 kind == JK_PREDICTION_KANJI);
         }
-        // The top row shows unless it's the Korean reading as typed: a Korean row can differ
-        // from it too (한·미·일 for 한?미?일, docs/moonshot.md §5.6).
-        const bool top_is_preedit =
-            count == 0 || predictions_[0] == Utf16(jk_preedit_ptr(engine_), jk_preedit_len(engine_));
         if (chosen_ && *chosen_ >= count) chosen_.reset();
         if (chosen_) {
             shown_ = predictions_[*chosen_];
-        } else if (!top_is_preedit) {
+        } else if (count > 0) {
+            // What's marked is the first suggestion, always (한·미·일 for 한?미?일,
+            // docs/moonshot.md §5.6): the engine's preedit only while there are none.
             shown_ = predictions_[0];
         } else {
             shown_.reset();
