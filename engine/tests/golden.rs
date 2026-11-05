@@ -155,10 +155,10 @@ fn the_keys_right_of_0_type_their_actions() {
 #[test]
 fn the_symbol_keys_type_their_jis_symbols() {
     // docs/moonshot.md §9.2 (2026-11-05): ^ ¥ @ [ ] . / ろ type their stock JIS symbols, alone and
-    // with Shift, and end the syllable before them.
+    // with Shift, and end the syllable before them. Shift+`.` is a period (2026-11-06), as in JIS Kana.
     pre("Equal S-Equal IntlYen S-IntlYen BracketLeft S-BracketLeft", "^~¥|@`");
     pre("BracketRight S-BracketRight Backslash S-Backslash", "[{]}");
-    pre("Period S-Period Slash S-Slash IntlRo S-IntlRo", ".>/?\\_");
+    pre("Period S-Period Slash S-Slash IntlRo S-IntlRo", "../?\\_");
     pre("KeyD KeyK KeyS KeyS KeyU KeyD KeyG KeyK KeyT KeyP KeyD KeyY Period", "안녕하세요.");
     pre("KeyA KeyN KeyJ KeyG KeyO KeyD KeyY S-Slash", "뭐해요?");
     pre("KeyG KeyK KeyS Period KeyR KeyK", "한.가");

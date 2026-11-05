@@ -529,6 +529,10 @@ again, alone and with Shift (^ ~, ¥ |, @ `, [ {, ] }, . >, / ?, \ _), and Korea
 typed the 2-set way again (ㅂ ㅅ, ㄴ ㅎ, ㅇ ㅡ ㄹ …). · is a symbol variant of ¥ (§5.2). The kana
 reading and JIS Kana still read every key by its kana (`.` is る).
 
+**Shift+`.` is a period** (2026-11-06, the owner's call): it typed `>`, while JIS Kana's Shift+`.`
+is 。 and Mode A's Shift+`,` is a comma. Now `.` and Shift+`.` both type `.`; `>` comes from
+English (無変換).
+
 ### 9.1 Notation
 
 An action is a short run of 2-set jamo, typed as if those keys were pressed. How a legend is
@@ -552,7 +556,7 @@ written says how it types:
 | `:` | ㅒ | 얘 | : ; |
 | `]` | ] | } | ] 」 |
 | `,` | ㅢ | , | , , |
-| `.` | . | > | . . |
+| `.` | . | . | . . |
 | `/` | / | ? | · · |
 | `ろ` | \ | _ | \ _ |
 

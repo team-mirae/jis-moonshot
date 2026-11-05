@@ -375,10 +375,12 @@ fn jis_korean(key: Key) -> Option<(Out, Out)> {
         Minus => (J('ㅙ'), K(&Action { legend: "왜", steps: &[I('ㅙ')] })),
         // docs/moonshot.md §9.2 (2026-11-05, the owner's call): ^ ¥ @ [ ] . / ろ type their stock JIS
         // symbols again, on both layers, so punctuation has its keys.
-        Equal | IntlYen | BracketLeft | BracketRight | Backslash | Period | Slash | IntlRo => {
+        Equal | IntlYen | BracketLeft | BracketRight | Backslash | Slash | IntlRo => {
             let (alone, shifted) = stock_jis(key)?;
             (C(alone), C(shifted))
         }
+        // Shift+`.` is a period too (2026-11-06), as in JIS Kana (。), the way Shift+`,` is a comma.
+        Period => (C('.'), C('.')),
         Semicolon => (J('ㅖ'), K(&Action { legend: "예", steps: &[I('ㅖ')] })),
         Quote => (J('ㅒ'), K(&Action { legend: "얘", steps: &[I('ㅒ')] })),
         Comma => (J('ㅢ'), C(',')),
