@@ -880,6 +880,9 @@ fn symbols_between_syllables_read_as_middle_dots() {
     let list = texts_of("가 #S-Slash 나 #S-Slash 다");
     let at = |t: &str| list.iter().position(|x| x == t).unwrap_or_else(|| panic!("{t} not in {list:?}"));
     assert!(at("가·나·다") < at("가?나?다"));
+    // While the next syllable is typed (가?ㄴ) too.
+    let list = texts_of("가 #S-Slash_KeyS");
+    assert!(list.iter().position(|x| x == "가·ㄴ") < list.iter().position(|x| x == "가?ㄴ"), "{list:?}");
     // Not ¥.
     assert!(!texts_of("가 #IntlYen 나").contains(&"가·나".to_string()));
     let list = texts_of("남 #Slash 여");
