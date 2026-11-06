@@ -24,7 +24,8 @@ Sources (all redistributable):
 
 The model and the common-*.txt lists live in engine/predict/ (the engine's predictor uses them);
 the Minecraft mod copies them into its jar at build time. JIS Moonshot's three-language key model
-(format JKR3, Korean, English and kana) is built by build_keymodel.py, which imports this file;
+(format JKR4, Korean, English and kana, Shift kept) is built by build_keymodel.py, which imports
+this file;
 this script's own ranker.bin (JKRK, two languages) would overwrite it: write it with --out.
 
 Usage: python3 -I build_ranker.py <words_alpha.txt> --nouns <wordnet dict/index.noun>

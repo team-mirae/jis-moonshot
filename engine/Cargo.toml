@@ -1,6 +1,6 @@
 [package]
 name = "jis-moonshot-engine"
-version = "0.6.3"
+version = "0.7.0"
 edition = "2024"
 publish = false
 license = "MIT"
@@ -56,4 +56,8 @@ required-features = ["predict"]
 
 [[example]]
 name = "moonshot_probe"
+required-features = ["predict"]
+
+[[example]]
+name = "keygrams"
 required-features = ["predict"]

@@ -223,13 +223,26 @@ Mode A's predictions get a **kana** reading, of kind `Kana` (hiragana) or `Katak
   きのと 5766 out), so common words the hand-written list lacks read as Japanese and get their kanji.
 - **Korean-only keys** (§9.3) lift Korean over English; a known Japanese word gets the same lift, so
   those keys (kana-only keys too) don't push Korean past it: どようび, typed with ゛ on `@`.
-- **Key model** (2026-11-02): `predict/ranker.bin` carries a three-language key model after the
-  Korean-vs-English tables: order-4 key n-grams over the 48 JIS keys (Shift dropped), one each
-  for Korean on JIS Moonshot's keys, English and JIS kana typing (Mozc's readings and
-  `common-ja.txt`), Witten-Bell smoothed, format `JKR3` (`engine/src/keymodel.rs`, built by
-  `engine/tools/corpora/build_keymodel.py`, about 5 MB). Held out: Korean 99.5%, English 99.5%,
-  kana 99.0% (97.6% for common words not trained on). Only the kana reading uses it so far: the
-  rules are tuned on the older Korean-vs-English tables, which keep that job.
+- **Key model** (2026-11-02; Shift kept since 2026-11-06): `predict/ranker.bin` carries a
+  three-language key model after the Korean-vs-English tables: order-4 key n-grams over 97
+  symbols (the 48 JIS keys, the same with Shift, and the space before and after a word, never two
+  in a row), one each for Korean on JIS Moonshot's keys, English and JIS kana typing (Mozc's
+  readings and `common-ja.txt`), Witten-Bell smoothed, nothing pruned, format `JKR4`
+  (`engine/src/keymodel.rs`, about 6.5 MB). Korean is trained the ways it's typed, each checked
+  to type the word through the engine: the conventional route, the planner's cheapest (implied ㅇ,
+  Shift+vowel) and that with Shift+consonant (§9.2); English keeps the corpora's capitals; kana
+  takes Shift for small kana, を and 、。・「」. Held out: Korean 99.4%, English 99.3%, kana 99.1%.
+  Only the kana reading uses it so far: the rules are tuned on the older Korean-vs-English
+  tables, which keep that job.
+  - **Built against every 4-gram:** `engine/tools/corpora/build_keymodel.py` (about 20 seconds)
+    smooths all 88,501,248 possible 4-grams densely as a reference (`corpora/keygrams/cost.bin`,
+    255 MB, gitignored; `engine/examples/keygrams.rs`), writes the sparse model from the same
+    counts and checks it against that table: every n-gram under 16 bits agrees within 2/16 of a
+    bit (rounding of the backoff steps).
+  - **Effect:** Shift is evidence the old model threw away (Korean never shifts Z, kana shifts
+    small kana; Shift+vowel is Korean). With the Japanese data loaded as the shells load it, the
+    owner's texts went from 12 of 115 words read as kana to 1, the AI-extended ones from 250 of
+    2,008 failures to 24 (`tests/corpora.rs`, `texts_with_the_japanese_data_loaded`).
 - **Score** (bits, the predictor's units): the best other reading's score, plus the **kana key
   model's** bits against the likelier of its Korean and English models (×0.5, −1, within ±6;
   without the model, a fixed −3), plus the evidence: coverage by known words (up to +5 for a
@@ -445,10 +458,13 @@ counted as hiragana): after each kana and pair of kana, how often 。、？・ c
 (有難う。), weighed by the kana typed.
 
 **[decide] Kana against Korean.** The tests that measure Korean (`tests/corpora.rs`,
-`tests/long_context.rs`) load no Japanese words or kanji, which the shells do. With them, as
-shipped, the corpora's weighted failure rate is 12.1% against 0.04% (12 of the owner's 115 words:
-사과 reads かのすわ, 회 きゆ, 책 そらす; measured after §9.2's change of 2026-11-05 and retraining). The marks above change none of it; the kana reading
-does (§5).
+`tests/long_context.rs`) load no Japanese words or kanji, which the shells do. With them the
+corpora's weighted failure rate was 12.1% against 0.04% (12 of the owner's 115 words: 사과 read
+かのすわ, 회 きゆ, 책 そらす; measured after §9.2's change of 2026-11-05 and retraining). The key
+model with Shift (§5, 2026-11-06) brought it to 1.13% (1 of 115: 소스 reads かくかも), now held
+by `texts_with_the_japanese_data_loaded`. Most of what's left is a Korean word before `,`
+(검토, → すまちさく、): the kana reading takes the comma as 、 while the Korean reading needs it
+as Shift+`,`.
 
 ## 6. Predictive typing must be accepted
 

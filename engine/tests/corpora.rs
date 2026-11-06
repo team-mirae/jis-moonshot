@@ -33,6 +33,20 @@ fn predictor() -> Arc<Predictor> {
     Arc::new(p.with_learned(&learned).unwrap())
 }
 
+/// The predictor as the shells load it: with the Japanese words and the kanji, so the kana
+/// reading competes (docs/moonshot.md §5.6, "Kana against Korean").
+fn shipped_predictor() -> Arc<Predictor> {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/predict/");
+    let japanese = std::fs::read_to_string(format!("{dir}common-ja.txt")).unwrap();
+    let kanji = std::fs::read(format!("{dir}kanji.bin")).unwrap();
+    Arc::new(predictor().with_japanese_words(&japanese).with_kanji(&kanji).unwrap())
+}
+
+/// Failed words allowed with the Japanese data loaded, (owner's texts, AI-extended texts). Lower
+/// these when they improve. Before the key model kept Shift (2026-11-06) they were 12 and 250.
+/// Both builds measure the same: the kana reading is ranked by rules in either.
+const MAX_WITH_JAPANESE: (usize, usize) = (1, 24);
+
 fn summary(name: &str, t: &Trusting) -> String {
     format!(
         "{name}: {}/{} words failed ({:.1}%), {} of {} characters wrong, {} ↓; {} presses + {} to correct = {} to the right text, against {} without predictions ({:+.1}%)",
@@ -142,4 +156,29 @@ fn every_typing_style_works() {
         assert!(o.failures.is_empty(), "{style:?}: the owner's texts failed {:?}", o.failures.iter().map(|f| &f.want).collect::<Vec<_>>());
         assert!(a.failures.len() <= max_ai, "{style:?}: {} AI-extended failures, at most {max_ai}", a.failures.len());
     }
+}
+
+#[test]
+fn texts_with_the_japanese_data_loaded() {
+    let p = shipped_predictor();
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/corpora-en-ko/");
+    let owner: String = MAX_FAILURES.iter().map(|(f, _)| std::fs::read_to_string(format!("{dir}{f}")).unwrap()).collect::<Vec<_>>().join("\n");
+    let ai: String = extended().into_iter().map(|(_, t)| t).collect::<Vec<_>>().join("\n");
+    let o = type_trusting(&owner, p.clone(), Ranker::Rules);
+    let a = type_trusting(&ai, p, Ranker::Rules);
+    let weighted = (o.failures.len() as f64 + AI_WEIGHT * a.failures.len() as f64) / (o.words as f64 + AI_WEIGHT * a.words as f64);
+    eprintln!(
+        "with Japanese loaded: weighted failure rate {:.2}%, owner's texts {}/{}, AI-extended {}/{}",
+        100.0 * weighted,
+        o.failures.len(),
+        o.words,
+        a.failures.len(),
+        a.words
+    );
+    for f in o.failures.iter().chain(&a.failures) {
+        eprintln!("  ✗ {:24} → {:24} [{}]  shown: {}", f.want, f.got, f.keys, f.list.join(" · "));
+    }
+    let (max_owner, max_ai) = MAX_WITH_JAPANESE;
+    assert!(o.failures.len() <= max_owner, "owner's texts: {} failures, at most {max_owner} allowed", o.failures.len());
+    assert!(a.failures.len() <= max_ai, "AI-extended texts: {} failures, at most {max_ai} allowed", a.failures.len());
 }

@@ -534,7 +534,7 @@ pub struct Predictor {
     order: usize,
     english: Vec<u8>,
     korean: Vec<u8>,
-    /// The three-language key model (`JKR3`): the kana reading's key score. When the file is only
+    /// The three-language key model (`JKR4`, Shift kept): the kana reading's key score. When the file is only
     /// that model, it scores Korean against English too (`keys_for_margin`); when it follows the
     /// two-language tables, those keep scoring Korean against English (the rules are tuned on them).
     keys: Option<std::sync::Arc<crate::keymodel::KeyModel>>,
@@ -568,8 +568,8 @@ impl Predictor {
     /// `model`: `predict/ranker.bin`. `english_words` / `korean_words`: `predict/common-*.txt`.
     /// `english_nouns`: `predict/english-nouns.txt` (may be empty: no noun bonus).
     pub fn parse(model: &[u8], english_words: &str, korean_words: &str, english_nouns: &str) -> Result<Predictor, BadModel> {
-        // `JKR3`: the three-language key model (Korean, English, kana; order 4, sparse), alone or
-        // after the two-language tables (`JKRK` then `JKR3`).
+        // `JKR4`: the three-language key model (Korean, English, kana; order 4, Shift kept, sparse),
+        // alone or after the two-language tables (`JKRK` then `JKR4`).
         let three_way = crate::keymodel::KeyModel::is_model(model);
         let parse_keys = |data: &[u8]| crate::keymodel::KeyModel::parse(data).map(std::sync::Arc::new).ok_or(BadModel);
         // Version 1: key trigrams; version 2: key 4-grams. One byte per entry, English then Korean.
@@ -1857,8 +1857,9 @@ impl Predictor {
     /// Korean minus English in average log2 probability per key, over the letter runs (the keys
     /// runs, with the three-language model).
     pub(crate) fn key_margin(&self, english: &str) -> f64 {
-        // Korean reads a Shift+consonant as the consonant and ㅏ (docs/moonshot.md §9.2): R is r k.
-        // English reads the keys as they are. Both totals are per key pressed.
+        // The two-language tables have no Shift: for them Korean reads a Shift+consonant as the
+        // consonant and ㅏ (docs/moonshot.md §9.2), R as r k. English reads the keys as they are.
+        // Both totals are per key pressed.
         let korean: String = english
             .chars()
             .flat_map(|c| {
@@ -1872,8 +1873,9 @@ impl Predictor {
             return 0.0;
         }
         if let Some(model) = self.keys.as_ref().filter(|_| self.keys_for_margin) {
+            // The three-language model keeps Shift: its Korean class was trained on Shift+consonant.
             use crate::keymodel::Class;
-            let ko = total_of(&korean, |run| model.log_probability(Class::Korean, run));
+            let ko = total_of(english, |run| model.log_probability(Class::Korean, run));
             let en = total_of(english, |run| model.log_probability(Class::English, run));
             return (ko - en) / pressed as f64;
         }
